@@ -52,6 +52,27 @@ export const AuditLogs: React.FC = () => {
     const allKeys = Array.from(new Set([...Object.keys(before || {}), ...Object.keys(after || {})]));
     if (allKeys.length === 0) return <span className="text-xs text-slate-400 italic">Empty payload.</span>;
 
+    const formatValueForProfessor = (val: any) => {
+      if (val === undefined || val === null) return <span className="text-slate-400 italic">Not Set</span>;
+      if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+      if (typeof val === 'string' && val.includes('T') && val.includes('Z')) {
+        // likely an ISO date
+        try {
+          const d = new Date(val);
+          if (!isNaN(d.getTime())) {
+            return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+          }
+        } catch {}
+      }
+      return String(val);
+    };
+
+    const formatKeyForProfessor = (key: string) => {
+      return key.replace(/_/g, ' ')
+                .replace(/\b\w/g, c => c.toUpperCase())
+                .replace('Id', 'ID');
+    };
+
     return (
       <div className="overflow-x-auto rounded-lg border border-slate-200">
         <table className="w-full text-left border-collapse text-xs">
@@ -67,23 +88,21 @@ export const AuditLogs: React.FC = () => {
               const oldVal = before ? before[key] : undefined;
               const newVal = after ? after[key] : undefined;
               
-              // Skip if both undefined or both the same
               if (oldVal === undefined && newVal === undefined) return null;
               
               const isChanged = JSON.stringify(oldVal) !== JSON.stringify(newVal);
-              if (!isChanged) return null; // Only show fields that changed or were added/removed
-
-              const displayOld = oldVal === undefined ? <span className="text-slate-300 italic">null</span> : JSON.stringify(oldVal);
-              const displayNew = newVal === undefined ? <span className="text-slate-300 italic">null</span> : JSON.stringify(newVal);
+              if (!isChanged) return null;
 
               return (
                 <tr key={key} className={isChanged ? 'bg-amber-50/30' : ''}>
-                  <td className="p-2 border-r border-slate-200 font-mono text-slate-700 break-all">{key}</td>
-                  <td className={`p-2 border-r border-slate-200 break-all font-mono ${oldVal === undefined ? 'text-slate-400' : 'text-red-700 line-through opacity-75'}`}>
-                    {displayOld}
+                  <td className="p-2 border-r border-slate-200 font-semibold text-slate-700 capitalize">
+                    {formatKeyForProfessor(key)}
                   </td>
-                  <td className={`p-2 break-all font-mono ${newVal === undefined ? 'text-slate-400' : 'text-emerald-700 font-bold'}`}>
-                    {displayNew}
+                  <td className={`p-2 border-r border-slate-200 font-medium ${oldVal === undefined || oldVal === null ? 'text-slate-400' : 'text-red-700 line-through opacity-75'}`}>
+                    {formatValueForProfessor(oldVal)}
+                  </td>
+                  <td className={`p-2 font-semibold ${newVal === undefined || newVal === null ? 'text-slate-400' : 'text-emerald-700'}`}>
+                    {formatValueForProfessor(newVal)}
                   </td>
                 </tr>
               );
@@ -190,8 +209,11 @@ export const AuditLogs: React.FC = () => {
                         </span>
                       </td>
                       <td className="p-4 text-sm text-slate-500 whitespace-nowrap">
-                        <div className="capitalize font-medium text-slate-700">{row.entity_type}</div>
-                        <div className="text-[10px] text-slate-400 font-mono tracking-tighter">{row.entity_id}</div>
+                        {row.entity_id ? (
+                          <div className="font-medium text-[#005596]">{row.entity_id}</div>
+                        ) : (
+                          <div className="capitalize font-medium text-slate-700">{row.entity_type.replace(/_/g, ' ')}</div>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -208,8 +230,11 @@ export const AuditLogs: React.FC = () => {
             <div className="mt-4 space-y-4">
               <div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Entity Type & ID</span>
-                <span className="text-sm font-semibold text-slate-700 capitalize">{selectedLog.entity_type}</span>
-                <span className="text-xs text-slate-400 font-mono block mt-0.5">{selectedLog.entity_id}</span>
+                {selectedLog.entity_id ? (
+                  <span className="text-sm font-semibold text-[#005596]">{selectedLog.entity_id}</span>
+                ) : (
+                  <span className="text-sm font-semibold text-slate-700 capitalize">{selectedLog.entity_type.replace(/_/g, ' ')}</span>
+                )}
               </div>
               <div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Action Performed</span>

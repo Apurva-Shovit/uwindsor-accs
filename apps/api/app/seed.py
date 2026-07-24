@@ -26,9 +26,9 @@ async def seed():
         print("Super admin already exists.")
 
     # 2. Seed Facility
-    fac = await Facility.find_one({"name": "Windsor Aquatic Research Centre"})
+    fac = await Facility.find_one({"name": "LaSalle Freshwater Restoration Ecology Centre"})
     if not fac:
-        fac = Facility(name="Windsor Aquatic Research Centre", address="401 Sunset Ave, Windsor, ON", description="Main pilot research facility")
+        fac = Facility(name="LaSalle Freshwater Restoration Ecology Centre", address="LaSalle, ON", description="Main restoration ecology facility")
         await fac.insert()
         print(f"Facility created: {fac.name} ({fac.id})")
     else:
