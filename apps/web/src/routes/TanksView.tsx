@@ -428,21 +428,9 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
                 )}
                 
                 {selectedTank?.display_status === 'quarantine' ? (
-                  <button
-                    onClick={async () => {
-                      if (!selectedTank) return;
-                      try {
-                        await toggleTankQuarantine(getId(selectedTank), false);
-                        await fetchTanks();
-                        setSelectedTank({ ...selectedTank, display_status: 'healthy' });
-                      } catch (err: any) {
-                        alert(err.response?.data?.detail || 'Failed to remove quarantine');
-                      }
-                    }}
-                    className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors"
-                  >
-                    Lift Quarantine
-                  </button>
+                  <div className="text-sm font-semibold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-md border border-amber-200 inline-block">
+                    Currently in Quarantine
+                  </div>
                 ) : (
                   <button
                     onClick={async () => {
