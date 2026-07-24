@@ -167,8 +167,12 @@ export const Dashboard: React.FC = () => {
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-800 capitalize">
                               {item.action.replace('_', ' ')}
                             </span>{' '}
-                            on <span className="font-semibold text-slate-600">{item.entity_type}</span>:{' '}
-                            <span className="text-sm font-medium text-[#005596]">{item.entity_id}</span>
+                            on <span className="font-semibold text-slate-600">{item.entity_type.replace(/_/g, ' ')}</span>
+                            {item.entity_id && (
+                              <>
+                                : <span className="text-sm font-medium text-[#005596]">{item.entity_id}</span>
+                              </>
+                            )}
                           </p>
                         </div>
                         <div className="text-right text-xs whitespace-nowrap text-slate-500 font-medium">

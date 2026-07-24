@@ -93,6 +93,8 @@ async def get_dashboard_activity(
                 if ce:
                     t = await Tank.get(ce.tank_id)
                     display_id = f"Census for Tank {t.tank_number if t else 'Unknown'}"
+            elif log.entity_type == "water_quality_log":
+                display_id = ""
         except Exception:
             pass
 
