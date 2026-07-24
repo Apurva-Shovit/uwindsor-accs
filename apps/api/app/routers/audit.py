@@ -37,17 +37,8 @@ async def get_audit_logs(
     skip = (page - 1) * page_size
     logs_cursor = AuditLog.find(query).sort("-created_at").skip(skip).limit(page_size)
     logs = await logs_cursor.to_list()
-    # Resolve actor names
-    actor_ids = {log.actor_id for log in logs}
-    from bson import ObjectId
-    obj_ids = []
-    for aid in actor_ids:
-        try:
-            obj_ids.append(ObjectId(aid))
-        except Exception:
-            pass
-    users = await User.find({"_id": {"$in": obj_ids}}).to_list()
-    user_map = {str(u.id): f"{u.first_name} {u.last_name}" for u in users}
+    users_list = await User.find_all().to_list()
+    user_map = {str(u.id): f"{u.first_name} {u.last_name}" for u in users_list}
     from ..models.tank_assignment import TankAssignment
     from ..models.facility import Tank
     from ..models.project import Project
@@ -86,13 +77,28 @@ async def get_audit_logs(
         if action_label == "quarantine_toggle" and log.after:
             action_label = "placed_in_quarantine" if log.after.get("is_quarantined") else "lifted_quarantine"
 
+        # Resolve created_by/updated_by in diff payloads
+        resolved_before = None
+        if log.before:
+            resolved_before = dict(log.before)
+            for k, v in resolved_before.items():
+                if k in ("created_by", "updated_by") and isinstance(v, str):
+                    resolved_before[k] = user_map.get(v, v)
+        
+        resolved_after = None
+        if log.after:
+            resolved_after = dict(log.after)
+            for k, v in resolved_after.items():
+                if k in ("created_by", "updated_by") and isinstance(v, str):
+                    resolved_after[k] = user_map.get(v, v)
+
         result.append({
             "actor_name": user_map.get(str(log.actor_id), "Unknown"),
             "action": action_label,
             "entity_type": log.entity_type,
             "entity_id": display_id,
-            "before": log.before,
-            "after": log.after,
+            "before": resolved_before,
+            "after": resolved_after,
             "timestamp": log.created_at.isoformat(),
         })
     return result

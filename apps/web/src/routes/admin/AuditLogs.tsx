@@ -32,9 +32,13 @@ export const AuditLogs: React.FC = () => {
     if (!tsStr) return '-';
     try {
       const d = new Date(tsStr);
-      return d.toLocaleString(undefined, {
-        dateStyle: 'medium',
-        timeStyle: 'short'
+      return d.toLocaleString(undefined, { 
+        weekday: 'short', 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit' 
       });
     } catch {
       return tsStr;
@@ -60,7 +64,14 @@ export const AuditLogs: React.FC = () => {
         try {
           const d = new Date(val);
           if (!isNaN(d.getTime())) {
-            return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+            return d.toLocaleString(undefined, { 
+              weekday: 'short', 
+              year: 'numeric', 
+              month: 'short', 
+              day: 'numeric', 
+              hour: '2-digit', 
+              minute: '2-digit' 
+            });
           }
         } catch {}
       }
