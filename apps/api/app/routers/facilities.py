@@ -163,7 +163,7 @@ async def tanks_summary(current: User = Depends(get_current_user)):
             aupp = ta.aupp_number or "N/A"
             p = await Project.get(ta.project_id)
             if p:
-                species = p.title
+                species = p.species or "N/A"
 
         res.append({
             "id": str(t.id),

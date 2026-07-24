@@ -77,7 +77,7 @@ async def create_tank_transfer(
     dest_is_new = False
     if dest_ta:
         if dest_ta.project_id != source_ta.project_id:
-            raise HTTPException(status.HTTP_409_CONFLICT, "Destination Occupied")
+            raise HTTPException(status.HTTP_409_CONFLICT, "Destination tank is occupied by a different AUPP project")
     else:
         # Case B: Destination empty. Create new assignment
         dest_is_new = True
@@ -141,6 +141,14 @@ async def create_tank_transfer(
         created_by=str(current.id),
     )
     await ev_in.insert()
+
+    # Propagate Quarantine if applicable
+    if source_tank_obj and source_tank_obj.is_quarantined and dest_tank_obj:
+        if not dest_tank_obj.is_quarantined:
+            dest_tank_obj.is_quarantined = True
+            dest_tank_obj.quarantine_start_date = source_tank_obj.quarantine_start_date
+            dest_tank_obj.quarantine_end_date = source_tank_obj.quarantine_end_date
+            await dest_tank_obj.save()
 
     # Create Audits
     await _create_audit("update", "tank_assignment", str(source_ta.id), before_source, after_source, current)
