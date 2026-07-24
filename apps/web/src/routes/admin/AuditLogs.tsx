@@ -90,6 +90,9 @@ export const AuditLogs: React.FC = () => {
               
               if (oldVal === undefined && newVal === undefined) return null;
               
+              // Filter out Mongo IDs and system fields
+              if (key === '_id' || key === 'id' || key === 'v' || key.endsWith('_id')) return null;
+
               const isChanged = JSON.stringify(oldVal) !== JSON.stringify(newVal);
               if (!isChanged) return null;
 
