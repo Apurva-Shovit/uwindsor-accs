@@ -69,13 +69,38 @@ async def get_dashboard_activity(
             pass
     users = await User.find({"_id": {"$in": obj_ids}}).to_list()
     user_map = {str(u.id): f"{u.first_name} {u.last_name}" for u in users}
+    from ..models.census_event import CensusEvent
     result = []
     for log in logs:
+        display_id = str(log.entity_id)
+        try:
+            if log.entity_type == "tank":
+                t = await Tank.get(log.entity_id)
+                display_id = f"Tank {t.tank_number}" if t else display_id
+            elif log.entity_type == "project":
+                p = await Project.get(log.entity_id)
+                display_id = f"Project '{p.title}'" if p else display_id
+            elif log.entity_type == "user":
+                u = await User.get(log.entity_id)
+                display_id = f"User {u.first_name} {u.last_name}" if u else display_id
+            elif log.entity_type == "tank_assignment":
+                ta = await TankAssignment.get(log.entity_id)
+                if ta:
+                    t = await Tank.get(ta.tank_id)
+                    display_id = f"Assignment on Tank {t.tank_number if t else 'Unknown'}"
+            elif log.entity_type == "census_event":
+                ce = await CensusEvent.get(log.entity_id)
+                if ce:
+                    t = await Tank.get(ce.tank_id)
+                    display_id = f"Census for Tank {t.tank_number if t else 'Unknown'}"
+        except Exception:
+            pass
+
         result.append({
             "actor_name": user_map.get(str(log.actor_id), "Unknown"),
             "action": log.action,
             "entity_type": log.entity_type,
-            "entity_id": log.entity_id,
+            "entity_id": display_id,
             "created_at": log.created_at.isoformat(),
         })
     return result
