@@ -1,0 +1,393 @@
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { AlertTriangle, Clock, ShieldAlert, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+
+export const QuarantinePage: React.FC = () => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedSourceTank, setSelectedSourceTank] = useState('');
+  const [targetTankId, setTargetTankId] = useState('');
+  const [transferCount, setTransferCount] = useState(1);
+  const [reason, setReason] = useState('');
+  const [urgency, setUrgency] = useState('normal');
+  const [submitting, setSubmitting] = useState(false);
+  
+  const { user } = useAuth();
+  const isManagerPlus = ['super_admin', 'admin', 'chair', 'manager'].includes(user?.role || '');
+
+  const [liftModalTank, setLiftModalTank] = useState<any>(null);
+  const [liftVerification, setLiftVerification] = useState('');
+
+  // Fetch tanks
+  const { data: tanks, refetch: refetchTanks } = useQuery({
+    queryKey: ['tanksList'],
+    queryFn: async () => {
+      const token = localStorage.getItem('token');
+      const res = await fetch('http://localhost:8000/facilities-structure/tanks/summary', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to fetch tanks');
+      return res.json();
+    }
+  });
+
+  // Fetch exemptions history
+  const { data: exemptions, refetch: refetchExemptions } = useQuery({
+    queryKey: ['quarantineExemptions'],
+    queryFn: async () => {
+      const token = localStorage.getItem('token');
+      const res = await fetch('http://localhost:8000/quarantine/exemptions', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to fetch exemptions');
+      return res.json();
+    }
+  });
+
+  const handleRequestExemption = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSourceTank || !targetTankId || !reason.trim()) return;
+
+    setSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('http://localhost:8000/quarantine/exemption-request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          tank_id: selectedSourceTank,
+          target_tank_id: targetTankId,
+          count: Number(transferCount),
+          reason,
+          urgency
+        })
+      });
+
+      if (!res.ok) throw new Error('Failed to submit exemption request');
+      setIsModalOpen(false);
+      setReason('');
+      refetchExemptions();
+    } catch (err: any) {
+      alert(err.message || 'Error requesting exemption');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const confirmLiftQuarantine = async () => {
+    if (!liftModalTank) return;
+    if (liftVerification !== `TANK ${liftModalTank.tank_number}`) {
+      alert("Verification failed. Please type the exact text.");
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:8000/facilities-structure/tanks/${liftModalTank.id || liftModalTank._id}/quarantine`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ is_quarantined: false })
+      });
+      if (!res.ok) throw new Error('Failed to lift quarantine');
+      refetchTanks();
+      setLiftModalTank(null);
+    } catch (err: any) {
+      alert(err.message || 'Error lifting quarantine');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-start border-b border-slate-200 pb-4">
+        <div>
+          <h1 className="text-2xl font-bold text-[#005596] flex items-center gap-2">
+            <ShieldAlert className="w-7 h-7 text-amber-600" />
+            14-Day Mandatory Quarantine Monitor
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Tracking isolation windows for newly acquired fish. Transfers are restricted during active quarantine unless authorized by Admin/Chair.
+          </p>
+        </div>
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-2 rounded-lg text-sm shadow-sm transition-colors flex items-center gap-2"
+        >
+          <AlertTriangle className="w-4 h-4" />
+          Request Special Transfer Exemption
+        </button>
+      </div>
+
+      {/* Active Quarantined Tanks */}
+      <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
+        <h2 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2">
+          <Clock className="w-5 h-5 text-brandBlue" />
+          Currently Quarantined Tanks
+        </h2>
+        
+        {!tanks ? (
+          <div className="text-center py-4 text-slate-400 text-sm italic">Loading tanks...</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {tanks.filter((t: any) => t.is_quarantined === true).map((t: any) => {
+              const start = new Date(t.quarantine_start_date);
+              const end = new Date(t.quarantine_end_date);
+              const now = new Date();
+              const daysLeft = Math.ceil((end.getTime() - now.getTime()) / (1000 * 3600 * 24));
+              
+              return (
+                <div key={t.id || t._id} className="border border-amber-200 bg-amber-50 rounded-lg p-4 flex flex-col gap-2">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-amber-900 text-lg">Tank {t.tank_number}</span>
+                    <span className="bg-amber-200 text-amber-800 text-xs font-bold px-2 py-1 rounded">
+                      {daysLeft > 0 ? `${daysLeft} days left` : 'Expired'}
+                    </span>
+                  </div>
+                  <div className="text-xs text-amber-700">
+                    <div><strong>Started:</strong> {start.toLocaleDateString()}</div>
+                    <div><strong>Ends:</strong> {end.toLocaleDateString()}</div>
+                  </div>
+                  {isManagerPlus && (
+                    <button 
+                      onClick={() => {
+                        setLiftModalTank(t);
+                        setLiftVerification('');
+                      }}
+                      className="mt-2 text-xs font-bold w-full bg-white text-amber-700 border border-amber-300 py-1.5 rounded hover:bg-amber-100 transition-colors"
+                    >
+                      Lift Quarantine
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            {tanks.filter((t: any) => t.is_quarantined === true).length === 0 && (
+              <div className="col-span-full text-center py-4 text-slate-400 text-sm italic">
+                No tanks are currently in quarantine.
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Quarantine Exemption Requests Table */}
+      <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
+        <h2 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-3">
+          Special Exemption Requests History
+        </h2>
+
+        {!exemptions || exemptions.length === 0 ? (
+          <div className="text-center py-8 text-slate-400 text-sm italic">
+            No quarantine exemption requests filed.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  <th className="p-3">Requested Date</th>
+                  <th className="p-3">Source & Target Tank</th>
+                  <th className="p-3">Fish Count</th>
+                  <th className="p-3">Urgency</th>
+                  <th className="p-3">Reason</th>
+                  <th className="p-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-sm">
+                {exemptions.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-6 text-center text-sm font-medium text-slate-500">
+                      No exemption requests found.
+                    </td>
+                  </tr>
+                ) : (
+                  exemptions.map((ex: any) => (
+                    <tr key={ex.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-3 font-medium text-slate-900 whitespace-nowrap">
+                        {new Date(ex.requested_at).toLocaleDateString()}
+                      </td>
+                      <td className="p-3 font-semibold text-slate-700">
+                        Tank {tanks?.find((t: any) => (t.id || (t as any)._id) === ex.tank_id)?.tank_number || 'Unknown'} → Tank {tanks?.find((t: any) => (t.id || (t as any)._id) === ex.target_tank_id)?.tank_number || 'Unknown'}
+                      </td>
+                      <td className="p-3 font-bold text-slate-800">{ex.count} fish</td>
+                      <td className="p-3 uppercase text-xs font-bold text-amber-600">{ex.urgency}</td>
+                      <td className="p-3 text-slate-600 text-xs max-w-xs">{ex.reason}</td>
+                      <td className="p-3 whitespace-nowrap">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                          ex.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                          ex.status === 'rejected' ? 'bg-red-50 text-red-700 border border-red-200' :
+                          'bg-amber-50 text-amber-700 border border-amber-200 animate-pulse'
+                        }`}>
+                          {ex.status === 'approved' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
+                          {ex.status === 'rejected' && <XCircle className="w-3.5 h-3.5 text-red-600" />}
+                          {ex.status === 'pending' && <Clock className="w-3.5 h-3.5 text-amber-600" />}
+                          {ex.status.toUpperCase()}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Exemption Request Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <form onSubmit={handleRequestExemption} className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <h3 className="text-lg font-bold text-[#005596] flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-600" />
+              Quarantine Transfer Exemption Request
+            </h3>
+            <p className="text-xs text-slate-500">
+              Provide justification for moving fish out of mandatory 14-day quarantine prior to isolation expiration.
+            </p>
+
+            <div className="space-y-3 text-sm">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Source Quarantine Tank</label>
+                <select
+                  value={selectedSourceTank}
+                  onChange={(e) => setSelectedSourceTank(e.target.value)}
+                  required
+                  className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-[#005596]"
+                >
+                  <option value="">Select Quarantined Tank</option>
+                  {tanks?.filter((t: any) => t.is_quarantined === true).map((t: any) => (
+                    <option key={t.id || t._id} value={t.id || t._id}>
+                      Tank {t.tank_number} - {t.count} fish (AUPP: {t.aupp})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Target Destination Tank</label>
+                <select
+                  value={targetTankId}
+                  onChange={(e) => setTargetTankId(e.target.value)}
+                  required
+                  className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-[#005596]"
+                >
+                  <option value="">Select Destination Tank</option>
+                  {tanks?.filter((t: any) => t.is_quarantined !== true).map((t: any) => (
+                    <option key={t.id || t._id} value={t.id || t._id}>
+                      Tank {t.tank_number} - {t.count} fish (AUPP: {t.aupp})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Fish Quantity</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={transferCount}
+                    onChange={(e) => setTransferCount(Number(e.target.value))}
+                    required
+                    className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-[#005596]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Urgency Level</label>
+                  <select
+                    value={urgency}
+                    onChange={(e) => setUrgency(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-[#005596]"
+                  >
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Justification Reason</label>
+                <textarea
+                  rows={3}
+                  placeholder="Explain why early transfer out of quarantine is necessary..."
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  required
+                  className="w-full border border-slate-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-[#005596]"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg disabled:opacity-50"
+              >
+                {submitting ? 'Submitting...' : 'Submit Request'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+      {/* Lift Quarantine Modal */}
+      {liftModalTank && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl max-w-sm w-full p-6 shadow-2xl space-y-4">
+            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-red-500" />
+              Manual Quarantine Lift
+            </h3>
+            <p className="text-sm text-slate-600">
+              You are about to bypass the 14-day mandatory quarantine for <strong>Tank {liftModalTank.tank_number}</strong>. This action is audited.
+            </p>
+            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
+                Type <span className="text-red-600 select-all">TANK {liftModalTank.tank_number}</span> to verify
+              </label>
+              <input
+                type="text"
+                value={liftVerification}
+                onChange={(e) => setLiftVerification(e.target.value)}
+                placeholder={`TANK ${liftModalTank.tank_number}`}
+                className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-red-500 text-sm"
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setLiftModalTank(null)}
+                className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmLiftQuarantine}
+                disabled={liftVerification !== `TANK ${liftModalTank.tank_number}`}
+                className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm transition-all"
+              >
+                Confirm Lift
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+};
