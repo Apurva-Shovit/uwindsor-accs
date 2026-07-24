@@ -27,11 +27,13 @@ async def get_reports_summary(
     rooms_list = await Room.find_all().to_list()
     facs_list = await Facility.find_all().to_list()
     projects_list = await Project.find_all().to_list()
+    users_list = await User.find_all().to_list()
 
     tank_map = {str(t.id): t for t in tanks_list}
     room_map = {str(r.id): r for r in rooms_list}
     fac_map = {str(f.id): f for f in facs_list}
     proj_map = {str(p.id): p for p in projects_list}
+    user_map = {str(u.id): f"{u.first_name} {u.last_name}" for u in users_list}
 
     def resolve_location(tank_id: str):
         t = tank_map.get(tank_id)
@@ -86,7 +88,7 @@ async def get_reports_summary(
             "aupp_number": proj_obj.aupp_number if proj_obj else "N/A",
             "event_type": "Water Quality",
             "summary": f"{log.type}: {log.parameters}",
-            "performed_by": log.created_by,
+            "performed_by": user_map.get(str(log.created_by), "System"),
             "created_at": log.created_at.isoformat(),
         })
 
@@ -113,7 +115,7 @@ async def get_reports_summary(
             "aupp_number": proj_obj.aupp_number if proj_obj else "N/A",
             "event_type": "Incident",
             "summary": inc.problem,
-            "performed_by": inc.created_by,
+            "performed_by": user_map.get(str(inc.created_by), "System"),
             "created_at": inc.created_at.isoformat(),
         })
 
@@ -140,7 +142,7 @@ async def get_reports_summary(
             "aupp_number": proj_obj.aupp_number if proj_obj else "N/A",
             "event_type": "Census",
             "summary": f"{c.event_type}: {c.change}",
-            "performed_by": c.created_by,
+            "performed_by": user_map.get(str(c.created_by), "System"),
             "created_at": c.created_at.isoformat(),
         })
 

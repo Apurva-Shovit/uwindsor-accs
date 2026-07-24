@@ -45,10 +45,13 @@ export const TankHistoryPage: React.FC = () => {
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '-';
     try {
-      return new Date(dateStr).toLocaleDateString(undefined, {
+      return new Date(dateStr).toLocaleString(undefined, {
+        weekday: 'short',
         year: 'numeric',
         month: 'short',
-        day: 'numeric'
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
       });
     } catch {
       return dateStr;
@@ -192,7 +195,7 @@ export const TankHistoryPage: React.FC = () => {
                 {history.map((row: any) => (
                   <tr key={row.id} className="hover:bg-slate-50 transition-colors">
                     <td className="p-4 font-semibold text-slate-900 whitespace-nowrap">
-                      {formatDate(row.date)}
+                      {formatDate(row.created_at || row.date)}
                     </td>
                     <td className="p-4">
                       <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-blue-50 text-[#005596]">

@@ -84,7 +84,7 @@ export const Reports: React.FC = () => {
     if (!dateStr) return '-';
     try {
       const d = new Date(dateStr);
-      return d.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return d.toLocaleString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     } catch {
       return dateStr;
     }
