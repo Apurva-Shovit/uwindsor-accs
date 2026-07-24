@@ -185,6 +185,7 @@ async def close_project(
         for ta in active_assignments:
             ev = CensusEvent(
                 tank_id=ta.tank_id,
+                tank_assignment_id=str(ta.id),
                 project_id=str(p.id),
                 event_type=census_type,
                 change=-ta.current_count,
