@@ -98,9 +98,13 @@ async def get_dashboard_activity(
         except Exception:
             pass
 
+        action_label = log.action
+        if action_label == "quarantine_toggle" and log.after:
+            action_label = "placed_in_quarantine" if log.after.get("is_quarantined") else "lifted_quarantine"
+
         result.append({
             "actor_name": user_map.get(str(log.actor_id), "Unknown"),
-            "action": log.action,
+            "action": action_label,
             "entity_type": log.entity_type,
             "entity_id": display_id,
             "created_at": log.created_at.isoformat(),

@@ -121,10 +121,12 @@ async def toggle_tank_quarantine(
         
     await t.save()
     
+    action_str = "placed_in_quarantine" if body.is_quarantined else "lifted_quarantine"
+    
     await AuditLog(
         actor_id=str(current.id),
         actor_role=current.role.value,
-        action="quarantine_toggle",
+        action=action_str,
         entity_type="tank",
         entity_id=str(t.id),
         before=before,
