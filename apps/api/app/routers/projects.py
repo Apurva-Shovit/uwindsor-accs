@@ -35,6 +35,11 @@ async def create_project(
     est_dt = datetime.fromisoformat(body.established_date) if body.established_date else None
     exp_dt = datetime.fromisoformat(body.aupp_expiry_date) if body.aupp_expiry_date else None
 
+    # Check for duplicate AUPP number
+    existing_project = await Project.find_one({"aupp_number": body.aupp_number})
+    if existing_project:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"A project with AUPP number '{body.aupp_number}' already exists.")
+
     project = Project(
         title=body.title,
         pi_name=body.pi_name,
