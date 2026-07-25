@@ -1,5 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { formatDate } from '../utils/formatters';
 
 export const Dashboard: React.FC = () => {
   const { data: summary, isLoading: loadingSummary } = useQuery({
@@ -26,18 +27,6 @@ export const Dashboard: React.FC = () => {
     }
   });
 
-  const formatTimestamp = (tsStr: string) => {
-    if (!tsStr) return '-';
-    try {
-      const d = new Date(tsStr);
-      return d.toLocaleString(undefined, {
-        dateStyle: 'short',
-        timeStyle: 'short'
-      });
-    } catch {
-      return tsStr;
-    }
-  };
 
   if (loadingSummary || loadingActivity) return (
     <div className="p-12 text-center text-slate-500">
@@ -100,17 +89,17 @@ export const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
           <h2 className="text-base font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2">Active Tank Distribution</h2>
-          <div className="flex items-center justify-between gap-6 py-2">
-            <div className="flex flex-col items-center justify-center p-4 bg-emerald-50 rounded-xl flex-1 border border-emerald-100">
-              <span className="text-sm font-semibold text-emerald-800">Healthy / Assigned</span>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-2">
+            <div className="flex flex-col items-center justify-center p-4 bg-emerald-50 rounded-xl w-full sm:flex-1 border border-emerald-100">
+              <span className="text-sm font-semibold text-emerald-800 text-center">Healthy / Assigned</span>
               <span className="text-3xl font-extrabold text-emerald-600 mt-2">{summary?.tank_status?.healthy || 0}</span>
             </div>
-            <div className="flex flex-col items-center justify-center p-4 bg-amber-50 rounded-xl flex-1 border border-amber-100">
-              <span className="text-sm font-semibold text-amber-800">Quarantine</span>
+            <div className="flex flex-col items-center justify-center p-4 bg-amber-50 rounded-xl w-full sm:flex-1 border border-amber-100">
+              <span className="text-sm font-semibold text-amber-800 text-center">Quarantine</span>
               <span className="text-3xl font-extrabold text-amber-600 mt-2">{summary?.tank_status?.quarantine || 0}</span>
             </div>
-            <div className="flex flex-col items-center justify-center p-4 bg-red-50 rounded-xl flex-1 border border-red-100">
-              <span className="text-sm font-semibold text-red-800">Needs Attention</span>
+            <div className="flex flex-col items-center justify-center p-4 bg-red-50 rounded-xl w-full sm:flex-1 border border-red-100">
+              <span className="text-sm font-semibold text-red-800 text-center">Needs Attention</span>
               <span className="text-3xl font-extrabold text-red-600 mt-2">{summary?.tank_status?.attention || 0}</span>
             </div>
           </div>
@@ -160,12 +149,12 @@ export const Dashboard: React.FC = () => {
                           </svg>
                         </span>
                       </div>
-                      <div className="flex-1 min-w-0 pt-1.5 flex justify-between space-x-4">
+                      <div className="flex-1 min-w-0 pt-1.5 flex flex-col sm:flex-row justify-between sm:space-x-4 gap-2">
                         <div>
-                          <p className="text-sm text-slate-700">
+                          <p className="text-sm text-slate-700 break-words">
                             <strong className="text-slate-900 font-semibold">{item.actor_name}</strong> performed{' '}
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-800 capitalize">
-                              {item.action.replace('_', ' ')}
+                              {item.action.replace(/_/g, ' ')}
                             </span>{' '}
                             on <span className="font-semibold text-slate-600">{item.entity_type.replace(/_/g, ' ')}</span>
                             {item.entity_id && (
@@ -175,8 +164,8 @@ export const Dashboard: React.FC = () => {
                             )}
                           </p>
                         </div>
-                        <div className="text-right text-xs whitespace-nowrap text-slate-500 font-medium">
-                          <time>{formatTimestamp(item.created_at)}</time>
+                        <div className="text-left sm:text-right text-xs whitespace-nowrap text-slate-500 font-medium">
+                          <time>{formatDate(item.created_at)}</time>
                         </div>
                       </div>
                     </div>
