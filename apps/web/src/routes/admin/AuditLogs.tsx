@@ -59,20 +59,26 @@ export const AuditLogs: React.FC = () => {
     const formatValueForProfessor = (val: any) => {
       if (val === undefined || val === null) return <span className="text-slate-400 italic">Not Set</span>;
       if (typeof val === 'boolean') return val ? 'Yes' : 'No';
-      if (typeof val === 'string' && val.includes('T') && val.includes('Z')) {
-        try {
-          const d = new Date(val);
-          if (!isNaN(d.getTime())) {
-            return d.toLocaleString(undefined, { 
-              weekday: 'short', 
-              year: 'numeric', 
-              month: 'short', 
-              day: 'numeric', 
-              hour: '2-digit', 
-              minute: '2-digit' 
-            });
-          }
-        } catch {}
+      if (typeof val === 'string') {
+        const dateRegex = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:?\d{2})?)?$/;
+        if (dateRegex.test(val)) {
+          try {
+            const d = new Date(val);
+            if (!isNaN(d.getTime())) {
+              const options: Intl.DateTimeFormatOptions = { 
+                weekday: 'short', 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric' 
+              };
+              if (val.includes('T')) {
+                options.hour = '2-digit';
+                options.minute = '2-digit';
+              }
+              return d.toLocaleString(undefined, options);
+            }
+          } catch {}
+        }
       }
       if (typeof val === 'object') {
         return (
@@ -121,14 +127,12 @@ export const AuditLogs: React.FC = () => {
               {formatKeyForProfessor(change.key)}
             </div>
             {change.oldVal === undefined || change.oldVal === null ? (
-              <div className="text-sm font-medium text-[#005596] flex items-center gap-2">
-                <span className="text-slate-400 italic text-xs">Set to</span> 
-                <span>{formatValueForProfessor(change.newVal)}</span>
+              <div className="text-sm font-bold text-[#005596]">
+                {formatValueForProfessor(change.newVal)}
               </div>
             ) : change.newVal === undefined || change.newVal === null ? (
-              <div className="text-sm font-medium text-red-600 flex items-center gap-2">
-                <span className="text-slate-400 italic text-xs">Removed</span>
-                <span className="line-through opacity-75">{formatValueForProfessor(change.oldVal)}</span>
+              <div className="text-sm font-medium text-red-600 line-through opacity-75">
+                {formatValueForProfessor(change.oldVal)}
               </div>
             ) : (
               <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 text-sm">
