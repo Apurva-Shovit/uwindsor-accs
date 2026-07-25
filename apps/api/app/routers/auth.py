@@ -1,4 +1,8 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
 from ..models.user import User
 from ..schemas.auth import SignupRequest, LoginRequest, TokenResponse, MeResponse
 from ..services.auth_service import AuthService
@@ -12,7 +16,8 @@ async def signup(body: SignupRequest):
     return {"message": "Signup received. Awaiting approval.", "id": user_id}
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest):
+@limiter.limit("5/minute")
+async def login(request: Request, body: LoginRequest):
     token, role, status = await AuthService.login(body)
     return TokenResponse(access_token=token, role=role, status=status)
 

@@ -1,5 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from ..models.user import RoleEnum
+from ..utils.sanitization import sanitize_html
 
 class ApproveRequest(BaseModel):
     role: RoleEnum                      # confirm/override requested_role
@@ -9,6 +10,11 @@ class ApproveRequest(BaseModel):
 
 class RejectRequest(BaseModel):
     reason: str
+
+    @field_validator('reason')
+    @classmethod
+    def sanitize_strings(cls, v: str) -> str:
+        return sanitize_html(v)
 
 class PendingUserResponse(BaseModel):
     id: str
