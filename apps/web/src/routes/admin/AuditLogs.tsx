@@ -75,6 +75,17 @@ export const AuditLogs: React.FC = () => {
           }
         } catch {}
       }
+      if (typeof val === 'object') {
+        return (
+          <div className="space-y-1">
+            {Object.entries(val).map(([k, v]) => (
+              <div key={k} className="text-xs">
+                <span className="font-semibold text-slate-500 capitalize">{k.replace(/_/g, ' ')}:</span> {String(v)}
+              </div>
+            ))}
+          </div>
+        );
+      }
       return String(val);
     };
 

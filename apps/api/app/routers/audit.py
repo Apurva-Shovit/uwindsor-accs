@@ -44,6 +44,8 @@ async def get_audit_logs(
     from ..models.project import Project
     from ..models.census_event import CensusEvent
     from ..models.water_quality_log import WaterQualityLog
+    from ..models.incident_report import IncidentReport
+    from ..models.quarantine import QuarantineExemption
     
     result = []
     for log in logs:
@@ -69,7 +71,20 @@ async def get_audit_logs(
                     t = await Tank.get(ce.tank_id)
                     display_id = f"Census for Tank {t.tank_number if t else 'Unknown'}"
             elif log.entity_type == "water_quality_log":
-                display_id = ""
+                wql = await WaterQualityLog.get(log.entity_id)
+                if wql:
+                    t = await Tank.get(wql.tank_id)
+                    display_id = f"Water Quality for Tank {t.tank_number if t else 'Unknown'}"
+            elif log.entity_type == "incident_report":
+                inc = await IncidentReport.get(log.entity_id)
+                if inc:
+                    t = await Tank.get(inc.tank_id)
+                    display_id = f"Incident on Tank {t.tank_number if t else 'Unknown'}"
+            elif log.entity_type == "quarantine_exemption":
+                qe = await QuarantineExemption.get(log.entity_id)
+                if qe:
+                    t = await Tank.get(qe.tank_id)
+                    display_id = f"Exemption for Tank {t.tank_number if t else 'Unknown'}"
         except Exception:
             pass
 
@@ -82,14 +97,14 @@ async def get_audit_logs(
         if log.before:
             resolved_before = dict(log.before)
             for k, v in resolved_before.items():
-                if k in ("created_by", "updated_by") and isinstance(v, str):
+                if k.endswith("_by") and isinstance(v, str):
                     resolved_before[k] = user_map.get(v, v)
         
         resolved_after = None
         if log.after:
             resolved_after = dict(log.after)
             for k, v in resolved_after.items():
-                if k in ("created_by", "updated_by") and isinstance(v, str):
+                if k.endswith("_by") and isinstance(v, str):
                     resolved_after[k] = user_map.get(v, v)
 
         result.append({
