@@ -1,5 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { formatDate, formatValueForProfessor, formatKeyForProfessor } from '../utils/formatters';
 
 export const AuditLogs: React.FC = () => {
   const [dateFrom, setDateFrom] = React.useState('');
@@ -28,22 +29,6 @@ export const AuditLogs: React.FC = () => {
     }
   });
 
-  const formatTimestamp = (tsStr: string) => {
-    if (!tsStr) return '-';
-    try {
-      const d = new Date(tsStr);
-      return d.toLocaleString(undefined, { 
-        weekday: 'short', 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric', 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      });
-    } catch {
-      return tsStr;
-    }
-  };
 
   const renderModifications = (before: any, after: any) => {
     if (!before && !after) return <span className="text-xs text-slate-400 italic">No detailed changes recorded.</span>;
@@ -56,50 +41,7 @@ export const AuditLogs: React.FC = () => {
     const allKeys = Array.from(new Set([...Object.keys(before || {}), ...Object.keys(after || {})]));
     if (allKeys.length === 0) return <span className="text-xs text-slate-400 italic">Empty payload.</span>;
 
-    const formatValueForProfessor = (val: any) => {
-      if (val === undefined || val === null) return <span className="text-slate-400 italic">Not Set</span>;
-      if (typeof val === 'boolean') return val ? 'Yes' : 'No';
-      if (typeof val === 'string') {
-        const dateRegex = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:?\d{2})?)?$/;
-        if (dateRegex.test(val)) {
-          try {
-            const d = new Date(val);
-            if (!isNaN(d.getTime())) {
-              const options: Intl.DateTimeFormatOptions = { 
-                weekday: 'short', 
-                year: 'numeric', 
-                month: 'short', 
-                day: 'numeric' 
-              };
-              if (val.includes('T')) {
-                options.hour = '2-digit';
-                options.minute = '2-digit';
-              }
-              return d.toLocaleString(undefined, options);
-            }
-          } catch {}
-        }
-      }
-      if (typeof val === 'object') {
-        return (
-          <div className="space-y-1 mt-1 bg-white border border-slate-100 rounded p-2">
-            {Object.entries(val).map(([k, v]) => (
-              <div key={k} className="text-xs flex gap-2">
-                <span className="font-bold text-slate-600 capitalize">{k.replace(/_/g, ' ')}:</span> 
-                <span className="text-slate-700">{String(v)}</span>
-              </div>
-            ))}
-          </div>
-        );
-      }
-      return String(val);
-    };
 
-    const formatKeyForProfessor = (key: string) => {
-      return key.replace(/_/g, ' ')
-                .replace(/\b\w/g, c => c.toUpperCase())
-                .replace('Id', 'ID');
-    };
 
     const changes = allKeys.map(key => {
       const oldVal = before ? before[key] : undefined;
@@ -210,28 +152,29 @@ export const AuditLogs: React.FC = () => {
           ) : !data || data.length === 0 ? (
             <div className="p-12 text-center text-slate-500">No audit events matched filters.</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Timestamp</th>
-                    <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Actor</th>
-                    <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Action</th>
-                    <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Entity</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {data.map((row: any, i: number) => (
-                    <tr
-                      key={i}
-                      onClick={() => setSelectedLog(row)}
-                      className={`hover:bg-slate-50 transition-colors cursor-pointer ${
-                        selectedLog === row ? 'bg-slate-50 font-medium' : ''
-                      }`}
-                    >
-                      <td className="p-4 text-sm text-slate-900 whitespace-nowrap">
-                        {formatTimestamp(row.timestamp)}
-                      </td>
+            <div className="overflow-hidden">
+              <div className="hidden lg:block overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Timestamp</th>
+                      <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Actor</th>
+                      <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Action</th>
+                      <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Entity</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {data.map((row: any, i: number) => (
+                      <tr
+                        key={i}
+                        onClick={() => setSelectedLog(row)}
+                        className={`hover:bg-slate-50 transition-colors cursor-pointer ${
+                          selectedLog === row ? 'bg-slate-50 font-medium' : ''
+                        }`}
+                      >
+                        <td className="p-4 text-sm text-slate-900 whitespace-nowrap">
+                          {formatDate(row.timestamp)}
+                        </td>
                       <td className="p-4 text-sm text-slate-600 whitespace-nowrap">
                         <div className="font-semibold">{row.actor_name}</div>
                       </td>
@@ -257,6 +200,37 @@ export const AuditLogs: React.FC = () => {
                   ))}
                 </tbody>
               </table>
+              </div>
+              <div className="block lg:hidden flex flex-col divide-y divide-slate-100">
+                {data.map((row: any, i: number) => (
+                  <div 
+                    key={i} 
+                    onClick={() => setSelectedLog(row)} 
+                    className={`p-4 hover:bg-slate-50 cursor-pointer flex flex-col gap-2 transition-colors ${
+                      selectedLog === row ? 'bg-slate-50 ring-1 ring-inset ring-[#005596]' : ''
+                    }`}
+                  >
+                    <div className="flex justify-between items-start gap-2">
+                      <span className="font-semibold text-slate-900 text-sm">{row.actor_name}</span>
+                      <time className="text-xs text-slate-500 font-medium whitespace-nowrap">{formatDate(row.timestamp)}</time>
+                    </div>
+                    <div className="flex justify-between items-center gap-2 mt-1">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold border capitalize ${
+                          row.action.includes('fail') || row.action.includes('reject')
+                            ? 'bg-red-50 text-red-700 border-red-100'
+                            : row.action.includes('create') || row.action.includes('approve')
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                        }`}>
+                        {row.action.replace(/_/g, ' ')}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-600 truncate">
+                        {row.entity_id || row.entity_type.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
