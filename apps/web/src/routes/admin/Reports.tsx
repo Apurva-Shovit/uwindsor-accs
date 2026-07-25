@@ -1,5 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { formatDate } from '../utils/formatters';
 
 export const Reports: React.FC = () => {
   const [dateFrom, setDateFrom] = React.useState('');
@@ -80,15 +81,7 @@ export const Reports: React.FC = () => {
     return <span className="text-sm text-slate-700">{summaryStr}</span>;
   };
 
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return '-';
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    } catch {
-      return dateStr;
-    }
-  };
+
 
   return (
     <div className="space-y-6">
@@ -219,7 +212,8 @@ export const Reports: React.FC = () => {
           }
 
           return (
-          <div className="overflow-x-auto">
+          <div className="overflow-hidden">
+            <div className="hidden lg:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 print:bg-slate-100">
@@ -267,6 +261,37 @@ export const Reports: React.FC = () => {
 
               </tbody>
             </table>
+            </div>
+            <div className="block lg:hidden flex flex-col divide-y divide-slate-100">
+              {filteredData.map((row: any, i: number) => (
+                <div key={i} className="p-4 flex flex-col gap-3">
+                  <div className="flex justify-between items-start gap-2">
+                    <div>
+                      <div className="font-semibold text-slate-700 text-sm">{row.facility}</div>
+                      {row.room && <div className="text-xs text-slate-500">{row.room} • {row.tank}</div>}
+                    </div>
+                    <time className="text-xs text-slate-500 font-medium whitespace-nowrap">{formatDate(row.created_at || row.date)}</time>
+                  </div>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+                      row.event_type === 'Incident' ? 'bg-red-50 text-red-700 border-red-100' :
+                      row.event_type === 'Water Quality' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                      row.event_type === 'Project Closure' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                      'bg-blue-50 text-blue-700 border-blue-100'
+                    }`}>
+                      {row.event_type}
+                    </span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                      {row.aupp_number || 'N/A'}
+                    </span>
+                    <span className="text-[11px] text-slate-600 ml-auto">By: <span className="font-semibold">{row.performed_by}</span></span>
+                  </div>
+                  <div className="text-sm text-slate-800 mt-1 bg-slate-50 rounded-lg p-2 border border-slate-100">
+                    {formatSummary(row.summary)}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
           );
         })()}
