@@ -22,6 +22,11 @@ class AuditRepository:
         return await AuditLog.find(query).sort("-created_at").skip(skip).limit(limit).to_list()
 
     @staticmethod
+    async def insert(log: AuditLog) -> AuditLog:
+        await log.insert()
+        return log
+
+    @staticmethod
     async def get_entity_display_name(entity_type: str, entity_id: str) -> str:
         """Fetches the entity from the DB to construct its display name."""
         if not ObjectId.is_valid(entity_id):
