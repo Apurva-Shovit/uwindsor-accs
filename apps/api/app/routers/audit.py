@@ -18,102 +18,14 @@ async def get_audit_logs(
     page_size: int = Query(20, ge=1, le=100),
     current: User = Depends(require_chair_or_admin),
 ):
-    # Build query
-    query: dict = {}
-    if actor_id:
-        query["actor_id"] = actor_id
-    if entity_type:
-        query["entity_type"] = entity_type
-    if action:
-        query["action"] = action
-    if date_from or date_to:
-        date_filter: dict = {}
-        if date_from:
-            date_filter["$gte"] = date_from
-        if date_to:
-            date_filter["$lte"] = date_to
-        query["created_at"] = date_filter
-    # Pagination
-    skip = (page - 1) * page_size
-    logs_cursor = AuditLog.find(query).sort("-created_at").skip(skip).limit(page_size)
-    logs = await logs_cursor.to_list()
-    users_list = await User.find_all().to_list()
-    user_map = {str(u.id): f"{u.first_name} {u.last_name}" for u in users_list}
-    from ..models.tank_assignment import TankAssignment
-    from ..models.facility import Tank
-    from ..models.project import Project
-    from ..models.census_event import CensusEvent
-    from ..models.water_quality_log import WaterQualityLog
-    from ..models.incident_report import IncidentReport
-    from ..models.quarantine import QuarantineExemption
+    from ..services.audit_service import AuditService
     
-    result = []
-    for log in logs:
-        display_id = str(log.entity_id)
-        try:
-            if log.entity_type == "tank":
-                t = await Tank.get(log.entity_id)
-                display_id = f"Tank {t.tank_number}" if t else display_id
-            elif log.entity_type == "project":
-                p = await Project.get(log.entity_id)
-                display_id = f"Project '{p.title}'" if p else display_id
-            elif log.entity_type == "user":
-                u = await User.get(log.entity_id)
-                display_id = f"{u.first_name} {u.last_name}" if u else display_id
-            elif log.entity_type == "tank_assignment":
-                ta = await TankAssignment.get(log.entity_id)
-                if ta:
-                    t = await Tank.get(ta.tank_id)
-                    display_id = f"Assignment on Tank {t.tank_number if t else 'Unknown'}"
-            elif log.entity_type == "census_event":
-                ce = await CensusEvent.get(log.entity_id)
-                if ce:
-                    t = await Tank.get(ce.tank_id)
-                    display_id = f"Census for Tank {t.tank_number if t else 'Unknown'}"
-            elif log.entity_type == "water_quality_log":
-                wql = await WaterQualityLog.get(log.entity_id)
-                if wql:
-                    t = await Tank.get(wql.tank_id)
-                    display_id = f"Water Quality for Tank {t.tank_number if t else 'Unknown'}"
-            elif log.entity_type == "incident_report":
-                inc = await IncidentReport.get(log.entity_id)
-                if inc:
-                    t = await Tank.get(inc.tank_id)
-                    display_id = f"Incident on Tank {t.tank_number if t else 'Unknown'}"
-            elif log.entity_type == "quarantine_exemption":
-                qe = await QuarantineExemption.get(log.entity_id)
-                if qe:
-                    t = await Tank.get(qe.tank_id)
-                    display_id = f"Exemption for Tank {t.tank_number if t else 'Unknown'}"
-        except Exception:
-            pass
-
-        action_label = log.action
-        if action_label == "quarantine_toggle" and log.after:
-            action_label = "placed_in_quarantine" if log.after.get("is_quarantined") else "lifted_quarantine"
-
-        # Resolve created_by/updated_by in diff payloads
-        resolved_before = None
-        if log.before:
-            resolved_before = dict(log.before)
-            for k, v in resolved_before.items():
-                if k.endswith("_by") and isinstance(v, str):
-                    resolved_before[k] = user_map.get(v, v)
-        
-        resolved_after = None
-        if log.after:
-            resolved_after = dict(log.after)
-            for k, v in resolved_after.items():
-                if k.endswith("_by") and isinstance(v, str):
-                    resolved_after[k] = user_map.get(v, v)
-
-        result.append({
-            "actor_name": user_map.get(str(log.actor_id), "Unknown"),
-            "action": action_label,
-            "entity_type": log.entity_type,
-            "entity_id": display_id,
-            "before": resolved_before,
-            "after": resolved_after,
-            "timestamp": log.created_at.isoformat(),
-        })
-    return result
+    return await AuditService.get_paginated_logs(
+        actor_id=actor_id,
+        entity_type=entity_type,
+        action=action,
+        date_from=date_from,
+        date_to=date_to,
+        page=page,
+        page_size=page_size
+    )
