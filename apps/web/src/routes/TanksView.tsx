@@ -188,7 +188,7 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
             {/* Visual Tank Layout Rack 1 (Tanks 1-8) */}
             <div className="border border-border rounded-lg p-4 bg-surface/40 space-y-4">
               <h3 className="text-sm font-bold text-textPrimary border-b border-border pb-2">Rack Section A (Tanks 1 - 8) — Total Fish: {rackATotal}</h3>
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {group1.map((t) => (
                   <button
                     key={t.id}
@@ -239,7 +239,7 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
             {/* Visual Tank Layout Rack 2 (Tanks 9-14+) */}
             <div className="border border-border rounded-lg p-4 bg-surface/40 space-y-4">
                <h3 className="text-sm font-bold text-textPrimary border-b border-border pb-2">Rack Section B (Tanks 9 - 14+) - Total Fish: {rackBTotal}</h3>
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {group2.map((t) => (
                   <button
                     key={t.id}

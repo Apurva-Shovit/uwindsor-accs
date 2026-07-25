@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { formatDate } from '../utils/formatters';
 import { Database, Search, Calendar, Filter, FileText, ArrowUpDown, User } from 'lucide-react';
 
 export const TankHistoryPage: React.FC = () => {
@@ -42,21 +43,7 @@ export const TankHistoryPage: React.FC = () => {
     }
   });
 
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return '-';
-    try {
-      return new Date(dateStr).toLocaleString(undefined, {
-        weekday: 'short',
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch {
-      return dateStr;
-    }
-  };
+
 
   return (
     <div className="space-y-6">
@@ -178,7 +165,8 @@ export const TankHistoryPage: React.FC = () => {
         ) : !history || history.length === 0 ? (
           <div className="p-12 text-center text-slate-500">No history events found matching your filter criteria.</div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-hidden">
+            <div className="hidden lg:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
@@ -227,6 +215,40 @@ export const TankHistoryPage: React.FC = () => {
                 ))}
               </tbody>
             </table>
+            </div>
+            <div className="block lg:hidden flex flex-col divide-y divide-slate-100">
+              {history.map((row: any) => (
+                <div key={row.id} className="p-4 flex flex-col gap-3">
+                  <div className="flex justify-between items-start gap-2">
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-blue-50 text-[#005596]">
+                      Tank {row.tank_number}
+                    </span>
+                    <time className="text-xs text-slate-500 font-medium whitespace-nowrap">{formatDate(row.created_at || row.date)}</time>
+                  </div>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${
+                        row.category === 'Census' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                        row.category === 'Water Quality' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                        'bg-red-50 text-red-700 border-red-200'
+                    }`}>
+                      {row.category}
+                    </span>
+                    <span className="text-[11px] font-medium text-slate-700 capitalize">
+                      {row.event_type}
+                    </span>
+                    <span className="text-[11px] text-slate-600 ml-auto">By: <span className="font-semibold">{row.created_by}</span></span>
+                  </div>
+                  <div className="text-xs text-slate-800 mt-1 bg-slate-50 rounded p-2 font-mono">
+                    {row.details}
+                  </div>
+                  {row.notes && (
+                    <div className="text-xs text-slate-500 italic mt-1">
+                      Note: {row.notes}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
