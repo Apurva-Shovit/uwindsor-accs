@@ -217,8 +217,8 @@ export const CensusPage: React.FC = () => {
           {/* ─── MODE HINT ─── */}
           <div className={`rounded-lg px-4 py-2.5 text-xs font-medium ${isAdditive ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
             {isAdditive
-              ? '🐟 Adding fish — select a tank and project below. A new assignment will be created if needed.'
-              : '📉 Adjusting existing population — select an active tank assignment below.'}
+              ? 'Adding fish — select a tank and project below. A new assignment will be created if needed.'
+              : 'Adjusting existing population — select an active tank assignment below.'}
           </div>
 
           {/* ═══════════════════════════════════════════════ */}
@@ -272,7 +272,6 @@ export const CensusPage: React.FC = () => {
               {/* ── Warning & Notice Cards ── */}
               {isAuppMismatch && (
                 <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-sm flex items-start space-x-3">
-                  <span className="text-xl">⛔</span>
                   <div>
                     <h4 className="font-bold text-red-800">Destination Occupied (AUPP Conflict)</h4>
                     <p className="text-red-700 text-xs mt-0.5 leading-relaxed">
@@ -285,7 +284,6 @@ export const CensusPage: React.FC = () => {
               {!isAuppMismatch && existingAssignment && selectedProjectId && (
                 eventType === 'arrival' ? (
                   <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm flex items-start space-x-3">
-                    <span className="text-xl">⚠️</span>
                     <div>
                       <h4 className="font-bold text-amber-900">Existing Population & Quarantine Warning</h4>
                       <p className="text-amber-800 text-xs mt-0.5 leading-relaxed">
@@ -295,7 +293,6 @@ export const CensusPage: React.FC = () => {
                   </div>
                 ) : (
                   <div className="rounded-xl bg-blue-50 border border-blue-200 p-4 text-sm flex items-start space-x-3">
-                    <span className="text-xl">ℹ️</span>
                     <div>
                       <h4 className="font-bold text-blue-900">Existing Population Info</h4>
                       <p className="text-blue-800 text-xs mt-0.5 leading-relaxed">
@@ -308,7 +305,6 @@ export const CensusPage: React.FC = () => {
 
               {!isAuppMismatch && !existingAssignment && selectedTankId && eventType === 'arrival' && (
                 <div className="rounded-xl bg-blue-50 border border-blue-200 p-4 text-sm flex items-start space-x-3">
-                  <span className="text-xl">🛡️</span>
                   <div>
                     <h4 className="font-bold text-blue-900">Quarantine Activation Notice</h4>
                     <p className="text-blue-800 text-xs mt-0.5 leading-relaxed">
@@ -430,7 +426,7 @@ export const CensusPage: React.FC = () => {
                 </span>
               </div>
               {!isAdditive && previewCount < 0 && (
-                <p className="text-xs text-red-600 font-semibold mt-1">⚠ Error: Population count cannot drop below 0.</p>
+                <p className="text-xs text-red-600 font-semibold mt-1">Error: Population count cannot drop below 0.</p>
               )}
             </div>
           )}
@@ -487,7 +483,7 @@ export const CensusPage: React.FC = () => {
       {/* ─── Toast ─── */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-green-600 text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-semibold">
-          ✅ {toast}
+          {toast}
           <button onClick={() => setToast('')} className="ml-2 opacity-70 hover:opacity-100 text-lg leading-none">×</button>
         </div>
       )}

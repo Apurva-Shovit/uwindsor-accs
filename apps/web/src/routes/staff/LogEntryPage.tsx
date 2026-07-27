@@ -34,7 +34,7 @@ function ValidationBadge({ field, result }: { field: string; result: ValidationR
   if (!r || r.in_range) return null;
   return (
     <span className="ml-2 inline-flex items-center gap-1 text-red-600 text-xs font-semibold">
-      ⚠ Out of Range
+      Out of Range
     </span>
   );
 }
@@ -90,7 +90,7 @@ function SuccessToast({ msg, onClose }: { msg: string; onClose: () => void }) {
   useEffect(() => { const t = setTimeout(onClose, 4000); return () => clearTimeout(t); }, [onClose]);
   return (
     <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-green-600 text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-semibold animate-fade-in">
-      ✅ {msg}
+      {msg}
       <button onClick={onClose} className="ml-2 opacity-70 hover:opacity-100 text-lg leading-none">×</button>
     </div>
   );
@@ -103,7 +103,6 @@ function WaterQualityForm({ tanks }: { tanks: Tank[] }) {
   const [date, setDate] = useState(today());
   const [ph, setPh] = useState('');
   const [temp, setTemp] = useState('');
-  const [doVal, setDoVal] = useState('');
   const [comments, setComments] = useState('');
   const [loading, setLoading] = useState(false);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
@@ -116,12 +115,12 @@ function WaterQualityForm({ tanks }: { tanks: Tank[] }) {
     try {
       const res = await postWaterQualityLog({
         tank_id: tankId, type: 'daily', date,
-        parameters: { ph: +ph, temperature: +temp, dissolved_oxygen: +doVal },
+        parameters: { ph: +ph, temperature: +temp },
         comments: comments || undefined,
       });
       setValidation(res.data.validation);
       setToast('Daily log created!');
-      setPh(''); setTemp(''); setDoVal(''); setComments('');
+      setPh(''); setTemp(''); setComments('');
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Submission failed');
     } finally {
@@ -140,10 +139,9 @@ function WaterQualityForm({ tanks }: { tanks: Tank[] }) {
             className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brandBlue" required />
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         <FieldInput label={fieldLabel.ph} name="ph" value={ph} onChange={setPh} result={validation || undefined} />
         <FieldInput label={fieldLabel.temperature} name="temperature" value={temp} onChange={setTemp} result={validation || undefined} />
-        <FieldInput label={fieldLabel.dissolved_oxygen} name="dissolved_oxygen" value={doVal} onChange={setDoVal} result={validation || undefined} />
       </div>
       <div>
         <label className="block text-xs font-semibold text-textSecondary uppercase tracking-wide mb-1">Comments</label>
@@ -154,8 +152,8 @@ function WaterQualityForm({ tanks }: { tanks: Tank[] }) {
         <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
           <strong>Validation complete.</strong>{' '}
           {Object.entries(validation).filter(([, v]) => !v.in_range).length > 0
-            ? `⚠ ${Object.entries(validation).filter(([, v]) => !v.in_range).map(([k]) => fieldLabel[k] || k).join(', ')} out of safe range.`
-            : 'All parameters within safe range ✅'}
+            ? `${Object.entries(validation).filter(([, v]) => !v.in_range).map(([k]) => fieldLabel[k] || k).join(', ')} out of safe range.`
+            : 'All parameters within safe range.'}
         </div>
       )}
       <button type="submit" disabled={loading || !tankId}
@@ -526,11 +524,11 @@ function BatchEntry({ tanks }: { tanks: Tank[] }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'water', label: 'Water Quality', icon: '💧' },
-  { id: 'teststrip', label: 'Test Strip', icon: '🧪' },
-  { id: 'incident', label: 'Incident Report', icon: '🚨' },
-  { id: 'batch', label: 'Batch Entry', icon: '📋' },
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'water', label: 'Water Quality' },
+  { id: 'teststrip', label: 'Test Strip' },
+  { id: 'incident', label: 'Incident Report' },
+  { id: 'batch', label: 'Batch Entry' },
 ];
 
 export const LogEntryPage: React.FC = () => {
@@ -562,8 +560,7 @@ export const LogEntryPage: React.FC = () => {
                 ? 'bg-white text-brandBlue shadow-sm border border-border'
                 : 'text-textSecondary hover:text-textPrimary'}`}
           >
-            <span>{tab.icon}</span>
-            <span className="hidden sm:inline">{tab.label}</span>
+            <span>{tab.label}</span>
           </button>
         ))}
       </div>

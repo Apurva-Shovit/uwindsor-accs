@@ -55,7 +55,8 @@ export const createSpecies = (data: any) => api.post('/species', data);
 export const getProjects = () => api.get('/projects');
 export const getProject = (id: string) => api.get(`/projects/${id}`);
 export const getProjectDetails = (id: string) => api.get(`/projects/${id}/details`);
-export const getProjectReport = (id: string) => api.get(`/projects/${id}/report`);
+export const getProjectReport = (id: string, timePeriod: string = 'all', page: number = 1, limit: number = 10) => 
+  api.get(`/projects/${id}/report`, { params: { time_period: timePeriod, page, limit } });
 
 export const createProject = (data: any) => api.post('/projects', data);
 export const closeProject = (id: string, data: any) => api.post(`/projects/${id}/close`, data);

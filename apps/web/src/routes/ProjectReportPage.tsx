@@ -11,10 +11,14 @@ export const ProjectReportPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'tanks' | 'deaths' | 'incidents' | 'census' | 'water_quality' | 'audits'>('tanks');
+  const [timePeriod, setTimePeriod] = useState<string>('all');
+  const [page, setPage] = useState<number>(1);
+  const limit = 10;
 
   useEffect(() => {
     if (id) {
-      getProjectReport(id)
+      setLoading(true);
+      getProjectReport(id, timePeriod, page, limit)
         .then(r => {
           setData(r.data);
           setLoading(false);
@@ -24,9 +28,9 @@ export const ProjectReportPage: React.FC = () => {
           setLoading(false);
         });
     }
-  }, [id]);
+  }, [id, timePeriod, page]);
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
         <div className="animate-spin h-10 w-10 border-4 border-[#005596] border-t-transparent rounded-full" />
@@ -51,7 +55,34 @@ export const ProjectReportPage: React.FC = () => {
     );
   }
 
-  const { project, summary, occupied_tanks, deaths, incidents, census_events, water_quality_logs, audit_logs } = data;
+  const { project, summary, occupied_tanks, deaths, deaths_meta, incidents, incidents_meta, census_events, census_meta, water_quality_logs, water_quality_meta, audit_logs, audit_meta } = data;
+
+  const PaginationControls = ({ meta }: { meta: any }) => {
+    if (!meta || meta.total_pages <= 1) return null;
+    return (
+      <div className="flex flex-col sm:flex-row items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500 gap-2">
+        <div>
+          Showing page <strong className="text-slate-800">{meta.page}</strong> of <strong className="text-slate-800">{meta.total_pages}</strong> ({meta.total_items} total records)
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            disabled={meta.page <= 1}
+            onClick={() => setPage(meta.page - 1)}
+            className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded disabled:opacity-40 transition-colors"
+          >
+            Previous
+          </button>
+          <button
+            disabled={meta.page >= meta.total_pages}
+            onClick={() => setPage(meta.page + 1)}
+            className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded disabled:opacity-40 transition-colors"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12 print:p-0">
@@ -80,12 +111,28 @@ export const ProjectReportPage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => window.print()}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#005596] text-white font-bold text-xs rounded-xl shadow hover:bg-blue-800 transition-colors"
-        >
-          <Printer className="w-4 h-4" /> Print Full Audit Report
-        </button>
+        <div className="flex items-center gap-3">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Time Period Filter</label>
+            <select
+              value={timePeriod}
+              onChange={e => { setTimePeriod(e.target.value); setPage(1); }}
+              className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#005596]"
+            >
+              <option value="all">All Time</option>
+              <option value="7d">Past 7 Days</option>
+              <option value="30d">Past 30 Days</option>
+              <option value="90d">Past 90 Days</option>
+              <option value="1y">Past 1 Year</option>
+            </select>
+          </div>
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#005596] text-white font-bold text-xs rounded-xl shadow hover:bg-blue-800 transition-colors mt-4 sm:mt-0"
+          >
+            <Printer className="w-4 h-4" /> Print Full Audit Report
+          </button>
+        </div>
       </div>
 
       {/* Top Executive Summary KPI Cards */}
@@ -285,31 +332,34 @@ export const ProjectReportPage: React.FC = () => {
           {deaths.length === 0 ? (
             <p className="text-xs text-slate-500 italic p-4 text-center">No mortalities recorded for this project.</p>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-red-50/50 border-b border-slate-200 text-red-900 font-bold uppercase">
-                    <th className="p-3">Date</th>
-                    <th className="p-3">Mortality Count</th>
-                    <th className="p-3">Tank</th>
-                    <th className="p-3">Reason / Cause</th>
-                    <th className="p-3">Notes</th>
-                    <th className="p-3">Reported By</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
-                  {deaths.map((d: any) => (
-                    <tr key={d.id} className="hover:bg-slate-50">
-                      <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">{d.date}</td>
-                      <td className="p-3 font-extrabold text-red-600">-{d.count} Fish</td>
-                      <td className="p-3 font-bold text-slate-800">{d.tank_number}</td>
-                      <td className="p-3 text-slate-800">{d.reason}</td>
-                      <td className="p-3 text-slate-600">{d.notes}</td>
-                      <td className="p-3 text-slate-700 font-semibold">{d.reported_by_name}</td>
+            <div className="space-y-3">
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-red-50/50 border-b border-slate-200 text-red-900 font-bold uppercase">
+                      <th className="p-3">Date</th>
+                      <th className="p-3">Mortality Count</th>
+                      <th className="p-3">Tank</th>
+                      <th className="p-3">Reason / Cause</th>
+                      <th className="p-3">Notes</th>
+                      <th className="p-3">Reported By</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium">
+                    {deaths.map((d: any) => (
+                      <tr key={d.id} className="hover:bg-slate-50">
+                        <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">{d.date}</td>
+                        <td className="p-3 font-extrabold text-red-600">-{d.count} Fish</td>
+                        <td className="p-3 font-bold text-slate-800">{d.tank_number}</td>
+                        <td className="p-3 text-slate-800">{d.reason}</td>
+                        <td className="p-3 text-slate-600">{d.notes}</td>
+                        <td className="p-3 text-slate-700 font-semibold">{d.reported_by_name}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <PaginationControls meta={deaths_meta} />
             </div>
           )}
         </div>
@@ -350,6 +400,7 @@ export const ProjectReportPage: React.FC = () => {
                   )}
                 </div>
               ))}
+              <PaginationControls meta={incidents_meta} />
             </div>
           )}
         </div>
@@ -362,35 +413,38 @@ export const ProjectReportPage: React.FC = () => {
           {census_events.length === 0 ? (
             <p className="text-xs text-slate-500 italic p-4 text-center">No census events recorded.</p>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-purple-50/50 border-b border-slate-200 text-purple-900 font-bold uppercase">
-                    <th className="p-3">Date</th>
-                    <th className="p-3">Event Type</th>
-                    <th className="p-3">Population Change</th>
-                    <th className="p-3">Tank</th>
-                    <th className="p-3">Reason / Notes</th>
-                    <th className="p-3">Recorded By</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
-                  {census_events.map((c: any) => (
-                    <tr key={c.id} className="hover:bg-slate-50">
-                      <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">{c.date}</td>
-                      <td className="p-3 capitalize font-bold text-purple-900">{c.event_type}</td>
-                      <td className="p-3">
-                        <span className={`font-extrabold ${c.change > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {c.change > 0 ? `+${c.change}` : c.change} Fish
-                        </span>
-                      </td>
-                      <td className="p-3 font-bold text-slate-800">{c.tank_number}</td>
-                      <td className="p-3 text-slate-600">{c.reason !== '-' ? c.reason : c.notes}</td>
-                      <td className="p-3 text-slate-700 font-semibold">{c.actor_name}</td>
+            <div className="space-y-3">
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-purple-50/50 border-b border-slate-200 text-purple-900 font-bold uppercase">
+                      <th className="p-3">Date</th>
+                      <th className="p-3">Event Type</th>
+                      <th className="p-3">Population Change</th>
+                      <th className="p-3">Tank</th>
+                      <th className="p-3">Reason / Notes</th>
+                      <th className="p-3">Recorded By</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium">
+                    {census_events.map((c: any) => (
+                      <tr key={c.id} className="hover:bg-slate-50">
+                        <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">{c.date}</td>
+                        <td className="p-3 capitalize font-bold text-purple-900">{c.event_type}</td>
+                        <td className="p-3">
+                          <span className={`font-extrabold ${c.change > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {c.change > 0 ? `+${c.change}` : c.change} Fish
+                          </span>
+                        </td>
+                        <td className="p-3 font-bold text-slate-800">{c.tank_number}</td>
+                        <td className="p-3 text-slate-600">{c.reason !== '-' ? c.reason : c.notes}</td>
+                        <td className="p-3 text-slate-700 font-semibold">{c.actor_name}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <PaginationControls meta={census_meta} />
             </div>
           )}
         </div>
@@ -403,33 +457,32 @@ export const ProjectReportPage: React.FC = () => {
           {water_quality_logs.length === 0 ? (
             <p className="text-xs text-slate-500 italic p-4 text-center">No water quality logs recorded for assigned tanks.</p>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-teal-50/50 border-b border-slate-200 text-teal-900 font-bold uppercase">
-                    <th className="p-3">Timestamp</th>
-                    <th className="p-3">Tank</th>
-                    <th className="p-3">pH</th>
-                    <th className="p-3">Temp (°C)</th>
-                    <th className="p-3">Salinity (ppt)</th>
-                    <th className="p-3">D.O. (mg/L)</th>
-                    <th className="p-3">Logged By</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
-                  {water_quality_logs.map((wq: any) => (
-                    <tr key={wq.id} className="hover:bg-slate-50">
-                      <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">{wq.date}</td>
-                      <td className="p-3 font-bold text-slate-800">{wq.tank_number}</td>
-                      <td className="p-3 font-bold text-teal-700">{wq.pH ?? 'N/A'}</td>
-                      <td className="p-3 font-bold text-teal-700">{wq.temperature_celsius ? `${wq.temperature_celsius}°C` : 'N/A'}</td>
-                      <td className="p-3 text-slate-600">{wq.salinity_ppt ?? 'N/A'}</td>
-                      <td className="p-3 text-slate-600">{wq.dissolved_oxygen_mg_l ?? 'N/A'}</td>
-                      <td className="p-3 text-slate-700 font-semibold">{wq.logged_by_name}</td>
+            <div className="space-y-3">
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-teal-50/50 border-b border-slate-200 text-teal-900 font-bold uppercase">
+                      <th className="p-3">Timestamp</th>
+                      <th className="p-3">Tank</th>
+                      <th className="p-3">pH</th>
+                      <th className="p-3">Temp (°C)</th>
+                      <th className="p-3">Logged By</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium">
+                    {water_quality_logs.map((wq: any) => (
+                      <tr key={wq.id} className="hover:bg-slate-50">
+                        <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">{wq.date}</td>
+                        <td className="p-3 font-bold text-slate-800">{wq.tank_number}</td>
+                        <td className="p-3 font-bold text-teal-700">{wq.pH ?? 'N/A'}</td>
+                        <td className="p-3 font-bold text-teal-700">{wq.temperature_celsius ? `${wq.temperature_celsius}°C` : 'N/A'}</td>
+                        <td className="p-3 text-slate-700 font-semibold">{wq.logged_by_name}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <PaginationControls meta={water_quality_meta} />
             </div>
           )}
         </div>
@@ -459,6 +512,7 @@ export const ProjectReportPage: React.FC = () => {
                   <ModificationCard before={a.before} after={a.after} />
                 </div>
               ))}
+              <PaginationControls meta={audit_meta} />
             </div>
           )}
         </div>

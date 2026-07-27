@@ -103,7 +103,13 @@ class ProjectService:
         return res
 
     @staticmethod
-    async def get_project_report(project_id: str, current_user: User) -> Dict[str, Any]:
+    async def get_project_report(
+        project_id: str, 
+        current_user: User,
+        time_period: str = "all",
+        page: int = 1,
+        limit: int = 10
+    ) -> Dict[str, Any]:
         p = await Project.get(project_id)
         if not p:
             raise HTTPException(404, "Project not found")
@@ -111,11 +117,39 @@ class ProjectService:
         from ..models.facility import Tank
         from ..models.water_quality_log import WaterQualityLog
         from ..utils.entity_resolver import EntityResolver
+        from datetime import datetime, timezone, timedelta, date
 
         p_data = p.model_dump(mode="json")
         p_data["id"] = str(p.id)
+        p_data["pi_name"] = await EntityResolver.resolve_user_name(p.pi_id)
 
-        # 1. Occupied tanks & historic assignments
+        # Calculate time period cutoff
+        now = datetime.now(timezone.utc)
+        cutoff = None
+        if time_period == "7d":
+            cutoff = now - timedelta(days=7)
+        elif time_period == "30d":
+            cutoff = now - timedelta(days=30)
+        elif time_period == "90d":
+            cutoff = now - timedelta(days=90)
+        elif time_period == "1y":
+            cutoff = now - timedelta(days=365)
+
+        def get_dt(obj):
+            dt = getattr(obj, "created_at", None)
+            if not dt and hasattr(obj, "date"):
+                d = getattr(obj, "date")
+                if isinstance(d, datetime):
+                    dt = d
+                elif isinstance(d, date):
+                    dt = datetime.combine(d, datetime.min.time()).replace(tzinfo=timezone.utc)
+            if not dt:
+                dt = getattr(obj, "timestamp", None)
+            if dt and dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+
+        # 1. Occupied Tanks
         assignments = await TankAssignment.find({"project_id": project_id, "current_count": {"$gt": 0}}).to_list()
         all_assignments_hist = await TankAssignment.find({"project_id": project_id}).to_list()
         assigned_tank_ids = list(set([a.tank_id for a in all_assignments_hist if a.tank_id]))
@@ -138,15 +172,22 @@ class ProjectService:
             })
 
         # 2. Census events (all & deaths)
-        census_events = await CensusEvent.find({"project_id": project_id}).sort("-date").to_list()
+        census_events = await CensusEvent.find({"project_id": project_id}).to_list()
+        # Sort time-descending
+        census_events.sort(key=lambda x: get_dt(x) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+
         census_list = []
         deaths_list = []
         total_deaths = 0
 
         for c in census_events:
+            c_dt = get_dt(c)
+            if cutoff and c_dt and c_dt < cutoff:
+                continue
+
             actor = await EntityResolver.resolve_user_name(c.created_by)
             tank_num = await EntityResolver.resolve_tank_number(c.tank_id)
-            date_str = c.date.strftime("%a, %b %d, %Y") if hasattr(c.date, "strftime") else str(c.date)
+            date_str = c_dt.strftime("%a, %b %d, %Y, %I:%M %p") if c_dt else str(c.date)
             
             c_dict = {
                 "id": str(c.id),
@@ -157,7 +198,7 @@ class ProjectService:
                 "notes": c.notes or "-",
                 "date": date_str,
                 "actor_name": actor or "Unknown User",
-                "created_at": c.created_at.isoformat() if c.created_at else None
+                "created_at": c.created_at.isoformat() if getattr(c, "created_at", None) else None
             }
             census_list.append(c_dict)
 
@@ -181,19 +222,18 @@ class ProjectService:
             all_incidents = await IncidentReport.find_all().to_list()
             incidents = [i for i in all_incidents if getattr(i, "project_id", None) == project_id]
 
+        incidents.sort(key=lambda x: get_dt(x) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+
         incidents_list = []
         for inc in incidents:
+            inc_dt = get_dt(inc)
+            if cutoff and inc_dt and inc_dt < cutoff:
+                continue
+
             creator_id = getattr(inc, "created_by", getattr(inc, "reported_by", None))
             reporter = await EntityResolver.resolve_user_name(creator_id)
             tank_num = await EntityResolver.resolve_tank_number(inc.tank_id)
-            
-            created_dt = getattr(inc, "created_at", None)
-            if created_dt:
-                inc_date = created_dt.strftime("%a, %b %d, %Y, %I:%M %p")
-            elif hasattr(inc, "date") and inc.date:
-                inc_date = inc.date.strftime("%a, %b %d, %Y")
-            else:
-                inc_date = "-"
+            inc_date = inc_dt.strftime("%a, %b %d, %Y, %I:%M %p") if inc_dt else "-"
 
             problem = getattr(inc, "problem", getattr(inc, "description", "Aquatic Incident"))
             comments = getattr(inc, "comments", getattr(inc, "notes", "-"))
@@ -226,36 +266,27 @@ class ProjectService:
                 all_wq = await WaterQualityLog.find_all().to_list()
                 wq_records = [w for w in all_wq if getattr(w, "project_id", None) == project_id or getattr(w, "tank_id", None) in assigned_tank_ids]
 
+        wq_records.sort(key=lambda x: get_dt(x) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+
         for wq in wq_records:
+            wq_dt = get_dt(wq)
+            if cutoff and wq_dt and wq_dt < cutoff:
+                continue
+
             creator_id = getattr(wq, "created_by", getattr(wq, "logged_by", None))
             logger = await EntityResolver.resolve_user_name(creator_id)
             tank_num = await EntityResolver.resolve_tank_number(wq.tank_id)
-            
-            created_dt = getattr(wq, "created_at", None)
-            if created_dt:
-                wq_date = created_dt.strftime("%a, %b %d, %Y, %I:%M %p")
-            elif hasattr(wq, "date") and wq.date:
-                wq_date = wq.date.strftime("%a, %b %d, %Y")
-            else:
-                wq_date = "-"
+            wq_date = wq_dt.strftime("%a, %b %d, %Y, %I:%M %p") if wq_dt else "-"
 
             params = getattr(wq, "parameters", {})
             ph_val = params.get("pH", getattr(wq, "pH", "N/A"))
-            temp_val = params.get("temperature_celsius", getattr(wq, "temperature_celsius", "N/A"))
-            sal_val = params.get("salinity_ppt", getattr(wq, "salinity_ppt", "N/A"))
-            do_val = params.get("dissolved_oxygen_mg_l", getattr(wq, "dissolved_oxygen_mg_l", "N/A"))
-            amm_val = params.get("ammonia_ppm", getattr(wq, "ammonia_ppm", "N/A"))
-            nit_val = params.get("nitrate_ppm", getattr(wq, "nitrate_ppm", "N/A"))
+            temp_val = params.get("temperature_celsius", getattr(wq, "temperature_celsius", getattr(wq, "temperature", "N/A")))
 
             wq_logs.append({
                 "id": str(wq.id),
                 "tank_number": tank_num,
                 "temperature_celsius": temp_val,
                 "pH": ph_val,
-                "salinity_ppt": sal_val,
-                "dissolved_oxygen_mg_l": do_val,
-                "ammonia_ppm": amm_val,
-                "nitrate_ppm": nit_val,
                 "logged_by_name": logger or "Unknown User",
                 "date": wq_date,
                 "notes": getattr(wq, "comments", getattr(wq, "notes", "-")) or "-"
@@ -268,15 +299,20 @@ class ProjectService:
                 {"entity_type": "tank_assignment", "after.project_id": project_id},
                 {"entity_type": "census_event", "after.project_id": project_id},
                 {"entity_type": "incident_report", "after.project_id": project_id}
-            ]}).sort("-created_at").to_list()
+            ]}).to_list()
         except Exception:
             all_audits = await AuditLog.find_all().to_list()
             audits = [a for a in all_audits if (getattr(a, "entity_type", "") == "project" and getattr(a, "entity_id", "") == project_id) or (isinstance(getattr(a, "after", None), dict) and a.after.get("project_id") == project_id)]
 
+        audits.sort(key=lambda x: get_dt(x) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+
         audit_list = []
         for a in audits:
+            aud_dt = get_dt(a)
+            if cutoff and aud_dt and aud_dt < cutoff:
+                continue
+
             actor = await EntityResolver.resolve_user_name(a.actor_id)
-            aud_dt = getattr(a, "created_at", getattr(a, "timestamp", None))
             ts_str = aud_dt.strftime("%a, %b %d, %Y, %I:%M %p") if aud_dt else "-"
             clean_before = await EntityResolver.resolve_payload_ids(a.before)
             clean_after = await EntityResolver.resolve_payload_ids(a.after)
@@ -291,6 +327,26 @@ class ProjectService:
                 "after": clean_after
             })
 
+        # Apply pagination helper
+        def paginate(items):
+            total_items = len(items)
+            total_pages = max(1, (total_items + limit - 1) // limit)
+            valid_page = max(1, min(page, total_pages))
+            start_idx = (valid_page - 1) * limit
+            end_idx = start_idx + limit
+            return items[start_idx:end_idx], {
+                "page": valid_page,
+                "limit": limit,
+                "total_items": total_items,
+                "total_pages": total_pages
+            }
+
+        p_deaths, deaths_meta = paginate(deaths_list)
+        p_incidents, incidents_meta = paginate(incidents_list)
+        p_census, census_meta = paginate(census_list)
+        p_wq, wq_meta = paginate(wq_logs)
+        p_audits, audits_meta = paginate(audit_list)
+
         return {
             "project": p_data,
             "summary": {
@@ -302,12 +358,18 @@ class ProjectService:
                 "total_wq_logs": len(wq_logs),
                 "total_audits": len(audit_list)
             },
+            "time_period": time_period,
             "occupied_tanks": occupied_tanks,
-            "deaths": deaths_list,
-            "incidents": incidents_list,
-            "census_events": census_list,
-            "water_quality_logs": wq_logs,
-            "audit_logs": audit_list
+            "deaths": p_deaths,
+            "deaths_meta": deaths_meta,
+            "incidents": p_incidents,
+            "incidents_meta": incidents_meta,
+            "census_events": p_census,
+            "census_meta": census_meta,
+            "water_quality_logs": p_wq,
+            "water_quality_meta": wq_meta,
+            "audit_logs": p_audits,
+            "audit_meta": audits_meta
         }
 
     @staticmethod

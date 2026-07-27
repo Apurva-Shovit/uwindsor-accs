@@ -33,8 +33,14 @@ async def get_project_details(id: str, current: User = Depends(get_current_user)
 
 
 @router.get("/{id}/report")
-async def get_project_report(id: str, current: User = Depends(get_current_user)):
-    return await ProjectService.get_project_report(id, current)
+async def get_project_report(
+    id: str, 
+    time_period: str = "all", 
+    page: int = 1, 
+    limit: int = 10,
+    current: User = Depends(get_current_user)
+):
+    return await ProjectService.get_project_report(id, current, time_period=time_period, page=page, limit=limit)
 
 
 @router.get("/{id}")
