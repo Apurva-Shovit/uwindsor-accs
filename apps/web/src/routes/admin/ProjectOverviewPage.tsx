@@ -597,7 +597,7 @@ export const ProjectOverviewPage: React.FC = () => {
                       className="text-red-600 focus:ring-red-500"
                     />
                     <div className="text-xs">
-                      <div>💉 Euthanized</div>
+                      <div>Euthanized</div>
                       <div className="text-[10px] font-normal text-slate-500">Protocol Termination</div>
                     </div>
                   </label>
@@ -614,7 +614,7 @@ export const ProjectOverviewPage: React.FC = () => {
                       className="text-emerald-600 focus:ring-emerald-500"
                     />
                     <div className="text-xs">
-                      <div>🏡 Adopted</div>
+                      <div>Adopted</div>
                       <div className="text-[10px] font-normal text-slate-500">Approved Adoption</div>
                     </div>
                   </label>
@@ -631,7 +631,7 @@ export const ProjectOverviewPage: React.FC = () => {
                       className="text-indigo-600 focus:ring-indigo-500"
                     />
                     <div className="text-xs">
-                      <div>🚚 Transferred</div>
+                      <div>Transferred</div>
                       <div className="text-[10px] font-normal text-slate-500">External Lab / Off-site</div>
                     </div>
                   </label>
@@ -648,7 +648,7 @@ export const ProjectOverviewPage: React.FC = () => {
                       className="text-slate-600 focus:ring-slate-500"
                     />
                     <div className="text-xs">
-                      <div>📝 Other</div>
+                      <div>Other</div>
                       <div className="text-[10px] font-normal text-slate-500">Custom Details</div>
                     </div>
                   </label>

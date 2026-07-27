@@ -493,7 +493,7 @@ export const ProjectDetailsPage: React.FC = () => {
 
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-green-600 text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-semibold">
-          ✅ {toast}
+          {toast}
           <button onClick={() => setToast('')} className="ml-2 opacity-70 hover:opacity-100 text-lg leading-none">×</button>
         </div>
       )}
