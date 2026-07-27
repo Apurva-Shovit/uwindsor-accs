@@ -11,6 +11,7 @@ import { ProjectReportPage } from '../ProjectReportPage';
 import { CensusPage } from './CensusPage';
 import { TransferPage } from './TransferPage';
 import { QuarantinePage } from './QuarantinePage';
+import { OfficialFormsReportPage } from '../OfficialFormsReportPage';
 
 export const StaffLayout: React.FC = () => {
   const { user } = useAuth();
@@ -26,6 +27,7 @@ export const StaffLayout: React.FC = () => {
             <Route path="/log-entry" element={<LogEntryPage />} />
             <Route path="/projects" element={<ProjectDetailsPage />} />
             <Route path="/projects/:id/report" element={<ProjectReportPage />} />
+            <Route path="/sop-forms" element={<OfficialFormsReportPage />} />
             <Route path="/census" element={<CensusPage />} />
             <Route path="/transfers" element={<TransferPage />} />
             <Route path="/quarantine" element={<QuarantinePage />} />
