@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BookOpen, AlertTriangle, Search, Calendar, Users, Activity, Plus, X } from 'lucide-react';
+import SpeciesDropdown from '../../components/SpeciesDropdown';
 
 
 export const ProjectOverviewPage: React.FC = () => {
@@ -16,15 +17,16 @@ export const ProjectOverviewPage: React.FC = () => {
   // New Project Form State
   const [newProject, setNewProject] = useState({
     title: '',
-    pi_name: 'PI-1',
+    pi_name: '',
     aupp_number: '',
-    species: 'Trout',
-    sex: 'both',
+    species: '',
+    sex: 'both' as 'both' | 'male' | 'female',
     dob: '',
     established_date: new Date().toISOString().slice(0, 10),
-    source: 'Hatched',
+    source: '',
     aupp_expiry_date: '',
-    room_number: 'RM 1',
+    room_number: '',
+    rfid_tracking_enabled: false,
   });
 
   const createProjectMutation = useMutation({
@@ -36,7 +38,11 @@ export const ProjectOverviewPage: React.FC = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          ...payload,
+          dob: payload.dob || undefined,
+          aupp_expiry_date: payload.aupp_expiry_date ? new Date(payload.aupp_expiry_date).toISOString() : undefined,
+        })
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -50,15 +56,16 @@ export const ProjectOverviewPage: React.FC = () => {
       setFormError('');
       setNewProject({
         title: '',
-        pi_name: 'PI-1',
+        pi_name: '',
         aupp_number: '',
-        species: 'Trout',
+        species: '',
         sex: 'both',
         dob: '',
         established_date: new Date().toISOString().slice(0, 10),
-        source: 'Hatched',
+        source: '',
         aupp_expiry_date: '',
-        room_number: 'RM 1',
+        room_number: '',
+        rfid_tracking_enabled: false,
       });
     },
     onError: (err: any) => {
@@ -69,10 +76,23 @@ export const ProjectOverviewPage: React.FC = () => {
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
-    if (!newProject.title || !newProject.pi_name || !newProject.aupp_number) {
-      setFormError('Title, PI Name, and AUPP Number are required.');
+
+    // All fields except DOB are compulsory
+    if (
+      !newProject.title.trim() ||
+      !newProject.pi_name.trim() ||
+      !newProject.aupp_number.trim() ||
+      !newProject.species.trim() ||
+      !newProject.sex ||
+      !newProject.established_date ||
+      !newProject.source.trim() ||
+      !newProject.aupp_expiry_date ||
+      !newProject.room_number.trim()
+    ) {
+      setFormError('All fields except Date of Birth (DOB) are compulsory.');
       return;
     }
+
     createProjectMutation.mutate(newProject);
   };
 
@@ -545,22 +565,19 @@ export const ProjectOverviewPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-slate-600 font-bold mb-1">Species</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Trout / Zebrafish"
-                    value={newProject.species}
-                    onChange={(e) => setNewProject({ ...newProject, species: e.target.value })}
-                    className="w-full p-2.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#005596]"
+                  <label className="block text-slate-600 font-bold mb-1">Species *</label>
+                  <SpeciesDropdown
+                    species={newProject.species}
+                    setSpecies={(val) => setNewProject({ ...newProject, species: val })}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-600 font-bold mb-1">Sex</label>
+                  <label className="block text-slate-600 font-bold mb-1">Sex *</label>
                   <select
                     value={newProject.sex}
                     onChange={(e) => setNewProject({ ...newProject, sex: e.target.value as any })}
-                    className="w-full p-2.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#005596]"
+                    className="w-full p-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#005596]"
                   >
                     <option value="both">Both (Male &amp; Female)</option>
                     <option value="male">Male</option>
@@ -590,10 +607,11 @@ export const ProjectOverviewPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-slate-600 font-bold mb-1">Source</label>
+                  <label className="block text-slate-600 font-bold mb-1">Source *</label>
                   <input
                     type="text"
-                    placeholder="e.g. Hatched / Vendor / Wild"
+                    required
+                    placeholder="e.g. Hatched / External Supplier Co"
                     value={newProject.source}
                     onChange={(e) => setNewProject({ ...newProject, source: e.target.value })}
                     className="w-full p-2.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#005596]"
@@ -601,24 +619,41 @@ export const ProjectOverviewPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-slate-600 font-bold mb-1">AUPP Expiry Date</label>
+                  <label className="block text-slate-600 font-bold mb-1">AUPP Expiry Date *</label>
                   <input
                     type="date"
+                    required
                     value={newProject.aupp_expiry_date}
                     onChange={(e) => setNewProject({ ...newProject, aupp_expiry_date: e.target.value })}
                     className="w-full p-2.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#005596]"
                   />
                 </div>
 
-                <div className="sm:col-span-2">
-                  <label className="block text-slate-600 font-bold mb-1">Room Number (RM#)</label>
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1">Room Number (RM#) *</label>
                   <input
                     type="text"
+                    required
                     placeholder="e.g. RM 1 / RM 301"
                     value={newProject.room_number}
                     onChange={(e) => setNewProject({ ...newProject, room_number: e.target.value })}
                     className="w-full p-2.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#005596]"
                   />
+                </div>
+
+                <div className="sm:col-span-2 pt-2 border-t border-slate-100">
+                  <label className="flex items-center gap-2 cursor-pointer p-3 bg-slate-50 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={newProject.rfid_tracking_enabled}
+                      onChange={(e) => setNewProject({ ...newProject, rfid_tracking_enabled: e.target.checked })}
+                      className="w-4 h-4 text-[#005596] rounded border-slate-300 focus:ring-[#005596]"
+                    />
+                    <div>
+                      <span className="block text-xs font-bold text-slate-800">Enable RFID / Individual Tracking</span>
+                      <span className="block text-[11px] text-slate-500">Switch this project from population counts to individual fish scanning mode.</span>
+                    </div>
+                  </label>
                 </div>
               </div>
 
