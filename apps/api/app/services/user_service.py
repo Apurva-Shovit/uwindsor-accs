@@ -43,7 +43,14 @@ class UserService:
         target.status = StatusEnum.active
         target.facility_ids = body.facility_ids
         target.room_ids = body.room_ids
-        target.assigned_tank_ids = body.assigned_tank_ids
+
+        # If Manager, Admin, Chair, or Super Admin and no explicit tank IDs passed, automatically assign all active tanks
+        if body.role in (RoleEnum.manager, RoleEnum.admin, RoleEnum.chair, RoleEnum.super_admin) and not body.assigned_tank_ids:
+            all_tanks = await Tank.find({"deleted": False}).to_list()
+            target.assigned_tank_ids = [str(t.id) for t in all_tanks]
+        else:
+            target.assigned_tank_ids = body.assigned_tank_ids
+
         target.approved_by = str(current_user.id)
         target.approved_at = datetime.now(timezone.utc).isoformat()
         
@@ -90,8 +97,16 @@ class UserService:
             query["status"] = status_filter
 
         users = await UserRepository.find(query)
+        all_tanks = await Tank.find({"deleted": False}).to_list()
+        all_tank_ids = [str(t.id) for t in all_tanks]
+
         result = []
         for u in sorted(users, key=lambda x: x.created_at, reverse=True):
+            assigned_ids = u.assigned_tank_ids or []
+            # Manager, Admin, Chair, Super Admin implicitly get all tank access if list is empty
+            if u.role in (RoleEnum.manager, RoleEnum.admin, RoleEnum.chair, RoleEnum.super_admin) and not assigned_ids:
+                assigned_ids = all_tank_ids
+
             result.append({
                 "id": str(u.id),
                 "email": u.email,
@@ -100,7 +115,7 @@ class UserService:
                 "requested_role": u.requested_role.value if u.requested_role else None,
                 "role": u.role.value if u.role else None,
                 "status": u.status.value if u.status else "pending",
-                "assigned_tank_ids": u.assigned_tank_ids or [],
+                "assigned_tank_ids": assigned_ids,
                 "approved_by": u.approved_by,
                 "approved_at": u.approved_at,
                 "created_at": u.created_at.isoformat() if u.created_at else None,
