@@ -450,11 +450,7 @@ export const Reports: React.FC = () => {
 
                 {/* Form 1: Appendix 6 */}
                 {selectedForm === 'appendix6' && (() => {
-                  const realTanks = sopTanks.length > 0
-                    ? sopTanks.map((t: any) => String(t.tank_number))
-                    : Array.from(new Set(sopWq.map((w: any) => String(w.tank_number)))).filter(Boolean);
-                  
-                  const displayTanks = realTanks.length > 0 ? realTanks : ['1', '2', '3', '4', '5', '6', '7', '8'];
+                  const displayTanks = Array.from({ length: 14 }, (_, i) => String(i + 1));
                   const daysOfWeek = ['Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat', 'Sun'];
 
                   return (

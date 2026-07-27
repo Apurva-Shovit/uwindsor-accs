@@ -303,6 +303,10 @@ class ProjectService:
             tank_num = await EntityResolver.resolve_tank_number(wq.tank_id)
             wq_date = wq_dt.strftime("%a, %b %d, %Y, %I:%M %p") if wq_dt else "-"
 
+            params = getattr(wq, "parameters", {})
+            ph_val = params.get("pH", getattr(wq, "pH", None))
+            temp_val = params.get("temperature_celsius", getattr(wq, "temperature_celsius", getattr(wq, "temperature", None)))
+
             day_abbr = wq_dt.strftime("%a") if wq_dt else ""
             day_map = {"Mon": "Mon", "Tue": "Tues", "Wed": "Wed", "Thu": "Thurs", "Fri": "Fri", "Sat": "Sat", "Sun": "Sun"}
             day_col = day_map.get(day_abbr, day_abbr)
