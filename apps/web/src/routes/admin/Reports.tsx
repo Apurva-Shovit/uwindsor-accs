@@ -134,6 +134,62 @@ export const Reports: React.FC = () => {
   const sopWq = sopReportData?.water_quality_logs || [];
   const sopIncidents = sopReportData?.incidents || [];
 
+  const handlePrint = () => {
+    const printElement = document.getElementById('official-sop-print-area');
+    if (!printElement) return;
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>ACC Official Form Print</title>
+          <style>
+            @import url('https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css');
+            body { font-family: system-ui, -apple-system, sans-serif; background: white; color: black; margin: 0; padding: 12px; }
+            .page-break { break-after: page; page-break-after: always; margin-bottom: 24px; }
+            table { width: 100%; border-collapse: collapse; border: 2px solid #0f172a; text-align: center; font-size: 11px; }
+            th, td { border: 1px solid #334155; padding: 4px; }
+            th { background-color: #005596 !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .bg-rose-100 { background-color: #ffe4e6 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .bg-emerald-100 { background-color: #d1fae5 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .bg-amber-100 { background-color: #fef3c7 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .bg-slate-100 { background-color: #f1f5f9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .bg-slate-50 { background-color: #f8fafc !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            @page { size: auto; margin: 10mm; }
+          </style>
+        </head>
+        <body>
+          ${printElement.innerHTML}
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    iframe.contentWindow?.focus();
+    setTimeout(() => {
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 1000);
+    }, 300);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
