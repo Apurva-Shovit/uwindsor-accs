@@ -188,7 +188,9 @@ export const UserManagement: React.FC = () => {
           User Account &amp; Access Control Management
         </h1>
         <p className="text-sm text-slate-500 mt-1">
-          Approve pending signups, modify system roles, suspend/reinstate accounts, and grant tank access permissions.
+          {isAdminOrChair
+            ? 'Approve pending signups, modify system roles, suspend/reinstate accounts, and grant tank access permissions.'
+            : 'Approve pending staff signups, suspend/reinstate staff accounts, and grant staff tank access permissions.'}
         </p>
       </div>
 

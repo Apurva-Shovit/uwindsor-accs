@@ -155,9 +155,10 @@ export const Sidebar: React.FC = () => {
           </>
         )}
 
-        {/* User Management (Chair / Admin / Super Admin only) */}
-        {isAdminOrChair && (
+        {/* User Management */}
+        {isManagerPlus && (
           <NavLink
+            end
             to="/admin/users"
             title="User Management"
             className={({ isActive }) => linkClass(isActive)}
