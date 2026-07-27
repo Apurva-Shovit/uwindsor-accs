@@ -29,7 +29,7 @@ export function App() {
             <Route
               path="/admin/*"
               element={
-                <RoleGuard allowedRoles={['chair', 'admin', 'super_admin']}>
+                <RoleGuard allowedRoles={['manager', 'chair', 'admin', 'super_admin']}>
                   <AdminLayout />
                 </RoleGuard>
               }

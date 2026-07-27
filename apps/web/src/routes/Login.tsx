@@ -21,7 +21,7 @@ export const Login: React.FC = () => {
       const { access_token, role, status } = res.data;
       await loginToken(access_token, role, status);
 
-      if (['super_admin', 'chair', 'admin'].includes(role)) {
+      if (['super_admin', 'chair', 'admin', 'manager'].includes(role)) {
         navigate('/admin');
       } else {
         navigate('/staff');
