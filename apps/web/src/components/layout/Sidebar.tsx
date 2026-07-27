@@ -92,6 +92,7 @@ export const Sidebar: React.FC = () => {
 
         {/* 7. Tanks & Racks */}
         <NavLink
+          end
           to={isManagerPlus ? '/admin/facility' : '/staff/tanks'}
           title="Tanks & Racks"
           className={({ isActive }) => linkClass(isActive)}
@@ -102,6 +103,7 @@ export const Sidebar: React.FC = () => {
 
         {/* 8. Tank History Explorer */}
         <NavLink
+          end
           to={isManagerPlus ? '/admin/tanks/history' : '/staff/tanks/history'}
           title="Tank History Explorer"
           className={({ isActive }) => linkClass(isActive)}
@@ -112,6 +114,7 @@ export const Sidebar: React.FC = () => {
 
         {/* 9. Research Projects */}
         <NavLink
+          end
           to={isManagerPlus ? '/admin/projects' : '/staff/projects'}
           title="Research Projects"
           className={({ isActive }) => linkClass(isActive)}
@@ -122,7 +125,8 @@ export const Sidebar: React.FC = () => {
 
         {/* 10. Reports */}
         <NavLink
-          to={isManagerPlus ? '/admin/reports' : '/staff/projects'}
+          end
+          to={isManagerPlus ? '/admin/reports' : '/staff/reports'}
           title="Reports"
           className={({ isActive }) => linkClass(isActive)}
         >
@@ -133,6 +137,7 @@ export const Sidebar: React.FC = () => {
         {/* 11. Audit Logs */}
         {isManagerPlus && (
           <NavLink
+            end
             to="/admin/audit-logs"
             title="Audit Logs"
             className={({ isActive }) => linkClass(isActive)}
