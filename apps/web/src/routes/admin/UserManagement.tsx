@@ -38,10 +38,17 @@ export const UserManagement: React.FC = () => {
     queryKey: ['facilityTanksForUserMgmt'],
     queryFn: async () => {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:8000/facilities/tanks', {
+      const res = await fetch('http://localhost:8000/facilities-structure/tanks/summary', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (!res.ok) return [];
+      if (!res.ok) {
+        // Fallback to /facilities-structure/tanks
+        const fallback = await fetch('http://localhost:8000/facilities-structure/tanks', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!fallback.ok) return [];
+        return fallback.json();
+      }
       return res.json();
     }
   });
@@ -403,17 +410,24 @@ export const UserManagement: React.FC = () => {
                 <div>
                   <label className="block text-slate-600 font-bold mb-1">Assign Tank Access (Optional)</label>
                   <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg p-2 space-y-1 bg-slate-50">
-                    {tanksList.map((t: any) => (
-                      <label key={t.id} className="flex items-center gap-2 text-slate-700 cursor-pointer p-1 hover:bg-white rounded">
-                        <input
-                          type="checkbox"
-                          checked={assignedTanks.includes(t.id)}
-                          onChange={() => toggleTankSelection(t.id)}
-                          className="rounded text-[#005596]"
-                        />
-                        <span>Tank {t.tank_number}</span>
-                      </label>
-                    ))}
+                    {tanksList.length === 0 ? (
+                      <div className="text-center py-3 text-slate-400 italic">No tanks found in facility structure.</div>
+                    ) : (
+                      tanksList.map((t: any) => {
+                        const tId = t.id || t._id;
+                        return (
+                          <label key={tId} className="flex items-center gap-2 text-slate-700 cursor-pointer p-1 hover:bg-white rounded">
+                            <input
+                              type="checkbox"
+                              checked={assignedTanks.includes(tId)}
+                              onChange={() => toggleTankSelection(tId)}
+                              className="rounded text-[#005596]"
+                            />
+                            <span>Tank {t.tank_number}</span>
+                          </label>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
 
@@ -494,17 +508,24 @@ export const UserManagement: React.FC = () => {
               <div className="space-y-4 text-xs font-medium">
                 <p className="text-slate-500">Select specific tanks to grant access to this user. Leave empty for all facility tanks.</p>
                 <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-lg p-2 space-y-1 bg-slate-50">
-                  {tanksList.map((t: any) => (
-                    <label key={t.id} className="flex items-center gap-2 text-slate-700 cursor-pointer p-1 hover:bg-white rounded">
-                      <input
-                        type="checkbox"
-                        checked={assignedTanks.includes(t.id)}
-                        onChange={() => toggleTankSelection(t.id)}
-                        className="rounded text-[#005596]"
-                      />
-                      <span>Tank {t.tank_number}</span>
-                    </label>
-                  ))}
+                  {tanksList.length === 0 ? (
+                    <div className="text-center py-4 text-slate-400 italic">No tanks found in facility structure.</div>
+                  ) : (
+                    tanksList.map((t: any) => {
+                      const tId = t.id || t._id;
+                      return (
+                        <label key={tId} className="flex items-center gap-2 text-slate-700 cursor-pointer p-1 hover:bg-white rounded">
+                          <input
+                            type="checkbox"
+                            checked={assignedTanks.includes(tId)}
+                            onChange={() => toggleTankSelection(tId)}
+                            className="rounded text-[#005596]"
+                          />
+                          <span>Tank {t.tank_number}</span>
+                        </label>
+                      );
+                    })
+                  )}
                 </div>
 
                 <div className="flex justify-end gap-2 pt-3 border-t">
