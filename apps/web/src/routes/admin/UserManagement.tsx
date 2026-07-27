@@ -2,8 +2,11 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Users, UserCheck, UserX, Shield, Database, Lock, Search, CheckCircle, AlertCircle, RefreshCw, X } from 'lucide-react';
 import { formatDate } from '../../utils/formatters';
+import { useAuth } from '../../context/AuthContext';
 
 export const UserManagement: React.FC = () => {
+  const { user } = useAuth();
+  const isAdminOrChair = ['super_admin', 'chair', 'admin'].includes(user?.role || '');
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -332,12 +335,14 @@ export const UserManagement: React.FC = () => {
                         </button>
                       ) : (
                         <>
-                          <button
-                            onClick={() => openModal(u, 'role')}
-                            className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-[#005596] font-bold rounded-lg border border-blue-200 transition-colors text-xs"
-                          >
-                            Edit Role
-                          </button>
+                          {isAdminOrChair && (
+                            <button
+                              onClick={() => openModal(u, 'role')}
+                              className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-[#005596] font-bold rounded-lg border border-blue-200 transition-colors text-xs"
+                            >
+                              Edit Role
+                            </button>
+                          )}
 
                           <button
                             onClick={() => openModal(u, 'tanks')}
@@ -396,14 +401,15 @@ export const UserManagement: React.FC = () => {
                   <label className="block text-slate-600 font-bold mb-1">Confirm System Role</label>
                   <select
                     value={newRole}
+                    disabled={!isAdminOrChair}
                     onChange={(e) => setNewRole(e.target.value)}
-                    className="w-full p-2.5 border border-slate-300 rounded-lg font-semibold text-slate-800"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg font-semibold text-slate-800 disabled:bg-slate-100 disabled:text-slate-500"
                   >
                     <option value="staff">Staff / Technician</option>
-                    <option value="manager">Facility Manager</option>
-                    <option value="admin">Administrator</option>
-                    <option value="chair">ACC Chair</option>
-                    <option value="super_admin">Super Admin</option>
+                    {isAdminOrChair && <option value="manager">Facility Manager</option>}
+                    {isAdminOrChair && <option value="admin">Administrator</option>}
+                    {isAdminOrChair && <option value="chair">ACC Chair</option>}
+                    {isAdminOrChair && <option value="super_admin">Super Admin</option>}
                   </select>
                 </div>
 

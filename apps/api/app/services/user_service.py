@@ -16,6 +16,8 @@ class UserService:
             query = {"status": "pending"}
         elif current_user.role in (RoleEnum.chair, RoleEnum.admin):
             query = {"status": "pending", "requested_role": {"$in": ["manager", "staff"]}}
+        elif current_user.role == RoleEnum.manager:
+            query = {"status": "pending", "requested_role": "staff"}
         else:
             raise HTTPException(403, "Not authorized to view pending users")
             
@@ -31,13 +33,17 @@ class UserService:
         if not target or target.status != StatusEnum.pending:
             raise HTTPException(404, "Pending user not found")
 
+        # Manager scope enforcement: Manager can ONLY approve Staff accounts
+        if current_user.role == RoleEnum.manager:
+            if body.role != RoleEnum.staff or target.requested_role != RoleEnum.staff:
+                raise HTTPException(403, "Managers can only approve Staff accounts")
+            body.role = RoleEnum.staff
+
         # Enforce approval hierarchy server-side
         if body.role in (RoleEnum.chair, RoleEnum.admin) and current_user.role != RoleEnum.super_admin:
             raise HTTPException(403, "Only Super Admin can approve Chair/Admin")
-        if body.role in (RoleEnum.manager, RoleEnum.staff) and current_user.role not in (
-            RoleEnum.chair, RoleEnum.admin, RoleEnum.super_admin
-        ):
-            raise HTTPException(403, "Only Chair/Admin/Super Admin can approve Manager/Staff")
+        if body.role == RoleEnum.manager and current_user.role not in (RoleEnum.chair, RoleEnum.admin, RoleEnum.super_admin):
+            raise HTTPException(403, "Only Chair/Admin/Super Admin can approve Manager accounts")
 
         before = target.model_dump()
         target.role = body.role
@@ -74,6 +80,9 @@ class UserService:
         target = await UserRepository.get_by_id(user_id)
         if not target or target.status != StatusEnum.pending:
             raise HTTPException(404, "Pending user not found")
+
+        if current_user.role == RoleEnum.manager and target.requested_role != RoleEnum.staff and target.role != RoleEnum.staff:
+            raise HTTPException(403, "Managers can only reject Staff account requests")
             
         before = target.model_dump()
         target.status = StatusEnum.rejected
@@ -103,8 +112,12 @@ class UserService:
 
         result = []
         for u in sorted(users, key=lambda x: x.created_at, reverse=True):
+            # If Manager, only include Staff accounts
+            if current_user.role == RoleEnum.manager:
+                if u.role != RoleEnum.staff and u.requested_role != RoleEnum.staff:
+                    continue
+
             assigned_ids = u.assigned_tank_ids or []
-            # Manager, Admin, Chair, Super Admin implicitly get all tank access if list is empty
             if u.role in (RoleEnum.manager, RoleEnum.admin, RoleEnum.chair, RoleEnum.super_admin) and not assigned_ids:
                 assigned_ids = all_tank_ids
 
@@ -125,6 +138,9 @@ class UserService:
 
     @staticmethod
     async def update_user_role(user_id: str, new_role: RoleEnum, current_user: User) -> Dict[str, Any]:
+        if current_user.role == RoleEnum.manager:
+            raise HTTPException(403, "Managers are not authorized to modify user roles")
+
         target = await UserRepository.get_by_id(user_id)
         if not target:
             raise HTTPException(404, "User not found")
@@ -153,6 +169,10 @@ class UserService:
         target = await UserRepository.get_by_id(user_id)
         if not target:
             raise HTTPException(404, "User not found")
+
+        if current_user.role == RoleEnum.manager:
+            if target.role != RoleEnum.staff:
+                raise HTTPException(403, "Managers can only suspend or reinstate Staff accounts")
 
         if target.role in (RoleEnum.chair, RoleEnum.admin, RoleEnum.super_admin) and current_user.role != RoleEnum.super_admin:
             raise HTTPException(403, "Only Super Admin can suspend/reinstate Chair/Admin/Super Admin")
