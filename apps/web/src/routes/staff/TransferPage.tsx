@@ -5,7 +5,9 @@ interface Tank {
   id?: string;
   _id?: string;
   tank_number: string;
+  is_quarantined?: boolean;
 }
+
 
 interface TankAssignment {
   id?: string;

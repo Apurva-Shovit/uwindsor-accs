@@ -1,9 +1,10 @@
 from typing import List, Dict, Any, Optional
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from fastapi import HTTPException, status
 
 from ..models.user import User, AuditLog, RoleEnum
 from ..models.project import Project
+from ..models.facility import Tank
 from ..models.tank_assignment import TankAssignment
 from ..models.census_event import CensusEvent
 from ..models.water_quality_log import WaterQualityLog
@@ -61,6 +62,26 @@ class CensusService:
         )
         await ev.insert()
         after_ev = ev.model_dump(mode="json")
+
+        if body.event_type == "arrival":
+            dest_tank = await Tank.get(ta.tank_id)
+            if dest_tank:
+                now = datetime.now(timezone.utc)
+                before_tank = dest_tank.model_dump(mode="json")
+                dest_tank.is_quarantined = True
+                dest_tank.quarantine_start_date = now
+                dest_tank.quarantine_end_date = now + timedelta(days=14)
+                await dest_tank.save()
+
+                await AuditRepository.insert(AuditLog(
+                    actor_id=str(current_user.id),
+                    actor_role=str(current_user.role.value if current_user.role else "none"),
+                    action="placed_in_quarantine",
+                    entity_type="tank",
+                    entity_id=str(dest_tank.id),
+                    before=before_tank,
+                    after=dest_tank.model_dump(mode="json"),
+                ))
 
         await AuditRepository.insert(AuditLog(
             actor_id=str(current_user.id),

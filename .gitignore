@@ -16,3 +16,15 @@ env/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Root Scratch Scripts
+check_rooms.py
+fix_rooms.py
+fix_stuck_projects.py
+list_data.py
+migrate_facility.py
+reset_db.py
+test_db.py
+test_login.py
+update_password.py
+

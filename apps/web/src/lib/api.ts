@@ -17,7 +17,18 @@ export const getPending = () => api.get('/users/pending');
 export const approveUser = (id: string, body: any) => api.patch(`/users/${id}/approve`, body);
 export const rejectUser = (id: string, reason: string) => api.patch(`/users/${id}/reject`, { reason });
 
+export interface Tank {
+  id?: string;
+  _id?: string;
+  room_id: string;
+  tank_number: string;
+  status: string;
+  notes?: string;
+  is_quarantined?: boolean;
+}
+
 // Facilities, Rooms, and Tanks APIs
+
 export const getFacilities = () => api.get('/facilities-structure/facilities');
 export const getRooms = (facilityId?: string) => api.get('/facilities-structure/rooms', { params: { facility_id: facilityId } });
 export const getTanks = (roomId?: string) => api.get('/facilities-structure/tanks', { params: { room_id: roomId } });
@@ -43,6 +54,8 @@ export const getSpecies = () => api.get('/species/');
 export const createSpecies = (data: any) => api.post('/species', data);
 export const getProjects = () => api.get('/projects');
 export const getProject = (id: string) => api.get(`/projects/${id}`);
+export const getProjectDetails = (id: string) => api.get(`/projects/${id}/details`);
+export const getProjectReport = (id: string) => api.get(`/projects/${id}/report`);
 
 export const createProject = (data: any) => api.post('/projects', data);
 export const closeProject = (id: string, data: any) => api.post(`/projects/${id}/close`, data);

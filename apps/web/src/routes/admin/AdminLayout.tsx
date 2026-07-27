@@ -2,18 +2,20 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Topbar } from '../../components/layout/Topbar';
 import { Sidebar } from '../../components/layout/Sidebar';
-import { ApprovalQueueTable } from '../../components/ApprovalQueueTable';
-import { useAuth } from '../../context/AuthContext';
-
 import { TanksView } from '../TanksView';
 import { Dashboard } from './Dashboard';
 import { Reports } from './Reports';
 import { AuditLogs } from './AuditLogs';
 import { ProjectOverviewPage } from './ProjectOverviewPage';
+import { ProjectReportPage } from '../ProjectReportPage';
 import { TankHistoryPage } from './TankHistoryPage';
+import { ApprovalQueueTable } from '../../components/ApprovalQueueTable';
+
+
 
 export const AdminLayout: React.FC = () => {
-  const { user } = useAuth();
+
+
 
   return (
     <div className="flex flex-col min-h-screen bg-surface">
@@ -32,6 +34,7 @@ export const AdminLayout: React.FC = () => {
             <Route path="approval-queue" element={<ApprovalQueueTable />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="projects" element={<ProjectOverviewPage />} />
+            <Route path="projects/:id/report" element={<ProjectReportPage />} />
             <Route path="reports" element={<Reports />} />
             <Route path="audit-logs" element={<AuditLogs />} />
             <Route path="*" element={<Navigate to="/admin" replace />} />

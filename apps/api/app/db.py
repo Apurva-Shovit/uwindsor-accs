@@ -28,4 +28,46 @@ async def init_db():
             IndividualFish, QuarantineExemption
         ],
     )
+    # Ensure superadmin account exists with known password
+    from .core.security import hash_password
+    from .models.user import RoleEnum, StatusEnum
+    su = await User.find_one({"email": "superadmin@uwindsor.ca"})
+    if not su:
+        su = User(
+            email="superadmin@uwindsor.ca",
+            password_hash=hash_password("ChangeMe123!"),
+            first_name="Super",
+            last_name="Admin",
+            requested_role=RoleEnum.super_admin,
+            role=RoleEnum.super_admin,
+            status=StatusEnum.active,
+        )
+        await su.insert()
+    else:
+        su.password_hash = hash_password("ChangeMe123!")
+        su.status = StatusEnum.active
+        su.role = RoleEnum.super_admin
+        await su.save()
+
+    # Ensure baseline facility, room, and 14 tanks exist
+    fac = await Facility.find_one({"name": "LaSalle Freshwater Restoration Ecology Centre"})
+    if not fac:
+        fac = Facility(name="LaSalle Freshwater Restoration Ecology Centre", address="LaSalle, ON", description="Main restoration ecology facility")
+        await fac.insert()
+        
+    room = await Room.find_one({"facility_id": str(fac.id), "room_number": "301"})
+    if not room:
+        room = Room(facility_id=str(fac.id), room_number="301", description="Main aquatic holding room")
+        await room.insert()
+
+    existing_tanks = await Tank.find({"room_id": str(room.id)}).to_list()
+    if len(existing_tanks) < 14:
+        for i in range(1, 15):
+            t_num = str(i)
+            t = await Tank.find_one({"room_id": str(room.id), "tank_number": t_num})
+            if not t:
+                t = Tank(room_id=str(room.id), tank_number=t_num, status="active", notes=f"Seeded Tank {t_num}")
+                await t.insert()
+
+
 

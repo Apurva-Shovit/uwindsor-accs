@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpen, AlertTriangle, CheckCircle, Search, Calendar, Users, Activity, FileText } from 'lucide-react';
+import { BookOpen, AlertTriangle, Search, Calendar, Users, Activity } from 'lucide-react';
+
 
 export const ProjectOverviewPage: React.FC = () => {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'closed' | 'expiring'>('all');
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
@@ -234,36 +237,50 @@ export const ProjectOverviewPage: React.FC = () => {
       {/* Project Detail Modal */}
       {selectedProject && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-start border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-lg font-bold text-[#005596]">{selectedProject.title}</h3>
+                <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase mb-1 ${
+                  selectedProject.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                }`}>
+                  {selectedProject.status}
+                </span>
+                <h3 className="text-xl font-bold text-[#005596]">{selectedProject.title}</h3>
                 <span className="text-xs font-mono text-slate-400">AUPP# {selectedProject.aupp_number}</span>
               </div>
               <button
                 onClick={() => setSelectedProject(null)}
-                className="text-slate-400 hover:text-slate-600 text-sm font-bold"
+                className="text-slate-400 hover:text-slate-600 text-base font-bold p-1"
               >
                 ✕
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                <span className="text-xs font-bold text-slate-400 uppercase block">Principal Investigator</span>
-                <span className="font-semibold text-slate-800">{selectedProject.pi_name}</span>
+            {/* KPI Summary Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center">
+                <span className="block text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Total Fish Count</span>
+                <span className="text-xl font-extrabold text-emerald-700 mt-1 block">
+                  {selectedProject.total_fish_count ?? selectedProject.total_animals ?? 0} Fish
+                </span>
               </div>
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                <span className="text-xs font-bold text-slate-400 uppercase block">Species</span>
-                <span className="font-semibold text-slate-800 capitalize">{selectedProject.species}</span>
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-center">
+                <span className="block text-[10px] font-bold text-blue-800 uppercase tracking-wider">Occupied Tanks</span>
+                <span className="text-xl font-extrabold text-blue-700 mt-1 block">
+                  {selectedProject.assigned_tanks_count || 0} Tanks
+                </span>
               </div>
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                <span className="text-xs font-bold text-slate-400 uppercase block">Assigned Tanks</span>
-                <span className="font-semibold text-slate-800">{selectedProject.assigned_tanks_count} Tanks</span>
+              <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-center">
+                <span className="block text-[10px] font-bold text-amber-800 uppercase tracking-wider">Quarantine Status</span>
+                <span className="text-xl font-extrabold text-amber-700 mt-1 block">
+                  {selectedProject.occupied_tanks?.filter((t: any) => t.is_quarantined).length || 0} Quarantined
+                </span>
               </div>
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                <span className="text-xs font-bold text-slate-400 uppercase block">Live Fish Count</span>
-                <span className="font-semibold text-emerald-600">{selectedProject.total_animals} Fish</span>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+                <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tracking Mode</span>
+                <span className="text-xs font-bold text-slate-800 mt-2 block">
+                  {selectedProject.rfid_tracking_enabled ? 'RFID Individual' : 'Population Count'}
+                </span>
               </div>
             </div>
 
@@ -274,12 +291,116 @@ export const ProjectOverviewPage: React.FC = () => {
               </div>
             )}
 
-            <div className="flex justify-end pt-2">
+            {/* Complete Project Details Grid */}
+            <div>
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 border-b border-slate-100 pb-1">
+                Project Protocol & Specifications
+              </h4>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Principal Investigator</span>
+                  <span className="font-semibold text-slate-800">{selectedProject.pi_name}</span>
+                </div>
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">AUPP Protocol #</span>
+                  <span className="font-semibold text-slate-800">{selectedProject.aupp_number}</span>
+                </div>
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Species</span>
+                  <span className="font-semibold text-slate-800 capitalize">{selectedProject.species}</span>
+                </div>
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Sex</span>
+                  <span className="font-semibold text-slate-800 capitalize">{selectedProject.sex || 'N/A'}</span>
+                </div>
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Date of Birth (DOB)</span>
+                  <span className="font-semibold text-slate-800">{formatDate(selectedProject.dob)}</span>
+                </div>
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Established Date</span>
+                  <span className="font-semibold text-slate-800">{formatDate(selectedProject.established_date)}</span>
+                </div>
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Source</span>
+                  <span className="font-semibold text-slate-800">{selectedProject.source || 'N/A'}</span>
+                </div>
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">AUPP Expiry Date</span>
+                  <span className="font-semibold text-slate-800">{formatDate(selectedProject.aupp_expiry_date)}</span>
+                </div>
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Room Number (RM#)</span>
+                  <span className="font-semibold text-slate-800">RM {selectedProject.room_number || 'N/A'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Currently Occupied Tanks */}
+            <div>
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 border-b border-slate-100 pb-1">
+                Currently Occupied Tanks ({selectedProject.occupied_tanks?.length || 0})
+              </h4>
+              {selectedProject.occupied_tanks && selectedProject.occupied_tanks.length > 0 ? (
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase">
+                        <th className="p-3">Tank</th>
+                        <th className="p-3">Fish Population</th>
+                        <th className="p-3">Quarantine Status</th>
+                        <th className="p-3">Tank State</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      {selectedProject.occupied_tanks.map((t: any) => (
+                        <tr key={t.tank_assignment_id} className="hover:bg-slate-50">
+                          <td className="p-3 font-bold text-[#005596]">Tank {t.tank_number}</td>
+                          <td className="p-3">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              {t.current_count} Fish
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            {t.is_quarantined ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+                                🛡️ Quarantined {t.quarantine_end_date ? `(until ${formatDate(t.quarantine_end_date)})` : ''}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                ✅ Clear / Active
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3 capitalize text-slate-600">{t.status}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="bg-slate-50 rounded-xl p-4 text-center text-xs text-slate-500 border border-slate-200 italic">
+                  No tanks are currently occupied by this project.
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-2 border-t border-slate-100">
+              <button
+                onClick={() => {
+                  const pid = selectedProject.id || selectedProject._id;
+                  setSelectedProject(null);
+                  navigate(`/admin/projects/${pid}/report`);
+                }}
+                className="w-full sm:w-auto px-4 py-2 bg-[#005596] hover:bg-blue-800 text-white text-xs font-bold rounded-lg shadow transition-colors"
+              >
+                📊 View Full Project Audit & Comprehensive Report
+              </button>
               <button
                 onClick={() => setSelectedProject(null)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg"
+                className="w-full sm:w-auto px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
               >
-                Close
+                Close Details
               </button>
             </div>
           </div>

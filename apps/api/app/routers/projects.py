@@ -27,6 +27,16 @@ async def list_projects(current: User = Depends(get_current_user)):
 
 
 
+@router.get("/{id}/details")
+async def get_project_details(id: str, current: User = Depends(get_current_user)):
+    return await ProjectService.get_project_details(id)
+
+
+@router.get("/{id}/report")
+async def get_project_report(id: str, current: User = Depends(get_current_user)):
+    return await ProjectService.get_project_report(id, current)
+
+
 @router.get("/{id}")
 async def get_project(id: str, current: User = Depends(get_current_user)):
     p = await Project.get(id)

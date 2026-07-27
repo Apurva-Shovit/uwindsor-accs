@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { TanksView } from '../TanksView';
 import { LogEntryPage } from './LogEntryPage';
 import { ProjectDetailsPage } from './ProjectDetailsPage';
+import { ProjectReportPage } from '../ProjectReportPage';
 import { CensusPage } from './CensusPage';
 import { TransferPage } from './TransferPage';
 import { QuarantinePage } from './QuarantinePage';
@@ -24,6 +25,7 @@ export const StaffLayout: React.FC = () => {
             <Route path="/tanks" element={<TanksView />} />
             <Route path="/log-entry" element={<LogEntryPage />} />
             <Route path="/projects" element={<ProjectDetailsPage />} />
+            <Route path="/projects/:id/report" element={<ProjectReportPage />} />
             <Route path="/census" element={<CensusPage />} />
             <Route path="/transfers" element={<TransferPage />} />
             <Route path="/quarantine" element={<QuarantinePage />} />

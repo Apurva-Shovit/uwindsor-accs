@@ -4,13 +4,21 @@ from .db import init_db
 from .routers import auth, users, facilities, dashboard, reports, audit
 from .routers import water_quality_logs, incident_reports
 from .routers import projects, census, transfers, intake, species, quarantine, individual_fish
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from .core.limiter import limiter
 from fastapi.responses import JSONResponse
 from fastapi.requests import Request
 
-app = FastAPI(title="ACare API")
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db()
+    yield
+
+app = FastAPI(title="ACare API", lifespan=lifespan)
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,7 +28,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -33,10 +40,6 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Content-Security-Policy"] = "default-src 'self'"
     return response
-
-@app.on_event("startup")
-async def startup():
-    await init_db()
 
 @app.get("/health")
 async def health():

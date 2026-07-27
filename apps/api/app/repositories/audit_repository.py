@@ -35,36 +35,47 @@ class AuditRepository:
         try:
             if entity_type == "tank":
                 t = await Tank.get(entity_id)
-                return f"Tank {t.tank_number}" if t else entity_id
+                return f"Tank {t.tank_number}" if t else "Unknown Tank"
             elif entity_type == "project":
                 p = await Project.get(entity_id)
-                return f"Project '{p.title}'" if p else entity_id
+                return f"Project '{p.title}'" if p else "Unknown Project"
             elif entity_type == "tank_assignment":
                 ta = await TankAssignment.get(entity_id)
                 if ta:
                     t = await Tank.get(ta.tank_id)
                     return f"Assignment on Tank {t.tank_number if t else 'Unknown'}"
+                return "Unknown Assignment"
             elif entity_type == "census_event":
                 ce = await CensusEvent.get(entity_id)
                 if ce:
                     t = await Tank.get(ce.tank_id)
                     return f"Census for Tank {t.tank_number if t else 'Unknown'}"
+                return "Unknown Census Event"
             elif entity_type == "water_quality_log":
                 wql = await WaterQualityLog.get(entity_id)
                 if wql:
                     t = await Tank.get(wql.tank_id)
                     return f"Water Quality for Tank {t.tank_number if t else 'Unknown'}"
+                return "Unknown Water Quality Log"
             elif entity_type == "incident_report":
                 inc = await IncidentReport.get(entity_id)
                 if inc:
                     t = await Tank.get(inc.tank_id)
                     return f"Incident on Tank {t.tank_number if t else 'Unknown'}"
+                return "Unknown Incident Report"
             elif entity_type == "quarantine_exemption":
                 qe = await QuarantineExemption.get(entity_id)
                 if qe:
                     t = await Tank.get(qe.tank_id)
                     return f"Exemption for Tank {t.tank_number if t else 'Unknown'}"
+                return "Unknown Quarantine Exemption"
+            elif entity_type == "user":
+                from ..models.user import User
+                u = await User.get(entity_id)
+                if u:
+                    return f"{u.first_name} {u.last_name}".strip()
+                return "Unknown User"
         except Exception:
             pass
             
-        return entity_id
+        return f"Unknown {entity_type.replace('_', ' ').title()}" if ObjectId.is_valid(entity_id) else entity_id

@@ -51,6 +51,9 @@ class FacilityService:
 
     @staticmethod
     async def create_tank(room_id: str, tank_number: str, notes: Optional[str]) -> Tank:
+        existing = await Tank.find_one({"room_id": room_id, "tank_number": tank_number, "deleted": False})
+        if existing:
+            raise HTTPException(status.HTTP_409_CONFLICT, f"Tank {tank_number} already exists in this room")
         t = Tank(room_id=room_id, tank_number=tank_number, notes=notes)
         await t.insert()
         return t

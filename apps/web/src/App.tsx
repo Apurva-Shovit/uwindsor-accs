@@ -7,35 +7,40 @@ import { PendingApproval } from './routes/PendingApproval';
 import { StaffLayout } from './routes/staff/StaffLayout';
 import { AdminLayout } from './routes/admin/AdminLayout';
 
+import { SidebarProvider } from './context/SidebarContext';
+
 export function App() {
   return (
     <AuthProvider>
-      <Router>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/pending-approval" element={<PendingApproval />} />
-          <Route
-            path="/staff/*"
-            element={
-              <RoleGuard allowedRoles={['staff', 'manager', 'chair', 'admin', 'super_admin']}>
-                <StaffLayout />
-              </RoleGuard>
-            }
-          />
-          <Route
-            path="/admin/*"
-            element={
-              <RoleGuard allowedRoles={['chair', 'admin', 'super_admin']}>
-                <AdminLayout />
-              </RoleGuard>
-            }
-          />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </Router>
+      <SidebarProvider>
+        <Router>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="/pending-approval" element={<PendingApproval />} />
+            <Route
+              path="/staff/*"
+              element={
+                <RoleGuard allowedRoles={['staff', 'manager', 'chair', 'admin', 'super_admin']}>
+                  <StaffLayout />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path="/admin/*"
+              element={
+                <RoleGuard allowedRoles={['chair', 'admin', 'super_admin']}>
+                  <AdminLayout />
+                </RoleGuard>
+              }
+            />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </Router>
+      </SidebarProvider>
     </AuthProvider>
   );
 }
+
 
 export default App;

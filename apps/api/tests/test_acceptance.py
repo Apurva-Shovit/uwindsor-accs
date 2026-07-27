@@ -9,10 +9,15 @@ from app.db import init_db
 @pytest.mark.asyncio
 async def test_full_auth_approval_flow():
     await init_db()
+    # Clean up test accounts to ensure isolation
+    test_emails = ["chair_test@uwindsor.ca", "staff_test@uwindsor.ca", "another_chair@uwindsor.ca"]
+    await User.find({"email": {"$in": test_emails}}).delete()
+    
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         # 1. Health check
         res = await ac.get("/health")
         assert res.status_code == 200
+
 
         # 2. Super admin login
         su = await User.find_one({"email": "superadmin@uwindsor.ca"})

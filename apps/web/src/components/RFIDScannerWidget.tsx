@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Radio, Search, Tag, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Radio, Search, Tag, AlertCircle } from 'lucide-react';
+
 
 export const RFIDScannerWidget: React.FC = () => {
   const [scanTag, setScanTag] = useState('');

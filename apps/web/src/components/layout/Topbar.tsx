@@ -1,18 +1,29 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { LogOut, Shield, User as UserIcon } from 'lucide-react';
+import { useSidebar } from '../../context/SidebarContext';
+import { LogOut, Shield, User as UserIcon, Menu } from 'lucide-react';
 
 export const Topbar: React.FC = () => {
   const { user, logout } = useAuth();
+  const { toggleSidebar } = useSidebar();
 
   return (
     <header className="flex h-16 w-full items-center justify-between border-b border-border bg-white px-6 shadow-sm">
       <div className="flex items-center space-x-3">
+        <button
+          onClick={toggleSidebar}
+          className="p-2 text-slate-600 hover:text-brandBlue hover:bg-slate-100 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-brandBlue/20"
+          title="Toggle Navigation Menu"
+          aria-label="Toggle Sidebar Menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brandBlue text-white font-bold">
           AC
         </div>
         <span className="text-lg font-semibold text-textPrimary">ACare Aquatic System</span>
       </div>
+
 
       <div className="flex items-center space-x-4">
         {user && (

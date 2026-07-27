@@ -8,8 +8,12 @@ from app.db import init_db
 @pytest.mark.asyncio
 async def test_sprint1_backend_flows():
     await init_db()
+    # Clean up test user to ensure isolation
+    await User.find({"email": "staff_sprint1@uwindsor.ca"}).delete()
+
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         # Get dynamic user tokens
+
         su_login = await ac.post("/auth/login", json={"email": "superadmin@uwindsor.ca", "password": "ChangeMe123!"})
         su_token = su_login.json()["access_token"]
 
@@ -64,11 +68,18 @@ async def test_sprint1_backend_flows():
             "notes": "Admin-created test tank"
         }, headers={"Authorization": f"Bearer {su_token}"})
         assert su_post_tank.status_code == 201
-        new_tank_id = su_post_tank.json()["_id"]
+        new_tank_data = su_post_tank.json()
+        new_tank_id = new_tank_data.get("_id") or new_tank_data.get("id")
+
 
         # Toggle state
         toggle_res = await ac.patch(f"/facilities-structure/tanks/{new_tank_id}", json={"status": "inactive"}, headers={"Authorization": f"Bearer {su_token}"})
         assert toggle_res.status_code == 200
         assert toggle_res.json()["status"] == "inactive"
+
+        # Cleanup test tank to keep DB clean
+        test_t = await Tank.get(new_tank_id)
+        if test_t:
+            await test_t.delete()
 
         print("\nALL SPRINT 1 BACKEND VERIFICATIONS SUCCESSFUL!")

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { getProjects, createProject, closeProject } from '../../lib/api';
+import { useNavigate } from 'react-router-dom';
+import { getProjects, createProject, closeProject, getProjectDetails } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import SpeciesDropdown from '../../components/SpeciesDropdown';
 
@@ -22,14 +23,17 @@ interface Project {
   source?: string;
   aupp_expiry_date?: string;
   room_number?: string;
+  rfid_tracking_enabled?: boolean;
 }
 
 const getId = (obj: { id?: string; _id?: string }): string => obj.id || obj._id || '';
 
 export const ProjectDetailsPage: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProj, setSelectedProj] = useState<Project | null>(null);
+  const [projDetails, setProjDetails] = useState<any | null>(null);
 
   // Creation form state
   const [title, setTitle] = useState('');
@@ -71,6 +75,19 @@ export const ProjectDetailsPage: React.FC = () => {
   useEffect(() => {
     loadProjects();
   }, []);
+
+  useEffect(() => {
+    if (selectedProj) {
+      const pid = getId(selectedProj);
+      if (pid) {
+        getProjectDetails(pid)
+          .then(r => setProjDetails(r.data))
+          .catch(() => setProjDetails(null));
+      }
+    } else {
+      setProjDetails(null);
+    }
+  }, [selectedProj?.id, (selectedProj as any)?._id]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -262,20 +279,57 @@ export const ProjectDetailsPage: React.FC = () => {
           )
         ) : (
           <div className="rounded-2xl border border-border bg-white p-6 shadow-sm space-y-6">
-            <div className="flex items-center justify-between border-b border-border pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4">
               <div>
                 <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold uppercase mb-1
                   ${selectedProj.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                   {selectedProj.status}
                 </span>
                 <h2 className="text-xl font-bold text-textPrimary">{selectedProj.title}</h2>
+                <span className="text-xs text-textSecondary font-mono block">AUPP# {selectedProj.aupp_number}</span>
               </div>
-              {selectedProj.status === 'active' && isManagerPlus && (
-                <button onClick={() => setShowCloseModal(true)}
-                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 transition-colors">
-                  Close Project
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => navigate(`/staff/projects/${getId(selectedProj)}/report`)}
+                  className="rounded-lg bg-[#005596] px-4 py-2 text-xs font-extrabold text-white hover:bg-blue-800 transition-colors shadow"
+                >
+                  📊 View Full Project Audit & Report
                 </button>
-              )}
+                {selectedProj.status === 'active' && isManagerPlus && (
+                  <button onClick={() => setShowCloseModal(true)}
+                    className="rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-700 transition-colors">
+                    Close Project
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* KPI Summary Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center">
+                <span className="block text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Total Fish Count</span>
+                <span className="text-xl font-extrabold text-emerald-700 mt-1 block">
+                  {projDetails ? (projDetails.total_fish_count ?? 0) : '...'} Fish
+                </span>
+              </div>
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-center">
+                <span className="block text-[10px] font-bold text-blue-800 uppercase tracking-wider">Occupied Tanks</span>
+                <span className="text-xl font-extrabold text-blue-700 mt-1 block">
+                  {projDetails ? (projDetails.assigned_tanks_count ?? 0) : '...'} Tanks
+                </span>
+              </div>
+              <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-center">
+                <span className="block text-[10px] font-bold text-amber-800 uppercase tracking-wider">Quarantine Status</span>
+                <span className="text-xl font-extrabold text-amber-700 mt-1 block">
+                  {projDetails ? (projDetails.occupied_tanks?.filter((t: any) => t.is_quarantined).length ?? 0) : 0} Quarantined
+                </span>
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+                <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tracking Mode</span>
+                <span className="text-xs font-bold text-slate-800 mt-2 block">
+                  {selectedProj.rfid_tracking_enabled ? 'RFID Individual' : 'Population Count'}
+                </span>
+              </div>
             </div>
 
             {selectedProj.status === 'closed' && (
@@ -292,45 +346,102 @@ export const ProjectDetailsPage: React.FC = () => {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-              <div>
-                <span className="block text-xs font-semibold text-textSecondary uppercase">Principal Investigator</span>
-                <span className="text-sm font-medium text-textPrimary">{selectedProj.pi_name}</span>
-              </div>
-              <div>
-                <span className="block text-xs font-semibold text-textSecondary uppercase">AUPP Protocols #</span>
-                <span className="text-sm font-medium text-textPrimary">{selectedProj.aupp_number}</span>
-              </div>
-              <div>
-                <span className="block text-xs font-semibold text-textSecondary uppercase">Species</span>
-                <span className="text-sm font-medium text-textPrimary">{selectedProj.species || 'N/A'}</span>
-              </div>
-              <div>
-                <span className="block text-xs font-semibold text-textSecondary uppercase">Sex</span>
-                <span className="text-sm font-medium text-textPrimary capitalize">{selectedProj.sex || 'N/A'}</span>
-              </div>
-              <div>
-                <span className="block text-xs font-semibold text-textSecondary uppercase">Date of Birth (DOB)</span>
-                <span className="text-sm font-medium text-textPrimary">{formatDate(selectedProj.dob)}</span>
-              </div>
-              <div>
-                <span className="block text-xs font-semibold text-textSecondary uppercase">Established Date</span>
-                <span className="text-sm font-medium text-textPrimary">{formatDate(selectedProj.established_date)}</span>
-              </div>
-              <div>
-                <span className="block text-xs font-semibold text-textSecondary uppercase">Source</span>
-                <span className="text-sm font-medium text-textPrimary">{selectedProj.source || 'N/A'}</span>
-              </div>
-              <div>
-                <span className="block text-xs font-semibold text-textSecondary uppercase">AUPP Expiry Date</span>
-                <span className="text-sm font-medium text-textPrimary">{formatDate(selectedProj.aupp_expiry_date)}</span>
-              </div>
-              <div>
-                <span className="block text-xs font-semibold text-textSecondary uppercase">Room Number (RM#)</span>
-                <span className="text-sm font-medium text-textPrimary">RM {selectedProj.room_number || 'N/A'}</span>
+            {/* Protocol Metadata Grid */}
+            <div>
+              <h3 className="text-xs font-bold text-textSecondary uppercase tracking-wider mb-3 border-b border-slate-100 pb-1">
+                Protocol Metadata & Specifications
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
+                <div>
+                  <span className="block text-xs font-semibold text-textSecondary uppercase">Principal Investigator</span>
+                  <span className="text-sm font-medium text-textPrimary">{selectedProj.pi_name}</span>
+                </div>
+                <div>
+                  <span className="block text-xs font-semibold text-textSecondary uppercase">AUPP Protocols #</span>
+                  <span className="text-sm font-medium text-textPrimary">{selectedProj.aupp_number}</span>
+                </div>
+                <div>
+                  <span className="block text-xs font-semibold text-textSecondary uppercase">Species</span>
+                  <span className="text-sm font-medium text-textPrimary">{selectedProj.species || 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="block text-xs font-semibold text-textSecondary uppercase">Sex</span>
+                  <span className="text-sm font-medium text-textPrimary capitalize">{selectedProj.sex || 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="block text-xs font-semibold text-textSecondary uppercase">Date of Birth (DOB)</span>
+                  <span className="text-sm font-medium text-textPrimary">{formatDate(selectedProj.dob)}</span>
+                </div>
+                <div>
+                  <span className="block text-xs font-semibold text-textSecondary uppercase">Established Date</span>
+                  <span className="text-sm font-medium text-textPrimary">{formatDate(selectedProj.established_date)}</span>
+                </div>
+                <div>
+                  <span className="block text-xs font-semibold text-textSecondary uppercase">Source</span>
+                  <span className="text-sm font-medium text-textPrimary">{selectedProj.source || 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="block text-xs font-semibold text-textSecondary uppercase">AUPP Expiry Date</span>
+                  <span className="text-sm font-medium text-textPrimary">{formatDate(selectedProj.aupp_expiry_date)}</span>
+                </div>
+                <div>
+                  <span className="block text-xs font-semibold text-textSecondary uppercase">Room Number (RM#)</span>
+                  <span className="text-sm font-medium text-textPrimary">RM {selectedProj.room_number || 'N/A'}</span>
+                </div>
               </div>
             </div>
+
+            {/* Occupied Tanks Section */}
+            <div className="pt-2">
+              <h3 className="text-xs font-bold text-textSecondary uppercase tracking-wider mb-3 border-b border-slate-100 pb-1">
+                Currently Occupied Tanks ({projDetails?.occupied_tanks?.length ?? 0})
+              </h3>
+              {projDetails && projDetails.occupied_tanks && projDetails.occupied_tanks.length > 0 ? (
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase">
+                        <th className="p-3">Tank</th>
+                        <th className="p-3">Fish Population</th>
+                        <th className="p-3">Quarantine Status</th>
+                        <th className="p-3">Tank State</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      {projDetails.occupied_tanks.map((t: any) => (
+                        <tr key={t.tank_assignment_id} className="hover:bg-slate-50">
+                          <td className="p-3 font-bold text-[#005596]">Tank {t.tank_number}</td>
+                          <td className="p-3">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              {t.current_count} Fish
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            {t.is_quarantined ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+                                🛡️ Quarantined {t.quarantine_end_date ? `(until ${new Date(t.quarantine_end_date).toLocaleDateString()})` : ''}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                ✅ Clear / Active
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3 capitalize text-slate-600">{t.status}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="bg-slate-50 rounded-xl p-4 text-center text-xs text-slate-500 border border-slate-200 italic">
+                  No tanks are currently occupied by this project.
+                </div>
+              )}
+            </div>
           </div>
+        )}
+      </div>
         )}
       </div>
 

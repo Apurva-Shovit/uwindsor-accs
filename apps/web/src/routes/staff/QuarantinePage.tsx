@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Clock, ShieldAlert, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
+import { AlertTriangle, Clock, ShieldAlert, CheckCircle2, XCircle } from 'lucide-react';
+
 import { useAuth } from '../../context/AuthContext';
 
 export const QuarantinePage: React.FC = () => {

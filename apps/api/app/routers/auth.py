@@ -1,8 +1,5 @@
 from fastapi import APIRouter, Depends, status, Request
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-
-limiter = Limiter(key_func=get_remote_address)
+from ..core.limiter import limiter
 from ..models.user import User
 from ..schemas.auth import SignupRequest, LoginRequest, TokenResponse, MeResponse
 from ..services.auth_service import AuthService

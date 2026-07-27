@@ -115,7 +115,12 @@ export const CensusPage: React.FC = () => {
     }
   }, [selectedTa?.project_id, isAdditive]);
 
-  /* ── Compute preview ── */
+  /* ── Derived helpers ── */
+  const selectedProjectForAdditive = projects.find(p => getId(p) === selectedProjectId);
+  const selectedTankForAdditive = tanks.find(t => getId(t) === selectedTankId);
+  const existingAssignment = selectedTankId ? assignments.find(a => a.tank_id === selectedTankId && a.current_count > 0) : null;
+  const isAuppMismatch = Boolean(existingAssignment && selectedProjectId && existingAssignment.project_id !== selectedProjectId);
+
   const rawChange = parseInt(changeStr, 10) || 0;
   let changeValue: number;
   if (isAdditive) {
@@ -124,10 +129,12 @@ export const CensusPage: React.FC = () => {
     changeValue = eventType === 'death' ? -Math.abs(rawChange) : rawChange;
   }
 
-  const previewCount = isAdditive ? rawChange : currentCount + changeValue;
+  const previewCount = isAdditive
+    ? (existingAssignment && existingAssignment.project_id === selectedProjectId ? existingAssignment.current_count + rawChange : rawChange)
+    : currentCount + changeValue;
 
   const isInvalid = isAdditive
-    ? rawChange <= 0 || !selectedTankId || !selectedProjectId
+    ? rawChange <= 0 || !selectedTankId || !selectedProjectId || isAuppMismatch
     : previewCount < 0 || changeValue === 0 || !selectedTaId;
 
   /* ── Submit ── */
@@ -172,9 +179,6 @@ export const CensusPage: React.FC = () => {
       setLoading(false);
     }
   };
-
-  /* ── Derived helpers ── */
-  const selectedProjectForAdditive = projects.find(p => getId(p) === selectedProjectId);
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -265,6 +269,55 @@ export const CensusPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* ── Warning & Notice Cards ── */}
+              {isAuppMismatch && (
+                <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-sm flex items-start space-x-3">
+                  <span className="text-xl">⛔</span>
+                  <div>
+                    <h4 className="font-bold text-red-800">Destination Occupied (AUPP Conflict)</h4>
+                    <p className="text-red-700 text-xs mt-0.5 leading-relaxed">
+                      Tank <strong>{selectedTankForAdditive?.tank_number}</strong> is currently occupied by a different AUPP project (AUPP: <strong>{existingAssignment?.aupp_number || 'N/A'}</strong>). Mixing different projects in the same tank is strictly prohibited.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {!isAuppMismatch && existingAssignment && selectedProjectId && (
+                eventType === 'arrival' ? (
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm flex items-start space-x-3">
+                    <span className="text-xl">⚠️</span>
+                    <div>
+                      <h4 className="font-bold text-amber-900">Existing Population & Quarantine Warning</h4>
+                      <p className="text-amber-800 text-xs mt-0.5 leading-relaxed">
+                        Tank <strong>{selectedTankForAdditive?.tank_number}</strong> currently contains <strong>{existingAssignment.current_count} fish</strong> for this project. Adding new arrivals will merge into this existing population and automatically place (or reset) the tank into a <strong>14-day mandatory quarantine</strong>.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl bg-blue-50 border border-blue-200 p-4 text-sm flex items-start space-x-3">
+                    <span className="text-xl">ℹ️</span>
+                    <div>
+                      <h4 className="font-bold text-blue-900">Existing Population Info</h4>
+                      <p className="text-blue-800 text-xs mt-0.5 leading-relaxed">
+                        Tank <strong>{selectedTankForAdditive?.tank_number}</strong> currently contains <strong>{existingAssignment.current_count} fish</strong> for this project. New hatchlings will be added to this tank's population without triggering quarantine.
+                      </p>
+                    </div>
+                  </div>
+                )
+              )}
+
+              {!isAuppMismatch && !existingAssignment && selectedTankId && eventType === 'arrival' && (
+                <div className="rounded-xl bg-blue-50 border border-blue-200 p-4 text-sm flex items-start space-x-3">
+                  <span className="text-xl">🛡️</span>
+                  <div>
+                    <h4 className="font-bold text-blue-900">Quarantine Activation Notice</h4>
+                    <p className="text-blue-800 text-xs mt-0.5 leading-relaxed">
+                      New fish arrival to Tank <strong>{selectedTankForAdditive?.tank_number}</strong> will automatically activate a <strong>14-day mandatory quarantine</strong> on this tank.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {selectedProjectForAdditive && (
                 <div className="rounded-xl border border-border bg-surface p-4 text-sm space-y-1">
                   <div><span className="text-xs font-semibold text-textSecondary uppercase">Project:</span> <span className="font-semibold text-textPrimary">{selectedProjectForAdditive.title}</span></div>
@@ -352,6 +405,12 @@ export const CensusPage: React.FC = () => {
           {(isAdditive ? (selectedTankId && selectedProjectId) : selectedTaId) && (
             <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4 space-y-2">
               <span className="block text-xs font-bold text-blue-800 uppercase">Live Count Preview</span>
+              {isAdditive && existingAssignment && existingAssignment.project_id === selectedProjectId && (
+                <div className="flex items-center justify-between text-sm">
+                  <span>Existing Population:</span>
+                  <span className="font-bold text-textPrimary">{existingAssignment.current_count}</span>
+                </div>
+              )}
               {!isAdditive && (
                 <div className="flex items-center justify-between text-sm">
                   <span>Current Population:</span>
@@ -364,14 +423,12 @@ export const CensusPage: React.FC = () => {
                   {isAdditive ? `+${rawChange}` : (changeValue >= 0 ? `+${changeValue}` : changeValue)}
                 </span>
               </div>
-              {!isAdditive && (
-                <div className="border-t border-blue-200 my-2 pt-2 flex items-center justify-between text-sm">
-                  <span className="font-semibold text-blue-900">After Submission:</span>
-                  <span className={`font-black text-lg ${previewCount < 0 ? 'text-red-600 animate-pulse' : 'text-blue-900'}`}>
-                    {previewCount}
-                  </span>
-                </div>
-              )}
+              <div className="border-t border-blue-200 my-2 pt-2 flex items-center justify-between text-sm">
+                <span className="font-semibold text-blue-900">Projected Total:</span>
+                <span className={`font-black text-lg ${previewCount < 0 ? 'text-red-600 animate-pulse' : 'text-blue-900'}`}>
+                  {previewCount}
+                </span>
+              </div>
               {!isAdditive && previewCount < 0 && (
                 <p className="text-xs text-red-600 font-semibold mt-1">⚠ Error: Population count cannot drop below 0.</p>
               )}

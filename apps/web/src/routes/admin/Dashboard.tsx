@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { formatDate } from '../utils/formatters';
+import { formatDate } from '../../utils/formatters';
 
 export const Dashboard: React.FC = () => {
   const { data: summary, isLoading: loadingSummary } = useQuery({

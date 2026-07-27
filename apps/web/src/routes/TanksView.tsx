@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getTanksSummary, createTank, deleteTank, getTankAssignments, getTankAssignmentHistory, getTankHistory, toggleTankQuarantine } from '../lib/api';
+import { getTanksSummary, createTank, deleteTank, getTankHistory, toggleTankQuarantine } from '../lib/api';
+
 
 import { Database, Plus } from 'lucide-react';
 

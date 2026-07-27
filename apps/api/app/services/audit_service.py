@@ -36,17 +36,42 @@ class AuditService:
         actor_ids = list(set([str(log.actor_id) for log in logs if log.actor_id]))
         actor_map = await EntityResolver.resolve_users_by_ids(actor_ids)
 
+        from bson import ObjectId
+
+        def _extract_user_from_snapshot(payload: Dict[str, Any] | None) -> str | None:
+            if not payload or not isinstance(payload, dict):
+                return None
+            fn = payload.get("first_name")
+            ln = payload.get("last_name")
+            if fn or ln:
+                return f"{fn or ''} {ln or ''}".strip()
+            email = payload.get("email")
+            if email:
+                return email
+            return None
+
         # 4. Map the response
         result = []
         for log in logs:
-            # Note: For strict N+1 elimination, entity_id resolution would also be bulked.
-            # However, since entity types are highly varied, we use the repo helper.
-            display_id = str(log.entity_id)
+            actor_name = actor_map.get(str(log.actor_id))
+            if not actor_name or actor_name == "Unknown User" or (isinstance(actor_name, str) and ObjectId.is_valid(actor_name)):
+                snapshot_name = _extract_user_from_snapshot(log.after) or _extract_user_from_snapshot(log.before)
+                actor_name = snapshot_name or "Unknown User"
+
+            display_id = str(log.entity_id) if log.entity_id else ""
             if log.entity_type != "user":
                 display_id = await AuditRepository.get_entity_display_name(log.entity_type, str(log.entity_id))
             else:
                 user_display = await EntityResolver.resolve_users_by_ids([str(log.entity_id)])
-                display_id = user_display.get(str(log.entity_id), display_id)
+                resolved_id = user_display.get(str(log.entity_id))
+                if not resolved_id or resolved_id == "Unknown User" or (isinstance(resolved_id, str) and ObjectId.is_valid(resolved_id)):
+                    snapshot_name = _extract_user_from_snapshot(log.after) or _extract_user_from_snapshot(log.before)
+                    display_id = snapshot_name or "Unknown User"
+                else:
+                    display_id = resolved_id
+
+            if isinstance(display_id, str) and ObjectId.is_valid(display_id):
+                display_id = f"Unknown {log.entity_type.replace('_', ' ').title()}"
 
             action_label = log.action
             if action_label == "quarantine_toggle" and log.after:
@@ -57,7 +82,7 @@ class AuditService:
             resolved_after = await EntityResolver.resolve_payload_ids(log.after) if log.after else None
 
             result.append({
-                "actor_name": actor_map.get(str(log.actor_id), "Unknown"),
+                "actor_name": actor_name,
                 "action": action_label,
                 "entity_type": log.entity_type,
                 "entity_id": display_id,
@@ -67,3 +92,17 @@ class AuditService:
             })
             
         return result
+
+    @staticmethod
+    async def get_audit_logs(skip: int = 0, limit: int = 20) -> List[Dict[str, Any]]:
+        page = (skip // limit) + 1 if limit > 0 else 1
+        return await AuditService.get_paginated_logs(
+            actor_id=None,
+            entity_type=None,
+            action=None,
+            date_from=None,
+            date_to=None,
+            page=page,
+            page_size=limit
+        )
+
