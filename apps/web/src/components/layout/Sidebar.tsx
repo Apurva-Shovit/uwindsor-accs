@@ -77,18 +77,6 @@ export const Sidebar: React.FC = () => {
           {isSidebarOpen && <span>Quarantine Monitor</span>}
         </NavLink>
 
-        {/* 6. Approval Queue (Admin/Chair only) */}
-        {isAdminOrChair && (
-          <NavLink
-            to="/admin/approval-queue"
-            title="Approval Queue"
-            className={({ isActive }) => linkClass(isActive)}
-          >
-            <Users className={`h-5 w-5 text-sky-600 ${isSidebarOpen ? 'mr-3' : ''}`} />
-            {isSidebarOpen && <span>Approval Queue</span>}
-          </NavLink>
-        )}
-
         {/* User Management */}
         {['super_admin', 'chair', 'admin', 'manager'].includes(user?.role || '') && (
           <NavLink

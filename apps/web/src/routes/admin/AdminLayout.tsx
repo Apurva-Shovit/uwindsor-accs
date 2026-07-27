@@ -9,7 +9,6 @@ import { AuditLogs } from './AuditLogs';
 import { ProjectOverviewPage } from './ProjectOverviewPage';
 import { ProjectReportPage } from '../ProjectReportPage';
 import { TankHistoryPage } from './TankHistoryPage';
-import { ApprovalQueueTable } from '../../components/ApprovalQueueTable';
 import { UserManagement } from './UserManagement';
 
 
@@ -33,7 +32,6 @@ export const AdminLayout: React.FC = () => {
               element={<Navigate to="dashboard" replace />}
             />
             <Route path="users" element={<UserManagement />} />
-            <Route path="approval-queue" element={<ApprovalQueueTable />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="projects" element={<ProjectOverviewPage />} />
             <Route path="projects/:id/report" element={<ProjectReportPage />} />
