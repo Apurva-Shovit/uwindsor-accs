@@ -138,6 +138,10 @@ export const Reports: React.FC = () => {
     const printElement = document.getElementById('official-sop-print-area');
     if (!printElement) return;
 
+    let htmlContent = printElement.innerHTML;
+    const origin = window.location.origin;
+    htmlContent = htmlContent.replace(/src="\/uwin-logo\.webp"/g, `src="${origin}/uwin-logo.webp"`);
+
     const iframe = document.createElement('iframe');
     iframe.style.position = 'fixed';
     iframe.style.right = '0';
@@ -159,35 +163,92 @@ export const Reports: React.FC = () => {
           <title>ACC Official Form Print</title>
           <style>
             @import url('https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css');
-            body { font-family: system-ui, -apple-system, sans-serif; background: white; color: black; margin: 0; padding: 12px; }
-            .page-break { break-after: page; page-break-after: always; margin-bottom: 24px; }
-            table { width: 100%; border-collapse: collapse; border: 2px solid #0f172a; text-align: center; font-size: 11px; }
-            th, td { border: 1px solid #334155; padding: 4px; }
-            th { background-color: #005596 !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .bg-rose-100 { background-color: #ffe4e6 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .bg-emerald-100 { background-color: #d1fae5 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .bg-amber-100 { background-color: #fef3c7 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .bg-slate-100 { background-color: #f1f5f9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .bg-slate-50 { background-color: #f8fafc !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            @page { size: auto; margin: 10mm; }
+            @page {
+              size: landscape;
+              margin: 6mm;
+            }
+            body {
+              font-family: system-ui, -apple-system, sans-serif;
+              background: white !important;
+              color: black !important;
+              margin: 0;
+              padding: 0;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .page-break {
+              break-after: page !important;
+              page-break-after: always !important;
+              margin-bottom: 0 !important;
+              padding-bottom: 0 !important;
+            }
+            table {
+              width: 100% !important;
+              border-collapse: collapse !important;
+              border: 2px solid #000000 !important;
+              text-align: center !important;
+              font-size: 10px !important;
+            }
+            th, td {
+              border: 1px solid #000000 !important;
+              padding: 3px !important;
+            }
+            th {
+              background-color: #005596 !important;
+              color: white !important;
+              font-weight: bold !important;
+            }
+            .bg-rose-100 { background-color: #ffe4e6 !important; color: #881337 !important; }
+            .bg-emerald-100 { background-color: #d1fae5 !important; color: #065f46 !important; }
+            .bg-amber-100 { background-color: #fef3c7 !important; color: #92400e !important; }
+            .bg-slate-100 { background-color: #f1f5f9 !important; }
+            .bg-slate-50 { background-color: #f8fafc !important; }
+            img { max-height: 48px; width: auto; display: block; }
           </style>
         </head>
         <body>
-          ${printElement.innerHTML}
+          <div style="width: 100%;">
+            ${htmlContent}
+          </div>
         </body>
       </html>
     `);
     doc.close();
 
-    iframe.contentWindow?.focus();
-    setTimeout(() => {
+    const imgElements = doc.getElementsByTagName('img');
+    let loadedCount = 0;
+    const totalImages = imgElements.length;
+
+    const triggerPrint = () => {
+      iframe.contentWindow?.focus();
       iframe.contentWindow?.print();
       setTimeout(() => {
         if (document.body.contains(iframe)) {
           document.body.removeChild(iframe);
         }
       }, 1000);
-    }, 300);
+    };
+
+    if (totalImages === 0) {
+      setTimeout(triggerPrint, 250);
+    } else {
+      for (let i = 0; i < totalImages; i++) {
+        const img = imgElements[i];
+        if (img.complete) {
+          loadedCount++;
+          if (loadedCount === totalImages) setTimeout(triggerPrint, 250);
+        } else {
+          img.onload = () => {
+            loadedCount++;
+            if (loadedCount === totalImages) setTimeout(triggerPrint, 250);
+          };
+          img.onerror = () => {
+            loadedCount++;
+            if (loadedCount === totalImages) setTimeout(triggerPrint, 250);
+          };
+        }
+      }
+    }
   };
 
   return (
