@@ -449,80 +449,71 @@ export const Reports: React.FC = () => {
                 </div>
 
                 {/* Form 1: Appendix 6 */}
-                {selectedForm === 'appendix6' && (
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse border border-slate-900 text-[11px] text-center">
-                      <thead>
-                        <tr className="bg-slate-200 border-b border-slate-900 font-bold uppercase">
-                          <th className="border border-slate-900 p-1.5 w-16">Tank #</th>
-                          <th className="border border-slate-900 p-1" colSpan={3}>Mon</th>
-                          <th className="border border-slate-900 p-1" colSpan={3}>Tues</th>
-                          <th className="border border-slate-900 p-1" colSpan={3}>Wed</th>
-                          <th className="border border-slate-900 p-1" colSpan={3}>Thurs</th>
-                          <th className="border border-slate-900 p-1" colSpan={3}>Fri</th>
-                          <th className="border border-slate-900 p-1" colSpan={3}>Sat</th>
-                          <th className="border border-slate-900 p-1" colSpan={3}>Sun</th>
-                          <th className="border border-slate-900 p-1.5 w-24">Comments / Initials</th>
-                        </tr>
-                        <tr className="bg-slate-100 border-b border-slate-900 font-semibold text-[9px]">
-                          <th className="border border-slate-900 p-1"></th>
-                          {['pH', 'Temp', 'DO'].map((p, i) => <th key={`m-${i}`} className="border border-slate-900 p-0.5">{p}</th>)}
-                          {['pH', 'Temp', 'DO'].map((p, i) => <th key={`tu-${i}`} className="border border-slate-900 p-0.5">{p}</th>)}
-                          {['pH', 'Temp', 'DO'].map((p, i) => <th key={`w-${i}`} className="border border-slate-900 p-0.5">{p}</th>)}
-                          {['pH', 'Temp', 'DO'].map((p, i) => <th key={`th-${i}`} className="border border-slate-900 p-0.5">{p}</th>)}
-                          {['pH', 'Temp', 'DO'].map((p, i) => <th key={`f-${i}`} className="border border-slate-900 p-0.5">{p}</th>)}
-                          {['pH', 'Temp', 'DO'].map((p, i) => <th key={`sa-${i}`} className="border border-slate-900 p-0.5">{p}</th>)}
-                          {['pH', 'Temp', 'DO'].map((p, i) => <th key={`su-${i}`} className="border border-slate-900 p-0.5">{p}</th>)}
-                          <th className="border border-slate-900 p-1"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Array.from({ length: 14 }).map((_, idx) => {
-                          const tankObj = sopTanks[idx];
-                          const tankNum = tankObj ? tankObj.tank_number : `${idx + 1}`;
-                          const tankWq = sopWq.filter((w: any) => w.tank_number === tankNum)[0];
+                {selectedForm === 'appendix6' && (() => {
+                  const realTanks = sopTanks.length > 0
+                    ? sopTanks.map((t: any) => String(t.tank_number))
+                    : Array.from(new Set(sopWq.map((w: any) => String(w.tank_number)))).filter(Boolean);
+                  
+                  const displayTanks = realTanks.length > 0 ? realTanks : ['1', '2', '3', '4', '5', '6', '7', '8'];
+                  const daysOfWeek = ['Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat', 'Sun'];
 
-                          return (
-                            <tr key={idx} className="border-b border-slate-400">
-                              <td className="border border-slate-900 p-1 font-bold bg-slate-50">{tankNum}</td>
-                              <td className="border border-slate-400 p-1">{tankWq?.pH ?? '7.2'}</td>
-                              <td className="border border-slate-400 p-1">{tankWq?.temperature_celsius ? `${tankWq.temperature_celsius}°` : '26.5°'}</td>
-                              <td className="border border-slate-400 p-1">7.8</td>
+                  return (
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse border border-slate-900 text-[11px] text-center">
+                        <thead>
+                          <tr className="bg-slate-200 border-b border-slate-900 font-bold uppercase">
+                            <th className="border border-slate-900 p-1.5 w-16">Tank #</th>
+                            <th className="border border-slate-900 p-1" colSpan={3}>Mon</th>
+                            <th className="border border-slate-900 p-1" colSpan={3}>Tues</th>
+                            <th className="border border-slate-900 p-1" colSpan={3}>Wed</th>
+                            <th className="border border-slate-900 p-1" colSpan={3}>Thurs</th>
+                            <th className="border border-slate-900 p-1" colSpan={3}>Fri</th>
+                            <th className="border border-slate-900 p-1" colSpan={3}>Sat</th>
+                            <th className="border border-slate-900 p-1" colSpan={3}>Sun</th>
+                            <th className="border border-slate-900 p-1.5 w-24">Comments / Initials</th>
+                          </tr>
+                          <tr className="bg-slate-100 border-b border-slate-900 font-semibold text-[9px]">
+                            <th className="border border-slate-900 p-1"></th>
+                            {daysOfWeek.map(d => (
+                              <React.Fragment key={d}>
+                                <th className="border border-slate-900 p-0.5">pH</th>
+                                <th className="border border-slate-900 p-0.5">Temp</th>
+                                <th className="border border-slate-900 p-0.5">DO</th>
+                              </React.Fragment>
+                            ))}
+                            <th className="border border-slate-900 p-1"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {displayTanks.map((tankNum: string) => {
+                            const tankLogs = sopWq.filter((w: any) => String(w.tank_number) === tankNum);
+                            const tankComment = tankLogs.find((w: any) => w.notes && w.notes !== '-')?.notes || '';
+                            const tankLogger = tankLogs[0]?.logged_by_name?.slice(0, 3).toUpperCase() || '';
 
-                              <td className="border border-slate-400 p-1">{tankWq?.pH ?? '7.2'}</td>
-                              <td className="border border-slate-400 p-1">26.4°</td>
-                              <td className="border border-slate-400 p-1">7.9</td>
-
-                              <td className="border border-slate-400 p-1">{tankWq?.pH ?? '7.3'}</td>
-                              <td className="border border-slate-400 p-1">26.5°</td>
-                              <td className="border border-slate-400 p-1">7.8</td>
-
-                              <td className="border border-slate-400 p-1">7.2</td>
-                              <td className="border border-slate-400 p-1">26.6°</td>
-                              <td className="border border-slate-400 p-1">7.7</td>
-
-                              <td className="border border-slate-400 p-1">7.2</td>
-                              <td className="border border-slate-400 p-1">26.5°</td>
-                              <td className="border border-slate-400 p-1">7.8</td>
-
-                              <td className="border border-slate-400 p-1">7.3</td>
-                              <td className="border border-slate-400 p-1">26.4°</td>
-                              <td className="border border-slate-400 p-1">7.9</td>
-
-                              <td className="border border-slate-400 p-1">7.2</td>
-                              <td className="border border-slate-400 p-1">26.5°</td>
-                              <td className="border border-slate-400 p-1">7.8</td>
-
-                              <td className="border border-slate-900 p-1 text-[9px] text-slate-600 font-mono">
-                                {tankWq ? `${tankWq.notes || 'Normal'} / ${tankWq.logged_by_name?.slice(0, 3).toUpperCase()}` : 'Normal / ACC'}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                            return (
+                              <tr key={tankNum} className="border-b border-slate-400">
+                                <td className="border border-slate-900 p-1 font-bold bg-slate-50">{tankNum}</td>
+                                {daysOfWeek.map(day => {
+                                  const dayLog = tankLogs.find((w: any) => w.day_of_week === day);
+                                  return (
+                                    <React.Fragment key={day}>
+                                      <td className="border border-slate-400 p-1">{dayLog ? (dayLog.pH ?? '-') : ''}</td>
+                                      <td className="border border-slate-400 p-1">{dayLog ? (dayLog.temperature_celsius ? `${dayLog.temperature_celsius}°` : '-') : ''}</td>
+                                      <td className="border border-slate-400 p-1">{dayLog ? '-' : ''}</td>
+                                    </React.Fragment>
+                                  );
+                                })}
+                                <td className="border border-slate-900 p-1 text-[9px] text-slate-600 font-mono">
+                                  {tankLogger ? `${tankComment || 'Logged'} / ${tankLogger}` : ''}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
 
                 {/* Form 2: Appendix 7 */}
                 {selectedForm === 'appendix7' && (
@@ -553,22 +544,25 @@ export const Reports: React.FC = () => {
                             </td>
                           </tr>
                         ) : (
-                          sopWq.map((wq: any, idx: number) => (
-                            <tr key={idx} className="border-b border-slate-400">
-                              <td className="border border-slate-900 p-2 font-semibold">{wq.date?.slice(0, 12)}</td>
-                              <td className="border border-slate-900 p-2 font-bold text-[#005596]">Tank {wq.tank_number}</td>
-                              <td className="border border-slate-400 p-2">10 ppm</td>
-                              <td className="border border-slate-400 p-2">0 ppm</td>
-                              <td className="border border-slate-400 p-2">150 ppm</td>
-                              <td className="border border-slate-400 p-2">0 ppm</td>
-                              <td className="border border-slate-400 p-2">140 ppm</td>
-                              <td className="border border-slate-400 p-2 font-bold text-emerald-700">{wq.pH ?? '7.2'}</td>
-                              <td className="border border-slate-400 p-2">0.1 ppm</td>
-                              <td className="border border-slate-900 p-2 text-[10px] text-slate-600">
-                                {wq.notes || 'In Range'} / {wq.logged_by_name?.slice(0, 3).toUpperCase()}
-                              </td>
-                            </tr>
-                          ))
+                          sopWq.map((wq: any, idx: number) => {
+                            const params = wq.parameters || {};
+                            return (
+                              <tr key={idx} className="border-b border-slate-400">
+                                <td className="border border-slate-900 p-2 font-semibold">{wq.date?.slice(0, 12)}</td>
+                                <td className="border border-slate-900 p-2 font-bold text-[#005596]">Tank {wq.tank_number}</td>
+                                <td className="border border-slate-400 p-2">{params.nitrate ? `${params.nitrate} ppm` : ''}</td>
+                                <td className="border border-slate-400 p-2">{params.nitrite ? `${params.nitrite} ppm` : ''}</td>
+                                <td className="border border-slate-400 p-2">{params.hardness ? `${params.hardness} ppm` : ''}</td>
+                                <td className="border border-slate-400 p-2">{params.chlorine ? `${params.chlorine} ppm` : ''}</td>
+                                <td className="border border-slate-400 p-2">{params.alkalinity ? `${params.alkalinity} ppm` : ''}</td>
+                                <td className="border border-slate-400 p-2 font-bold text-emerald-700">{wq.pH ? String(wq.pH) : ''}</td>
+                                <td className="border border-slate-400 p-2">{params.ammonia ? `${params.ammonia} ppm` : ''}</td>
+                                <td className="border border-slate-900 p-2 text-[10px] text-slate-600">
+                                  {wq.notes && wq.notes !== '-' ? wq.notes : 'Logged'} / {wq.logged_by_name?.slice(0, 3).toUpperCase()}
+                                </td>
+                              </tr>
+                            );
+                          })
                         )}
                       </tbody>
                     </table>

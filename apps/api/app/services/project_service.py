@@ -303,9 +303,9 @@ class ProjectService:
             tank_num = await EntityResolver.resolve_tank_number(wq.tank_id)
             wq_date = wq_dt.strftime("%a, %b %d, %Y, %I:%M %p") if wq_dt else "-"
 
-            params = getattr(wq, "parameters", {})
-            ph_val = params.get("pH", getattr(wq, "pH", "N/A"))
-            temp_val = params.get("temperature_celsius", getattr(wq, "temperature_celsius", getattr(wq, "temperature", "N/A")))
+            day_abbr = wq_dt.strftime("%a") if wq_dt else ""
+            day_map = {"Mon": "Mon", "Tue": "Tues", "Wed": "Wed", "Thu": "Thurs", "Fri": "Fri", "Sat": "Sat", "Sun": "Sun"}
+            day_col = day_map.get(day_abbr, day_abbr)
 
             wq_logs.append({
                 "id": str(wq.id),
@@ -314,6 +314,8 @@ class ProjectService:
                 "pH": ph_val,
                 "logged_by_name": logger or "Unknown User",
                 "date": wq_date,
+                "iso_date": wq_dt.strftime("%Y-%m-%d") if wq_dt else "",
+                "day_of_week": day_col,
                 "notes": getattr(wq, "comments", getattr(wq, "notes", "-")) or "-"
             })
 
