@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BookOpen, AlertTriangle, Search, Calendar, Users, Activity, Plus, X } from 'lucide-react';
 import SpeciesDropdown from '../../components/SpeciesDropdown';
-
+import { closeProject } from '../../lib/api';
 
 export const ProjectOverviewPage: React.FC = () => {
   const navigate = useNavigate();
@@ -13,6 +13,34 @@ export const ProjectOverviewPage: React.FC = () => {
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formError, setFormError] = useState('');
+
+  // Close Project State
+  const [closeModalProject, setCloseModalProject] = useState<any | null>(null);
+  const [dispositionType, setDispositionType] = useState<'euthanized' | 'adopted' | 'transferred_external' | 'other'>('euthanized');
+  const [dispositionNotes, setDispositionNotes] = useState('');
+  const [closeSubmitting, setCloseSubmitting] = useState(false);
+  const [closeError, setCloseError] = useState('');
+
+  const handleCloseProjectSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!closeModalProject) return;
+    const pid = closeModalProject.id || closeModalProject._id;
+    setCloseSubmitting(true);
+    setCloseError('');
+    try {
+      await closeProject(pid, {
+        disposition_type: dispositionType,
+        notes: dispositionNotes || undefined,
+      });
+      queryClient.invalidateQueries({ queryKey: ['projectsOverview'] });
+      setCloseModalProject(null);
+      setSelectedProject(null);
+    } catch (err: any) {
+      setCloseError(err.response?.data?.detail || 'Failed to close project');
+    } finally {
+      setCloseSubmitting(false);
+    }
+  };
 
   // New Project Form State
   const [newProject, setNewProject] = useState({
@@ -482,16 +510,31 @@ export const ProjectOverviewPage: React.FC = () => {
             </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-2 border-t border-slate-100">
-              <button
-                onClick={() => {
-                  const pid = selectedProject.id || selectedProject._id;
-                  setSelectedProject(null);
-                  navigate(`/admin/projects/${pid}/report`);
-                }}
-                className="w-full sm:w-auto px-4 py-2 bg-[#005596] hover:bg-blue-800 text-white text-xs font-bold rounded-lg shadow transition-colors"
-              >
-                View Full Project Audit & Comprehensive Report
-              </button>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  onClick={() => {
+                    const pid = selectedProject.id || selectedProject._id;
+                    setSelectedProject(null);
+                    navigate(`/admin/projects/${pid}/report`);
+                  }}
+                  className="w-full sm:w-auto px-4 py-2 bg-[#005596] hover:bg-blue-800 text-white text-xs font-bold rounded-lg shadow transition-colors"
+                >
+                  View Full Project Audit &amp; Comprehensive Report
+                </button>
+                {selectedProject.status === 'active' && (
+                  <button
+                    onClick={() => {
+                      setCloseModalProject(selectedProject);
+                      setDispositionType('euthanized');
+                      setDispositionNotes('');
+                      setCloseError('');
+                    }}
+                    className="w-full sm:w-auto px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg shadow transition-colors"
+                  >
+                    Close Project &amp; Disposition
+                  </button>
+                )}
+              </div>
               <button
                 onClick={() => setSelectedProject(null)}
                 className="w-full sm:w-auto px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
@@ -499,6 +542,154 @@ export const ProjectOverviewPage: React.FC = () => {
                 Close Details
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Close Project Modal */}
+      {closeModalProject && (
+        <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5">
+            <div className="flex justify-between items-start border-b border-slate-100 pb-3">
+              <div>
+                <span className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold uppercase bg-red-100 text-red-800 mb-1">
+                  Project Termination / Closure
+                </span>
+                <h3 className="text-xl font-bold text-red-900">{closeModalProject.title}</h3>
+                <span className="text-xs font-mono text-slate-500">AUPP# {closeModalProject.aupp_number}</span>
+              </div>
+              <button
+                onClick={() => setCloseModalProject(null)}
+                className="text-slate-400 hover:text-slate-600 text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-1 text-xs text-amber-900">
+              <div className="font-bold flex items-center gap-1.5 text-amber-800">
+                <AlertTriangle className="w-4 h-4 text-amber-600" /> Confirm Final Project Closure
+              </div>
+              <p>
+                Closing this project will set all remaining fish counts to 0, mark occupied tanks as <strong>Empty</strong>, and record a final project closure audit event.
+              </p>
+              <div className="pt-1 flex gap-4 font-semibold text-amber-800">
+                <span>Remaining Fish: {closeModalProject.total_fish_count ?? closeModalProject.total_animals ?? 0}</span>
+                <span>Occupied Tanks: {closeModalProject.occupied_tanks?.length || 0}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleCloseProjectSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase text-slate-600 block">
+                  Fish Disposition Method <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <label className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${
+                    dispositionType === 'euthanized' ? 'border-red-500 bg-red-50/50 text-red-900 font-bold' : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="disposition"
+                      value="euthanized"
+                      checked={dispositionType === 'euthanized'}
+                      onChange={(e) => setDispositionType(e.target.value as any)}
+                      className="text-red-600 focus:ring-red-500"
+                    />
+                    <div className="text-xs">
+                      <div>💉 Euthanized</div>
+                      <div className="text-[10px] font-normal text-slate-500">Protocol Termination</div>
+                    </div>
+                  </label>
+
+                  <label className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${
+                    dispositionType === 'adopted' ? 'border-emerald-500 bg-emerald-50/50 text-emerald-900 font-bold' : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="disposition"
+                      value="adopted"
+                      checked={dispositionType === 'adopted'}
+                      onChange={(e) => setDispositionType(e.target.value as any)}
+                      className="text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <div className="text-xs">
+                      <div>🏡 Adopted</div>
+                      <div className="text-[10px] font-normal text-slate-500">Approved Adoption</div>
+                    </div>
+                  </label>
+
+                  <label className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${
+                    dispositionType === 'transferred_external' ? 'border-indigo-500 bg-indigo-50/50 text-indigo-900 font-bold' : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="disposition"
+                      value="transferred_external"
+                      checked={dispositionType === 'transferred_external'}
+                      onChange={(e) => setDispositionType(e.target.value as any)}
+                      className="text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <div className="text-xs">
+                      <div>🚚 Transferred</div>
+                      <div className="text-[10px] font-normal text-slate-500">External Lab / Off-site</div>
+                    </div>
+                  </label>
+
+                  <label className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${
+                    dispositionType === 'other' ? 'border-slate-500 bg-slate-100 text-slate-900 font-bold' : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="disposition"
+                      value="other"
+                      checked={dispositionType === 'other'}
+                      onChange={(e) => setDispositionType(e.target.value as any)}
+                      className="text-slate-600 focus:ring-slate-500"
+                    />
+                    <div className="text-xs">
+                      <div>📝 Other</div>
+                      <div className="text-[10px] font-normal text-slate-500">Custom Details</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase text-slate-600 block">
+                  Disposition &amp; Closure Notes
+                </label>
+                <textarea
+                  value={dispositionNotes}
+                  onChange={(e) => setDispositionNotes(e.target.value)}
+                  placeholder="Describe the final disposition procedure, SOP guidelines followed, or transfer recipient..."
+                  className="w-full border border-slate-200 rounded-xl p-3 text-xs focus:ring-2 focus:ring-red-500 focus:outline-none min-h-[80px]"
+                />
+              </div>
+
+              {closeError && (
+                <div className="p-3 rounded-lg bg-red-50 text-red-700 border border-red-200 text-xs font-semibold">
+                  {closeError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setCloseModalProject(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={closeSubmitting}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg shadow transition-colors disabled:opacity-50"
+                >
+                  {closeSubmitting ? 'Closing Project...' : 'Confirm & Close Project'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

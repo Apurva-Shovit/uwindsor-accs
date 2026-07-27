@@ -541,6 +541,17 @@ class ProjectService:
                 ta.current_count = 0
                 await ta.save()
 
+                from ..models.facility import Tank
+                remaining = await TankAssignment.find({
+                    "tank_id": ta.tank_id,
+                    "current_count": {"$gt": 0}
+                }).to_list()
+                if not remaining:
+                    tank_obj = await Tank.get(ta.tank_id)
+                    if tank_obj and tank_obj.status != "empty":
+                        tank_obj.status = "empty"
+                        await tank_obj.save()
+
         after = p.model_dump(mode="json")
         await AuditRepository.insert(AuditLog(
             actor_id=str(current_user.id),
