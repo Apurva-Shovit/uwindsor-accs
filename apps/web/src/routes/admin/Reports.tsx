@@ -452,58 +452,85 @@ export const Reports: React.FC = () => {
                 {selectedForm === 'appendix6' && (() => {
                   const cleanTankNum = (val: any) => String(val || '').replace(/tank\s*/i, '').trim();
                   const displayTanks = Array.from({ length: 14 }, (_, i) => String(i + 1));
-                  const daysOfWeek = ['Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat', 'Sun'];
+                  const daysOfWeek = [
+                    { key: 'Mon', label: 'Mon' },
+                    { key: 'Tues', label: 'Tues' },
+                    { key: 'Wed', label: 'Wed' },
+                    { key: 'Thurs', label: 'Thurs' },
+                    { key: 'Fri', label: 'Fri' },
+                    { key: 'Sat', label: 'Sat' },
+                    { key: 'Sun', label: 'Sun' }
+                  ];
 
                   return (
                     <div className="overflow-x-auto">
-                      <table className="w-full border-collapse border border-slate-900 text-[11px] text-center">
+                      <table className="w-full border-collapse border-2 border-slate-900 text-[10px] text-center">
                         <thead>
-                          <tr className="bg-slate-200 border-b border-slate-900 font-bold uppercase">
-                            <th className="border border-slate-900 p-1.5 w-16">Tank #</th>
-                            <th className="border border-slate-900 p-1" colSpan={3}>Mon</th>
-                            <th className="border border-slate-900 p-1" colSpan={3}>Tues</th>
-                            <th className="border border-slate-900 p-1" colSpan={3}>Wed</th>
-                            <th className="border border-slate-900 p-1" colSpan={3}>Thurs</th>
-                            <th className="border border-slate-900 p-1" colSpan={3}>Fri</th>
-                            <th className="border border-slate-900 p-1" colSpan={3}>Sat</th>
-                            <th className="border border-slate-900 p-1" colSpan={3}>Sun</th>
-                            <th className="border border-slate-900 p-1.5 w-24">Comments / Initials</th>
-                          </tr>
-                          <tr className="bg-slate-100 border-b border-slate-900 font-semibold text-[9px]">
-                            <th className="border border-slate-900 p-1"></th>
-                            {daysOfWeek.map(d => (
-                              <React.Fragment key={d}>
-                                <th className="border border-slate-900 p-0.5">pH</th>
-                                <th className="border border-slate-900 p-0.5">Temp</th>
-                                <th className="border border-slate-900 p-0.5">DO</th>
-                              </React.Fragment>
+                          <tr className="bg-[#005596] text-white border-b-2 border-slate-900 font-bold uppercase">
+                            <th className="border border-slate-900 p-1.5 w-12 text-center" colSpan={2}>Day</th>
+                            {displayTanks.map((tn) => (
+                              <th key={tn} className="border border-slate-900 p-1 w-8 text-center">{tn}</th>
                             ))}
-                            <th className="border border-slate-900 p-1"></th>
+                            <th className="border border-slate-900 p-1.5 w-24 text-center">Initials</th>
+                            <th className="border border-slate-900 p-1.5 w-28 text-center">Comments</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {displayTanks.map((tankNum: string) => {
-                            const tankLogs = sopWq.filter((w: any) => cleanTankNum(w.tank_number) === cleanTankNum(tankNum));
-                            const tankComment = tankLogs.find((w: any) => w.notes && w.notes !== '-')?.notes || '';
-                            const tankLogger = tankLogs[0]?.logged_by_name?.slice(0, 3).toUpperCase() || '';
+                          {daysOfWeek.map(({ key: dayKey, label: dayLabel }) => {
+                            const dayLogs = sopWq.filter((w: any) => w.day_of_week === dayKey);
+                            const dayInitials = Array.from(new Set(dayLogs.map((w: any) => w.logged_by_name))).filter(Boolean).join(', ');
+                            const dayComments = Array.from(new Set(dayLogs.map((w: any) => w.notes))).filter((n: any) => n && n !== '-').join('; ');
 
                             return (
-                              <tr key={tankNum} className="border-b border-slate-400">
-                                <td className="border border-slate-900 p-1 font-bold bg-slate-50">{tankNum}</td>
-                                {daysOfWeek.map(day => {
-                                  const dayLog = tankLogs.find((w: any) => w.day_of_week === day);
-                                  return (
-                                    <React.Fragment key={day}>
-                                      <td className="border border-slate-400 p-1">{dayLog ? (dayLog.pH ?? '-') : ''}</td>
-                                      <td className="border border-slate-400 p-1">{dayLog ? (dayLog.temperature_celsius ? `${dayLog.temperature_celsius}°` : '-') : ''}</td>
-                                      <td className="border border-slate-400 p-1">{dayLog ? '-' : ''}</td>
-                                    </React.Fragment>
-                                  );
-                                })}
-                                <td className="border border-slate-900 p-1 text-[9px] text-slate-600 font-mono">
-                                  {tankLogger ? `${tankComment || 'Logged'} / ${tankLogger}` : ''}
-                                </td>
-                              </tr>
+                              <React.Fragment key={dayKey}>
+                                {/* Sub-row 1: pH */}
+                                <tr className="border-t-2 border-slate-900">
+                                  <td rowSpan={3} className="border border-slate-900 font-black text-slate-900 bg-slate-100 p-1 align-middle text-xs">
+                                    {dayLabel}
+                                  </td>
+                                  <td className="border border-slate-900 font-bold text-red-900 bg-rose-100 p-1">pH</td>
+                                  {displayTanks.map((tankNum) => {
+                                    const log = dayLogs.find((w: any) => cleanTankNum(w.tank_number) === tankNum);
+                                    return (
+                                      <td key={`ph-${tankNum}`} className="border border-slate-400 p-1 text-slate-900 font-semibold">
+                                        {log && log.pH !== null && log.pH !== undefined ? String(log.pH) : ''}
+                                      </td>
+                                    );
+                                  })}
+                                  <td rowSpan={3} className="border border-slate-900 p-1 text-[9px] font-semibold text-slate-800 align-middle">
+                                    {dayInitials || ''}
+                                  </td>
+                                  <td rowSpan={3} className="border border-slate-900 p-1 text-[9px] text-slate-700 align-middle text-left">
+                                    {dayComments || ''}
+                                  </td>
+                                </tr>
+
+                                {/* Sub-row 2: DO */}
+                                <tr>
+                                  <td className="border border-slate-900 font-bold text-emerald-900 bg-emerald-100 p-1">DO</td>
+                                  {displayTanks.map((tankNum) => {
+                                    const log = dayLogs.find((w: any) => cleanTankNum(w.tank_number) === tankNum);
+                                    return (
+                                      <td key={`do-${tankNum}`} className="border border-slate-400 p-1 text-slate-900 font-semibold">
+                                        {log && log.dissolved_oxygen !== null && log.dissolved_oxygen !== undefined ? String(log.dissolved_oxygen) : ''}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+
+                                {/* Sub-row 3: Temp */}
+                                <tr>
+                                  <td className="border border-slate-900 font-bold text-amber-900 bg-amber-100 p-1">Temp</td>
+                                  {displayTanks.map((tankNum) => {
+                                    const log = dayLogs.find((w: any) => cleanTankNum(w.tank_number) === tankNum);
+                                    return (
+                                      <td key={`temp-${tankNum}`} className="border border-slate-400 p-1 text-slate-900 font-semibold">
+                                        {log && log.temperature_celsius !== null && log.temperature_celsius !== undefined ? `${log.temperature_celsius}°` : ''}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              </React.Fragment>
                             );
                           })}
                         </tbody>

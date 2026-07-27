@@ -303,9 +303,13 @@ class ProjectService:
             tank_num = await EntityResolver.resolve_tank_number(wq.tank_id)
             wq_date = wq_dt.strftime("%a, %b %d, %Y, %I:%M %p") if wq_dt else "-"
 
-            params = getattr(wq, "parameters", {})
-            ph_val = params.get("pH", getattr(wq, "pH", None))
-            temp_val = params.get("temperature_celsius", getattr(wq, "temperature_celsius", getattr(wq, "temperature", None)))
+            params = getattr(wq, "parameters", {}) or {}
+            if not isinstance(params, dict):
+                params = {}
+
+            ph_val = params.get("ph") if "ph" in params else params.get("pH") if "pH" in params else getattr(wq, "pH", getattr(wq, "ph", None))
+            temp_val = params.get("temperature") if "temperature" in params else params.get("temperature_celsius") if "temperature_celsius" in params else getattr(wq, "temperature_celsius", getattr(wq, "temperature", None))
+            do_val = params.get("dissolved_oxygen") if "dissolved_oxygen" in params else params.get("do") if "do" in params else getattr(wq, "dissolved_oxygen", getattr(wq, "do", None))
 
             day_abbr = wq_dt.strftime("%a") if wq_dt else ""
             day_map = {"Mon": "Mon", "Tue": "Tues", "Wed": "Wed", "Thu": "Thurs", "Fri": "Fri", "Sat": "Sat", "Sun": "Sun"}
@@ -316,6 +320,7 @@ class ProjectService:
                 "tank_number": tank_num,
                 "temperature_celsius": temp_val,
                 "pH": ph_val,
+                "dissolved_oxygen": do_val,
                 "logged_by_name": logger or "Unknown User",
                 "date": wq_date,
                 "iso_date": wq_dt.strftime("%Y-%m-%d") if wq_dt else "",
