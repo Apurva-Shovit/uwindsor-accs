@@ -1,5 +1,6 @@
+from typing import Optional
 from pydantic import BaseModel, field_validator
-from ..models.user import RoleEnum
+from ..models.user import RoleEnum, StatusEnum
 from ..utils.sanitization import sanitize_html
 
 class ApproveRequest(BaseModel):
@@ -23,3 +24,13 @@ class PendingUserResponse(BaseModel):
     last_name: str
     requested_role: str
     created_at: str
+
+class UserRoleUpdate(BaseModel):
+    role: RoleEnum
+
+class UserStatusUpdate(BaseModel):
+    status: StatusEnum
+    reason: Optional[str] = None
+
+class UserTankAssignmentsUpdate(BaseModel):
+    assigned_tank_ids: list[str] = []

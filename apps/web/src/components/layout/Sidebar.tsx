@@ -89,6 +89,18 @@ export const Sidebar: React.FC = () => {
           </NavLink>
         )}
 
+        {/* User Management */}
+        {['super_admin', 'chair', 'admin', 'manager'].includes(user?.role || '') && (
+          <NavLink
+            to="/admin/users"
+            title="User Management"
+            className={({ isActive }) => linkClass(isActive)}
+          >
+            <Users className={`h-5 w-5 text-indigo-600 ${isSidebarOpen ? 'mr-3' : ''}`} />
+            {isSidebarOpen && <span>User Management</span>}
+          </NavLink>
+        )}
+
         {/* 7. Tanks & Racks */}
         <NavLink
           to={isAdminOrChair ? '/admin/facility' : '/staff/tanks'}

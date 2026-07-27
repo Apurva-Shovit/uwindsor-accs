@@ -61,3 +61,70 @@ class DashboardService:
     async def get_dashboard_activity(skip: int, limit: int) -> List[Dict[str, Any]]:
         # Reuse the existing robust AuditService which handles EntityResolver
         return await AuditService.get_audit_logs(skip, limit)
+
+    @staticmethod
+    async def get_water_quality_analytics(tank_id: Optional[str] = None, days: int = 30) -> Dict[str, Any]:
+        from ..models.water_quality_log import WaterQualityLog
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        
+        query: dict = {"date": {"$gte": cutoff}}
+        if tank_id and tank_id != "all":
+            query["tank_id"] = tank_id
+
+        logs = await WaterQualityLog.find(query).sort("+date").to_list()
+        
+        # Group logs by date string (YYYY-MM-DD)
+        daily_map: Dict[str, Dict[str, Any]] = {}
+        
+        for wq in logs:
+            date_str = wq.date.strftime("%Y-%m-%d") if isinstance(wq.date, datetime) else str(wq.date)[:10]
+            if date_str not in daily_map:
+                daily_map[date_str] = {
+                    "date": date_str,
+                    "ph_values": [],
+                    "temp_values": [],
+                    "do_values": [],
+                    "log_count": 0
+                }
+            
+            params = wq.parameters or {}
+            ph_val = wq.pH if wq.pH is not None else params.get("ph") or params.get("pH")
+            temp_val = wq.temperature_celsius if wq.temperature_celsius is not None else params.get("temperature") or params.get("temperature_celsius")
+            do_val = wq.dissolved_oxygen if wq.dissolved_oxygen is not None else params.get("dissolved_oxygen") or params.get("do")
+
+            if ph_val is not None:
+                try: daily_map[date_str]["ph_values"].append(float(ph_val))
+                except (ValueError, TypeError): pass
+            if temp_val is not None:
+                try: daily_map[date_str]["temp_values"].append(float(temp_val))
+                except (ValueError, TypeError): pass
+            if do_val is not None:
+                try: daily_map[date_str]["do_values"].append(float(do_val))
+                except (ValueError, TypeError): pass
+            
+            daily_map[date_str]["log_count"] += 1
+
+        series = []
+        for d_str in sorted(daily_map.keys()):
+            entry = daily_map[d_str]
+            avg_ph = round(sum(entry["ph_values"]) / len(entry["ph_values"]), 2) if entry["ph_values"] else None
+            avg_temp = round(sum(entry["temp_values"]) / len(entry["temp_values"]), 1) if entry["temp_values"] else None
+            avg_do = round(sum(entry["do_values"]) / len(entry["do_values"]), 1) if entry["do_values"] else None
+            
+            series.append({
+                "date": d_str,
+                "ph": avg_ph,
+                "temperature": avg_temp,
+                "dissolved_oxygen": avg_do,
+                "log_count": entry["log_count"]
+            })
+
+        all_tanks = await Tank.find({"deleted": False}).to_list()
+        tank_options = [{"id": str(t.id), "tank_number": t.tank_number} for t in sorted(all_tanks, key=lambda x: int(x.tank_number) if str(x.tank_number).isdigit() else 999)]
+
+        return {
+            "time_range_days": days,
+            "selected_tank_id": tank_id or "all",
+            "tank_options": tank_options,
+            "series": series
+        }

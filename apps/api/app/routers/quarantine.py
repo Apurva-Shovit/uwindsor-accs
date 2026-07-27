@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from typing import Optional
 from ..models.user import User
-from ..core.permissions import get_current_user, require_chair_or_admin
+from ..core.permissions import get_current_user, require_manager_plus
 from ..services.quarantine_service import QuarantineService, ExemptionRequestCreate, ExemptionDecision
 
 router = APIRouter(prefix="/quarantine", tags=["quarantine"])
@@ -24,6 +24,6 @@ async def list_exemptions(
 async def decide_exemption(
     id: str,
     body: ExemptionDecision,
-    current: User = Depends(require_chair_or_admin),
+    current: User = Depends(require_manager_plus),
 ):
     return await QuarantineService.decide_exemption(id, body, current)

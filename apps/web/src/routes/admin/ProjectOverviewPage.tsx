@@ -1,14 +1,80 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { BookOpen, AlertTriangle, Search, Calendar, Users, Activity } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { BookOpen, AlertTriangle, Search, Calendar, Users, Activity, Plus, X } from 'lucide-react';
 
 
 export const ProjectOverviewPage: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'closed' | 'expiring'>('all');
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [formError, setFormError] = useState('');
+
+  // New Project Form State
+  const [newProject, setNewProject] = useState({
+    title: '',
+    pi_name: 'PI-1',
+    aupp_number: '',
+    species: 'Trout',
+    sex: 'both',
+    dob: '',
+    established_date: new Date().toISOString().slice(0, 10),
+    source: 'Hatched',
+    aupp_expiry_date: '',
+    room_number: 'RM 1',
+  });
+
+  const createProjectMutation = useMutation({
+    mutationFn: async (payload: typeof newProject) => {
+      const token = localStorage.getItem('token');
+      const res = await fetch('http://localhost:8000/projects', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to create project');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projectsOverview'] });
+      setShowCreateModal(false);
+      setFormError('');
+      setNewProject({
+        title: '',
+        pi_name: 'PI-1',
+        aupp_number: '',
+        species: 'Trout',
+        sex: 'both',
+        dob: '',
+        established_date: new Date().toISOString().slice(0, 10),
+        source: 'Hatched',
+        aupp_expiry_date: '',
+        room_number: 'RM 1',
+      });
+    },
+    onError: (err: any) => {
+      setFormError(err.message || 'Error creating project');
+    }
+  });
+
+  const handleCreateSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError('');
+    if (!newProject.title || !newProject.pi_name || !newProject.aupp_number) {
+      setFormError('Title, PI Name, and AUPP Number are required.');
+      return;
+    }
+    createProjectMutation.mutate(newProject);
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ['projectsOverview'],
@@ -53,14 +119,24 @@ export const ProjectOverviewPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="border-b border-slate-200 pb-4">
-        <h1 className="text-2xl font-bold text-[#005596] flex items-center gap-2">
-          <BookOpen className="w-7 h-7 text-[#005596]" />
-          Research Projects & Protocol Overview
-        </h1>
-        <p className="text-sm text-slate-500 mt-1">
-          High-level monitoring of active Animal Use Protocol Numbers (AUPP#), allocated animal census, and compliance status.
-        </p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-4">
+        <div>
+          <h1 className="text-2xl font-bold text-[#005596] flex items-center gap-2">
+            <BookOpen className="w-7 h-7 text-[#005596]" />
+            Research Projects & Protocol Overview
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            High-level monitoring of active Animal Use Protocol Numbers (AUPP#), allocated animal census, and compliance status.
+          </p>
+        </div>
+
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="bg-[#005596] hover:bg-[#002B51] text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow transition-colors flex items-center gap-2 whitespace-nowrap"
+        >
+          <Plus className="w-4 h-4" />
+          Create Project
+        </button>
       </div>
 
       {/* KPI Summary Cards */}
@@ -403,6 +479,166 @@ export const ProjectOverviewPage: React.FC = () => {
                 Close Details
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Project Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 my-8">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div>
+                <h3 className="text-lg font-bold text-[#005596]">Create New Research Project</h3>
+                <p className="text-xs text-slate-500">Project Protocol & Specifications Form</p>
+              </div>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {formError && (
+              <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 font-semibold">
+                {formError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateSubmit} className="space-y-4 text-xs font-medium">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-slate-600 font-bold mb-1">Project Protocol &amp; Specifications Title *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Freshwater Ecology Behavioral Analysis"
+                    value={newProject.title}
+                    onChange={(e) => setNewProject({ ...newProject, title: e.target.value })}
+                    className="w-full p-2.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#005596]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1">Principal Investigator (PI) *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. PI-1"
+                    value={newProject.pi_name}
+                    onChange={(e) => setNewProject({ ...newProject, pi_name: e.target.value })}
+                    className="w-full p-2.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#005596]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1">AUPP Protocol # *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 26-01"
+                    value={newProject.aupp_number}
+                    onChange={(e) => setNewProject({ ...newProject, aupp_number: e.target.value })}
+                    className="w-full p-2.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#005596]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1">Species</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Trout / Zebrafish"
+                    value={newProject.species}
+                    onChange={(e) => setNewProject({ ...newProject, species: e.target.value })}
+                    className="w-full p-2.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#005596]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1">Sex</label>
+                  <select
+                    value={newProject.sex}
+                    onChange={(e) => setNewProject({ ...newProject, sex: e.target.value as any })}
+                    className="w-full p-2.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#005596]"
+                  >
+                    <option value="both">Both (Male &amp; Female)</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1">Date of Birth (DOB) <span className="font-normal text-slate-400">(optional)</span></label>
+                  <input
+                    type="date"
+                    value={newProject.dob}
+                    onChange={(e) => setNewProject({ ...newProject, dob: e.target.value })}
+                    className="w-full p-2.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#005596]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1">Established Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={newProject.established_date}
+                    onChange={(e) => setNewProject({ ...newProject, established_date: e.target.value })}
+                    className="w-full p-2.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#005596]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1">Source</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Hatched / Vendor / Wild"
+                    value={newProject.source}
+                    onChange={(e) => setNewProject({ ...newProject, source: e.target.value })}
+                    className="w-full p-2.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#005596]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1">AUPP Expiry Date</label>
+                  <input
+                    type="date"
+                    value={newProject.aupp_expiry_date}
+                    onChange={(e) => setNewProject({ ...newProject, aupp_expiry_date: e.target.value })}
+                    className="w-full p-2.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#005596]"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-slate-600 font-bold mb-1">Room Number (RM#)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. RM 1 / RM 301"
+                    value={newProject.room_number}
+                    onChange={(e) => setNewProject({ ...newProject, room_number: e.target.value })}
+                    className="w-full p-2.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#005596]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createProjectMutation.isPending}
+                  className="px-5 py-2 rounded-xl bg-[#005596] hover:bg-blue-800 text-white font-bold text-xs shadow transition-colors flex items-center gap-2"
+                >
+                  {createProjectMutation.isPending ? 'Creating Project...' : 'Save & Initialize Protocol'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
