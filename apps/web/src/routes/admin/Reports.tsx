@@ -553,7 +553,10 @@ export const Reports: React.FC = () => {
                                     const cellIso = cellDate.toISOString().slice(0, 10);
 
                                     const dayLogs = isEligible
-                                      ? sopWq.filter((w: any) => w.iso_date === cellIso || (w.day_of_week === dayKey && (!w.iso_date || w.iso_date === cellIso)))
+                                      ? sopWq.filter((w: any) =>
+                                          (w.iso_date === cellIso || (w.day_of_week === dayKey && (!w.iso_date || w.iso_date === cellIso))) &&
+                                          (w.type === 'daily' || w.temperature_celsius != null || w.dissolved_oxygen != null)
+                                        )
                                       : [];
 
                                     const dayInitials = isEligible ? Array.from(new Set(dayLogs.map((w: any) => w.logged_by_name))).filter(Boolean).join(', ') : '';
@@ -622,58 +625,62 @@ export const Reports: React.FC = () => {
                 })()}
 
                 {/* Form 2: Appendix 7 */}
-                {selectedForm === 'appendix7' && (
-                  <div className="overflow-x-auto space-y-3">
-                    <div className="bg-blue-50 border border-blue-200 rounded p-2 text-[10px] text-blue-900 font-medium">
-                      <strong>Required Test Schedules:</strong> Recirculated Tanks: <strong>Daily</strong> - Temp, O2, pH | <strong>Biweekly</strong> - Ammonia, Nitrite/Nitrates, Total Hardness | <strong>Weekly</strong> - Nitrogen, Salinity | <strong>Annually</strong> - Chlorine.
-                    </div>
-                    <table className="w-full border-collapse border border-slate-900 text-center text-xs">
-                      <thead>
-                        <tr className="bg-slate-200 border-b border-slate-900 font-bold uppercase text-[10px]">
-                          <th className="border border-slate-900 p-2">Date</th>
-                          <th className="border border-slate-900 p-2">Tank ID</th>
-                          <th className="border border-slate-900 p-2">Nitrate<br/><span className="text-[8px] font-normal">0–40 ppm</span></th>
-                          <th className="border border-slate-900 p-2">Nitrite<br/><span className="text-[8px] font-normal">0 ppm</span></th>
-                          <th className="border border-slate-900 p-2">Total Hardness<br/><span className="text-[8px] font-normal">20–450 ppm</span></th>
-                          <th className="border border-slate-900 p-2">Total Chlorine<br/><span className="text-[8px] font-normal">0 ppm</span></th>
-                          <th className="border border-slate-900 p-2">Total Alkalinity<br/><span className="text-[8px] font-normal">120–180 ppm</span></th>
-                          <th className="border border-slate-900 p-2">pH<br/><span className="text-[8px] font-normal">6.5–9.0</span></th>
-                          <th className="border border-slate-900 p-2">Ammonia<br/><span className="text-[8px] font-normal">0–0.5 ppm</span></th>
-                          <th className="border border-slate-900 p-2">Comments / Initials</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sopWq.length === 0 ? (
-                          <tr>
-                            <td colSpan={10} className="p-4 text-slate-500 italic text-center border border-slate-900">
-                              No test strip records recorded for this period.
-                            </td>
+                {selectedForm === 'appendix7' && (() => {
+                  const testStripLogs = sopWq.filter((w: any) => w.type === 'test_strip' || (w.parameters && (w.parameters.nitrate != null || w.parameters.hardness != null || w.parameters.chlorine != null)));
+
+                  return (
+                    <div className="overflow-x-auto space-y-3">
+                      <div className="bg-blue-50 border border-blue-200 rounded p-2 text-[10px] text-blue-900 font-medium">
+                        <strong>Required Test Schedules:</strong> Recirculated Tanks: <strong>Daily</strong> - Temp, O2, pH | <strong>Biweekly</strong> - Ammonia, Nitrite/Nitrates, Total Hardness | <strong>Weekly</strong> - Nitrogen, Salinity | <strong>Annually</strong> - Chlorine.
+                      </div>
+                      <table className="w-full border-collapse border border-slate-900 text-center text-xs">
+                        <thead>
+                          <tr className="bg-slate-200 border-b border-slate-900 font-bold uppercase text-[10px]">
+                            <th className="border border-slate-900 p-2">Date</th>
+                            <th className="border border-slate-900 p-2">Tank ID</th>
+                            <th className="border border-slate-900 p-2">Nitrate<br/><span className="text-[8px] font-normal">0–40 ppm</span></th>
+                            <th className="border border-slate-900 p-2">Nitrite<br/><span className="text-[8px] font-normal">0 ppm</span></th>
+                            <th className="border border-slate-900 p-2">Total Hardness<br/><span className="text-[8px] font-normal">20–450 ppm</span></th>
+                            <th className="border border-slate-900 p-2">Total Chlorine<br/><span className="text-[8px] font-normal">0 ppm</span></th>
+                            <th className="border border-slate-900 p-2">Total Alkalinity<br/><span className="text-[8px] font-normal">120–180 ppm</span></th>
+                            <th className="border border-slate-900 p-2">pH<br/><span className="text-[8px] font-normal">6.5–9.0</span></th>
+                            <th className="border border-slate-900 p-2">Ammonia<br/><span className="text-[8px] font-normal">0–0.5 ppm</span></th>
+                            <th className="border border-slate-900 p-2">Comments / Initials</th>
                           </tr>
-                        ) : (
-                          sopWq.map((wq: any, idx: number) => {
-                            const params = wq.parameters || {};
-                            return (
-                              <tr key={idx} className="border-b border-slate-400">
-                                <td className="border border-slate-900 p-2 font-semibold">{wq.date?.slice(0, 12)}</td>
-                                <td className="border border-slate-900 p-2 font-bold text-[#005596]">Tank {wq.tank_number}</td>
-                                <td className="border border-slate-400 p-2">{params.nitrate ? `${params.nitrate} ppm` : ''}</td>
-                                <td className="border border-slate-400 p-2">{params.nitrite ? `${params.nitrite} ppm` : ''}</td>
-                                <td className="border border-slate-400 p-2">{params.hardness ? `${params.hardness} ppm` : ''}</td>
-                                <td className="border border-slate-400 p-2">{params.chlorine ? `${params.chlorine} ppm` : ''}</td>
-                                <td className="border border-slate-400 p-2">{params.alkalinity ? `${params.alkalinity} ppm` : ''}</td>
-                                <td className="border border-slate-400 p-2 font-bold text-emerald-700">{wq.pH ? String(wq.pH) : ''}</td>
-                                <td className="border border-slate-400 p-2">{params.ammonia ? `${params.ammonia} ppm` : ''}</td>
-                                <td className="border border-slate-900 p-2 text-[10px] text-slate-600">
-                                  {wq.notes && wq.notes !== '-' ? wq.notes : 'Logged'} / {wq.logged_by_name?.slice(0, 3).toUpperCase()}
-                                </td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                        </thead>
+                        <tbody>
+                          {testStripLogs.length === 0 ? (
+                            <tr>
+                              <td colSpan={10} className="p-4 text-slate-500 italic text-center border border-slate-900">
+                                No test strip records recorded for this period.
+                              </td>
+                            </tr>
+                          ) : (
+                            testStripLogs.map((wq: any, idx: number) => {
+                              const params = wq.parameters || {};
+                              return (
+                                <tr key={idx} className="border-b border-slate-400">
+                                  <td className="border border-slate-900 p-2 font-semibold">{wq.date?.slice(0, 12)}</td>
+                                  <td className="border border-slate-900 p-2 font-bold text-[#005596]">Tank {wq.tank_number}</td>
+                                  <td className="border border-slate-400 p-2">{params.nitrate ? `${params.nitrate} ppm` : ''}</td>
+                                  <td className="border border-slate-400 p-2">{params.nitrite ? `${params.nitrite} ppm` : ''}</td>
+                                  <td className="border border-slate-400 p-2">{params.hardness ? `${params.hardness} ppm` : ''}</td>
+                                  <td className="border border-slate-400 p-2">{params.chlorine ? `${params.chlorine} ppm` : ''}</td>
+                                  <td className="border border-slate-400 p-2">{params.alkalinity ? `${params.alkalinity} ppm` : ''}</td>
+                                  <td className="border border-slate-400 p-2 font-bold text-emerald-700">{wq.pH ? String(wq.pH) : ''}</td>
+                                  <td className="border border-slate-400 p-2">{params.ammonia ? `${params.ammonia} ppm` : ''}</td>
+                                  <td className="border border-slate-900 p-2 text-[10px] text-slate-600">
+                                    {wq.notes && wq.notes !== '-' ? wq.notes : 'Logged'} / {wq.logged_by_name?.slice(0, 3).toUpperCase()}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
 
                 {/* Form 3: Aquatic Incident Report Form */}
                 {selectedForm === 'incidents' && (

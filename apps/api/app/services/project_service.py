@@ -317,10 +317,12 @@ class ProjectService:
 
             wq_logs.append({
                 "id": str(wq.id),
+                "type": getattr(wq, "type", "daily"),
                 "tank_number": tank_num,
                 "temperature_celsius": temp_val,
                 "pH": ph_val,
                 "dissolved_oxygen": do_val,
+                "parameters": params,
                 "logged_by_name": logger or "Unknown User",
                 "date": wq_date,
                 "iso_date": wq_dt.strftime("%Y-%m-%d") if wq_dt else "",
