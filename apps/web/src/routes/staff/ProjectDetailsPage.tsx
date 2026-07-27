@@ -442,8 +442,6 @@ export const ProjectDetailsPage: React.FC = () => {
           </div>
         )}
       </div>
-        )}
-      </div>
 
       {/* Close project Modal */}
       {showCloseModal && selectedProj && (
