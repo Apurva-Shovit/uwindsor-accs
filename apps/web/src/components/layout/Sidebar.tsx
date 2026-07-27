@@ -121,25 +121,13 @@ export const Sidebar: React.FC = () => {
 
         {/* 10. Reports */}
         <NavLink
-          to={isAdminOrChair ? '/admin/sop-forms' : '/staff/sop-forms'}
-          title="Official SOP Form Reports"
+          to={isAdminOrChair ? '/admin/reports' : '/staff/projects'}
+          title="Reports"
           className={({ isActive }) => linkClass(isActive)}
         >
-          <FileText className={`h-5 w-5 text-[#005596] ${isSidebarOpen ? 'mr-3' : ''}`} />
-          {isSidebarOpen && <span>Official SOP Form Reports</span>}
+          <FileText className={`h-5 w-5 ${isSidebarOpen ? 'mr-3' : ''}`} />
+          {isSidebarOpen && <span>Reports</span>}
         </NavLink>
-
-        {/* 11. Reports (Admin/Chair only) */}
-        {isAdminOrChair && (
-          <NavLink
-            to="/admin/reports"
-            title="Reports"
-            className={({ isActive }) => linkClass(isActive)}
-          >
-            <FileText className={`h-5 w-5 ${isSidebarOpen ? 'mr-3' : ''}`} />
-            {isSidebarOpen && <span>System Reports</span>}
-          </NavLink>
-        )}
 
         {/* 11. Audit Logs (Admin/Chair only) */}
         {isAdminOrChair && (

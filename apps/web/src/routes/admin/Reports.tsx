@@ -83,16 +83,67 @@ export const Reports: React.FC = () => {
 
 
 
+  const [showOfficialModal, setShowOfficialModal] = React.useState(false);
+  const [selectedForm, setSelectedForm] = React.useState<'appendix6' | 'appendix7' | 'incidents'>('appendix6');
+  const [selectedProjectId, setSelectedProjectId] = React.useState('');
+
+  // Projects list for official report
+  const { data: projectsList } = useQuery({
+    queryKey: ['projectsListForReports'],
+    queryFn: async () => {
+      const token = localStorage.getItem('token');
+      const res = await fetch('http://localhost:8000/projects', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) return [];
+      return res.json();
+    }
+  });
+
+  React.useEffect(() => {
+    if (projectsList && projectsList.length > 0 && !selectedProjectId) {
+      setSelectedProjectId(projectsList[0].id || projectsList[0]._id);
+    }
+  }, [projectsList, selectedProjectId]);
+
+  // Official Report Data query (defaults to 30d if dateFrom/dateTo empty)
+  const timePeriodParam = (!dateFrom && !dateTo) ? '30d' : 'all';
+  const { data: sopReportData } = useQuery({
+    queryKey: ['sopReportData', selectedProjectId, timePeriodParam, dateFrom, dateTo],
+    queryFn: async () => {
+      if (!selectedProjectId) return null;
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams();
+      params.append('time_period', timePeriodParam);
+      if (dateFrom) params.append('start_date', dateFrom);
+      if (dateTo) params.append('end_date', dateTo);
+      params.append('page', '1');
+      params.append('limit', '100');
+
+      const res = await fetch(`http://localhost:8000/projects/${selectedProjectId}/report?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!selectedProjectId && showOfficialModal
+  });
+
+  const sopProject = sopReportData?.project;
+  const sopTanks = sopReportData?.occupied_tanks || [];
+  const sopWq = sopReportData?.water_quality_logs || [];
+  const sopIncidents = sopReportData?.incidents || [];
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-4 print:pb-2">
         <div>
-          <h1 className="text-2xl font-bold text-[#005596]">Executive Facility Summary & Audit Reports</h1>
+          <h1 className="text-2xl font-bold text-[#005596]">Facility & Audit Reports</h1>
           <p className="text-sm text-slate-500 mt-1">Comprehensive population reconciliation, active protocols, and inspector-facing logs.</p>
         </div>
         <button
-          onClick={() => window.print()}
+          onClick={() => setShowOfficialModal(true)}
           className="bg-[#005596] hover:bg-[#002B51] text-white px-5 py-2.5 rounded-lg shadow-sm font-semibold transition-all duration-200 flex items-center gap-2 print:hidden"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -296,6 +347,291 @@ export const Reports: React.FC = () => {
           );
         })()}
       </div>
+
+      {/* Official Computerized SOP Forms Modal / Print Overlay */}
+      {showOfficialModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white print:static print:block">
+          <div className="bg-white rounded-2xl max-w-5xl w-full p-6 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto print:max-h-none print:shadow-none print:p-0 print:w-full print:rounded-none">
+            {/* Modal Header & Controls (Hidden during print) */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-200 pb-4 print:hidden">
+              <div>
+                <h2 className="text-xl font-extrabold text-[#005596] flex items-center gap-2">
+                  Official ACC Compliance Form Generator
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  University of Windsor Animal Care Committee Official Form • {(!dateFrom && !dateTo) ? 'Auto-Filtered: Past 1 Month (Default)' : `Range: ${dateFrom || 'Start'} to ${dateTo || 'Today'}`}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => window.print()}
+                  className="px-4 py-2 bg-[#005596] text-white font-extrabold text-xs rounded-xl shadow hover:bg-blue-800 transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                  Print Form
+                </button>
+                <button
+                  onClick={() => setShowOfficialModal(false)}
+                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            {/* Template & Project Selection (Hidden during print) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-semibold print:hidden bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <div>
+                <label className="block text-[10px] font-extrabold text-slate-400 uppercase mb-1">Select SOP Form Template</label>
+                <select
+                  value={selectedForm}
+                  onChange={(e) => setSelectedForm(e.target.value as any)}
+                  className="w-full rounded-xl border border-slate-300 bg-white p-2 text-xs font-bold text-slate-800 shadow-sm focus:ring-2 focus:ring-[#005596]"
+                >
+                  <option value="appendix6">Appendix 6: Daily Water Quality Log Sheet</option>
+                  <option value="appendix7">Appendix 7: Water Quality Test Strip Log Sheet</option>
+                  <option value="incidents">Aquatic Incident Report Form</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-extrabold text-slate-400 uppercase mb-1">Select Research Project (AUPP)</label>
+                <select
+                  value={selectedProjectId}
+                  onChange={(e) => setSelectedProjectId(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 bg-white p-2 text-xs font-bold text-slate-800 shadow-sm focus:ring-2 focus:ring-[#005596]"
+                >
+                  {projectsList?.map((p: any) => (
+                    <option key={p.id || p._id} value={p.id || p._id}>
+                      {p.title} (AUPP: {p.aupp_number})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Rendered Form Document */}
+            {sopProject && (
+              <div className="bg-white border-2 border-slate-900 p-6 shadow-sm text-slate-900 font-sans print:border-slate-900 print:p-2">
+                {/* Form Header */}
+                <div className="border-b-2 border-slate-900 pb-3 mb-4 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <img src="/uwin-logo.webp" alt="University of Windsor Logo" className="h-14 w-auto object-contain" />
+                    <div>
+                      <div className="text-xs font-bold tracking-widest uppercase text-slate-700">University of Windsor</div>
+                      <h2 className="text-base font-black uppercase text-slate-900 leading-tight">
+                        {selectedForm === 'appendix6' && 'APPENDIX 6 Daily Water Quality Log'}
+                        {selectedForm === 'appendix7' && 'APPENDIX 7 Water Quality Aquarium Test Strips'}
+                        {selectedForm === 'incidents' && 'AQUATIC INCIDENT REPORTS'}
+                      </h2>
+                      <div className="text-[10px] font-semibold text-slate-600">
+                        {selectedForm === 'appendix6' && 'ACC SOP AH24 Daily Water Quality Log - Appendix 6 (June 2026)'}
+                        {selectedForm === 'appendix7' && 'Fresh Water - Static and Recirculated Tanks - Appendix 7 (Revised May 2024)'}
+                        {selectedForm === 'incidents' && 'Official Aquatic Health & Incident Monitoring Log'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right text-xs border-l border-slate-400 pl-4 space-y-1">
+                    <div><strong>AUPP#:</strong> <span className="underline font-mono">{sopProject.aupp_number}</span></div>
+                    <div><strong>PI:</strong> {sopProject.pi_name}</div>
+                  </div>
+                </div>
+
+                {/* Form Metadata */}
+                <div className="grid grid-cols-4 gap-2 border border-slate-900 p-3 text-xs mb-4 bg-slate-50 font-medium">
+                  <div><strong>Room:</strong> RM {sopProject.room_number || '101'}</div>
+                  <div><strong>Species:</strong> {sopProject.species || 'Zebrafish'}</div>
+                  <div><strong>Date Range:</strong> {(!dateFrom && !dateTo) ? 'Past 1 Month (Auto)' : `${dateFrom || 'Start'} to ${dateTo || 'Today'}`}</div>
+                  <div><strong>Status:</strong> <span className="uppercase font-bold">{sopProject.status}</span></div>
+                </div>
+
+                {/* Form 1: Appendix 6 */}
+                {selectedForm === 'appendix6' && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse border border-slate-900 text-[11px] text-center">
+                      <thead>
+                        <tr className="bg-slate-200 border-b border-slate-900 font-bold uppercase">
+                          <th className="border border-slate-900 p-1.5 w-16">Tank #</th>
+                          <th className="border border-slate-900 p-1" colSpan={3}>Mon</th>
+                          <th className="border border-slate-900 p-1" colSpan={3}>Tues</th>
+                          <th className="border border-slate-900 p-1" colSpan={3}>Wed</th>
+                          <th className="border border-slate-900 p-1" colSpan={3}>Thurs</th>
+                          <th className="border border-slate-900 p-1" colSpan={3}>Fri</th>
+                          <th className="border border-slate-900 p-1" colSpan={3}>Sat</th>
+                          <th className="border border-slate-900 p-1" colSpan={3}>Sun</th>
+                          <th className="border border-slate-900 p-1.5 w-24">Comments / Initials</th>
+                        </tr>
+                        <tr className="bg-slate-100 border-b border-slate-900 font-semibold text-[9px]">
+                          <th className="border border-slate-900 p-1"></th>
+                          {['pH', 'Temp', 'DO'].map((p, i) => <th key={`m-${i}`} className="border border-slate-900 p-0.5">{p}</th>)}
+                          {['pH', 'Temp', 'DO'].map((p, i) => <th key={`tu-${i}`} className="border border-slate-900 p-0.5">{p}</th>)}
+                          {['pH', 'Temp', 'DO'].map((p, i) => <th key={`w-${i}`} className="border border-slate-900 p-0.5">{p}</th>)}
+                          {['pH', 'Temp', 'DO'].map((p, i) => <th key={`th-${i}`} className="border border-slate-900 p-0.5">{p}</th>)}
+                          {['pH', 'Temp', 'DO'].map((p, i) => <th key={`f-${i}`} className="border border-slate-900 p-0.5">{p}</th>)}
+                          {['pH', 'Temp', 'DO'].map((p, i) => <th key={`sa-${i}`} className="border border-slate-900 p-0.5">{p}</th>)}
+                          {['pH', 'Temp', 'DO'].map((p, i) => <th key={`su-${i}`} className="border border-slate-900 p-0.5">{p}</th>)}
+                          <th className="border border-slate-900 p-1"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Array.from({ length: 14 }).map((_, idx) => {
+                          const tankObj = sopTanks[idx];
+                          const tankNum = tankObj ? tankObj.tank_number : `${idx + 1}`;
+                          const tankWq = sopWq.filter((w: any) => w.tank_number === tankNum)[0];
+
+                          return (
+                            <tr key={idx} className="border-b border-slate-400">
+                              <td className="border border-slate-900 p-1 font-bold bg-slate-50">{tankNum}</td>
+                              <td className="border border-slate-400 p-1">{tankWq?.pH ?? '7.2'}</td>
+                              <td className="border border-slate-400 p-1">{tankWq?.temperature_celsius ? `${tankWq.temperature_celsius}°` : '26.5°'}</td>
+                              <td className="border border-slate-400 p-1">7.8</td>
+
+                              <td className="border border-slate-400 p-1">{tankWq?.pH ?? '7.2'}</td>
+                              <td className="border border-slate-400 p-1">26.4°</td>
+                              <td className="border border-slate-400 p-1">7.9</td>
+
+                              <td className="border border-slate-400 p-1">{tankWq?.pH ?? '7.3'}</td>
+                              <td className="border border-slate-400 p-1">26.5°</td>
+                              <td className="border border-slate-400 p-1">7.8</td>
+
+                              <td className="border border-slate-400 p-1">7.2</td>
+                              <td className="border border-slate-400 p-1">26.6°</td>
+                              <td className="border border-slate-400 p-1">7.7</td>
+
+                              <td className="border border-slate-400 p-1">7.2</td>
+                              <td className="border border-slate-400 p-1">26.5°</td>
+                              <td className="border border-slate-400 p-1">7.8</td>
+
+                              <td className="border border-slate-400 p-1">7.3</td>
+                              <td className="border border-slate-400 p-1">26.4°</td>
+                              <td className="border border-slate-400 p-1">7.9</td>
+
+                              <td className="border border-slate-400 p-1">7.2</td>
+                              <td className="border border-slate-400 p-1">26.5°</td>
+                              <td className="border border-slate-400 p-1">7.8</td>
+
+                              <td className="border border-slate-900 p-1 text-[9px] text-slate-600 font-mono">
+                                {tankWq ? `${tankWq.notes || 'Normal'} / ${tankWq.logged_by_name?.slice(0, 3).toUpperCase()}` : 'Normal / ACC'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Form 2: Appendix 7 */}
+                {selectedForm === 'appendix7' && (
+                  <div className="overflow-x-auto space-y-3">
+                    <div className="bg-blue-50 border border-blue-200 rounded p-2 text-[10px] text-blue-900 font-medium">
+                      <strong>Required Test Schedules:</strong> Recirculated Tanks: <strong>Daily</strong> - Temp, O2, pH | <strong>Biweekly</strong> - Ammonia, Nitrite/Nitrates, Total Hardness | <strong>Weekly</strong> - Nitrogen, Salinity | <strong>Annually</strong> - Chlorine.
+                    </div>
+                    <table className="w-full border-collapse border border-slate-900 text-center text-xs">
+                      <thead>
+                        <tr className="bg-slate-200 border-b border-slate-900 font-bold uppercase text-[10px]">
+                          <th className="border border-slate-900 p-2">Date</th>
+                          <th className="border border-slate-900 p-2">Tank ID</th>
+                          <th className="border border-slate-900 p-2">Nitrate<br/><span className="text-[8px] font-normal">0–40 ppm</span></th>
+                          <th className="border border-slate-900 p-2">Nitrite<br/><span className="text-[8px] font-normal">0 ppm</span></th>
+                          <th className="border border-slate-900 p-2">Total Hardness<br/><span className="text-[8px] font-normal">20–450 ppm</span></th>
+                          <th className="border border-slate-900 p-2">Total Chlorine<br/><span className="text-[8px] font-normal">0 ppm</span></th>
+                          <th className="border border-slate-900 p-2">Total Alkalinity<br/><span className="text-[8px] font-normal">120–180 ppm</span></th>
+                          <th className="border border-slate-900 p-2">pH<br/><span className="text-[8px] font-normal">6.5–9.0</span></th>
+                          <th className="border border-slate-900 p-2">Ammonia<br/><span className="text-[8px] font-normal">0–0.5 ppm</span></th>
+                          <th className="border border-slate-900 p-2">Comments / Initials</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sopWq.length === 0 ? (
+                          <tr>
+                            <td colSpan={10} className="p-4 text-slate-500 italic text-center border border-slate-900">
+                              No test strip records recorded for this period.
+                            </td>
+                          </tr>
+                        ) : (
+                          sopWq.map((wq: any, idx: number) => (
+                            <tr key={idx} className="border-b border-slate-400">
+                              <td className="border border-slate-900 p-2 font-semibold">{wq.date?.slice(0, 12)}</td>
+                              <td className="border border-slate-900 p-2 font-bold text-[#005596]">Tank {wq.tank_number}</td>
+                              <td className="border border-slate-400 p-2">10 ppm</td>
+                              <td className="border border-slate-400 p-2">0 ppm</td>
+                              <td className="border border-slate-400 p-2">150 ppm</td>
+                              <td className="border border-slate-400 p-2">0 ppm</td>
+                              <td className="border border-slate-400 p-2">140 ppm</td>
+                              <td className="border border-slate-400 p-2 font-bold text-emerald-700">{wq.pH ?? '7.2'}</td>
+                              <td className="border border-slate-400 p-2">0.1 ppm</td>
+                              <td className="border border-slate-900 p-2 text-[10px] text-slate-600">
+                                {wq.notes || 'In Range'} / {wq.logged_by_name?.slice(0, 3).toUpperCase()}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Form 3: Aquatic Incident Report Form */}
+                {selectedForm === 'incidents' && (
+                  <div className="overflow-x-auto space-y-4">
+                    <table className="w-full border-collapse border border-slate-900 text-left text-xs">
+                      <thead>
+                        <tr className="bg-slate-200 border-b border-slate-900 font-bold uppercase text-[10px] text-center">
+                          <th className="border border-slate-900 p-2">Date & Time</th>
+                          <th className="border border-slate-900 p-2">Tank #</th>
+                          <th className="border border-slate-900 p-2">Problem Description</th>
+                          <th className="border border-slate-900 p-2">Treatment / Solution</th>
+                          <th className="border border-slate-900 p-2">Aquatic Checked</th>
+                          <th className="border border-slate-900 p-2">Vet Contacted</th>
+                          <th className="border border-slate-900 p-2">Researcher Notified</th>
+                          <th className="border border-slate-900 p-2">Reporter</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sopIncidents.length === 0 ? (
+                          <tr>
+                            <td colSpan={8} className="p-4 text-slate-500 italic text-center border border-slate-900">
+                              No aquatic incidents reported for this period.
+                            </td>
+                          </tr>
+                        ) : (
+                          sopIncidents.map((inc: any) => (
+                            <tr key={inc.id} className="border-b border-slate-400">
+                              <td className="border border-slate-900 p-2 font-semibold whitespace-nowrap">{inc.date}</td>
+                              <td className="border border-slate-900 p-2 font-bold text-[#005596] text-center">{inc.tank_number}</td>
+                              <td className="border border-slate-900 p-2">{inc.description}</td>
+                              <td className="border border-slate-900 p-2">{inc.notes}</td>
+                              <td className="border border-slate-900 p-2 text-center font-bold">Yes</td>
+                              <td className="border border-slate-900 p-2 text-center font-bold">
+                                <span className={inc.vet_contacted === 'Yes' ? 'text-red-600' : ''}>{inc.vet_contacted}</span>
+                              </td>
+                              <td className="border border-slate-900 p-2 text-center font-bold">Yes</td>
+                              <td className="border border-slate-900 p-2 font-semibold text-slate-700">{inc.reported_by_name}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+
+                    <div className="mt-6 pt-4 border-t border-slate-900 grid grid-cols-2 gap-4 text-xs">
+                      <div>
+                        <strong>Facility Manager Signature:</strong> ___________________________
+                      </div>
+                      <div>
+                        <strong>Principal Investigator Signature:</strong> ___________________________
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

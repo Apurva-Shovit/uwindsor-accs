@@ -10,7 +10,6 @@ import { ProjectOverviewPage } from './ProjectOverviewPage';
 import { ProjectReportPage } from '../ProjectReportPage';
 import { TankHistoryPage } from './TankHistoryPage';
 import { ApprovalQueueTable } from '../../components/ApprovalQueueTable';
-import { OfficialFormsReportPage } from '../OfficialFormsReportPage';
 
 
 
@@ -36,7 +35,6 @@ export const AdminLayout: React.FC = () => {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="projects" element={<ProjectOverviewPage />} />
             <Route path="projects/:id/report" element={<ProjectReportPage />} />
-            <Route path="sop-forms" element={<OfficialFormsReportPage />} />
             <Route path="reports" element={<Reports />} />
             <Route path="audit-logs" element={<AuditLogs />} />
             <Route path="*" element={<Navigate to="/admin" replace />} />
