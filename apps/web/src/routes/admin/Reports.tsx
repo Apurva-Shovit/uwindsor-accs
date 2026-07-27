@@ -448,93 +448,175 @@ export const Reports: React.FC = () => {
                   <div><strong>Status:</strong> <span className="uppercase font-bold">{sopProject.status}</span></div>
                 </div>
 
-                {/* Form 1: Appendix 6 */}
+                {/* Form 1: Appendix 6 (Weekly Multi-Page Generator) */}
                 {selectedForm === 'appendix6' && (() => {
                   const cleanTankNum = (val: any) => String(val || '').replace(/tank\s*/i, '').trim();
                   const displayTanks = Array.from({ length: 14 }, (_, i) => String(i + 1));
-                  const daysOfWeek = [
-                    { key: 'Mon', label: 'Mon' },
-                    { key: 'Tues', label: 'Tues' },
-                    { key: 'Wed', label: 'Wed' },
-                    { key: 'Thurs', label: 'Thurs' },
-                    { key: 'Fri', label: 'Fri' },
-                    { key: 'Sat', label: 'Sat' },
-                    { key: 'Sun', label: 'Sun' }
+
+                  // Calculate calendar weeks (Monday - Sunday) spanned by the selected range
+                  const getMonday = (d: Date) => {
+                    const date = new Date(d);
+                    const day = date.getDay();
+                    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+                    return new Date(date.setDate(diff));
+                  };
+
+                  const startDateObj = dateFrom ? new Date(dateFrom + 'T00:00:00') : new Date(Date.now() - 30 * 86400 * 1000);
+                  const endDateObj = dateTo ? new Date(dateTo + 'T23:59:59') : new Date();
+
+                  const weekPages = [];
+                  let currMon = getMonday(startDateObj);
+
+                  while (currMon <= endDateObj) {
+                    const currSun = new Date(currMon);
+                    currSun.setDate(currSun.getDate() + 6);
+                    currSun.setHours(23, 59, 59, 999);
+
+                    weekPages.push({
+                      monDate: new Date(currMon),
+                      sunDate: new Date(currSun)
+                    });
+
+                    currMon = new Date(currMon);
+                    currMon.setDate(currMon.getDate() + 7);
+                  }
+
+                  const daysOfWeekConfig = [
+                    { offset: 0, key: 'Mon', label: 'Mon' },
+                    { offset: 1, key: 'Tues', label: 'Tues' },
+                    { offset: 2, key: 'Wed', label: 'Wed' },
+                    { offset: 3, key: 'Thurs', label: 'Thurs' },
+                    { offset: 4, key: 'Fri', label: 'Fri' },
+                    { offset: 5, key: 'Sat', label: 'Sat' },
+                    { offset: 6, key: 'Sun', label: 'Sun' }
                   ];
 
                   return (
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse border-2 border-slate-900 text-[10px] text-center">
-                        <thead>
-                          <tr className="bg-[#005596] text-white border-b-2 border-slate-900 font-bold uppercase">
-                            <th className="border border-slate-900 p-1.5 w-12 text-center" colSpan={2}>Day</th>
-                            {displayTanks.map((tn) => (
-                              <th key={tn} className="border border-slate-900 p-1 w-8 text-center">{tn}</th>
-                            ))}
-                            <th className="border border-slate-900 p-1.5 w-24 text-center">Initials</th>
-                            <th className="border border-slate-900 p-1.5 w-28 text-center">Comments</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {daysOfWeek.map(({ key: dayKey, label: dayLabel }) => {
-                            const dayLogs = sopWq.filter((w: any) => w.day_of_week === dayKey);
-                            const dayInitials = Array.from(new Set(dayLogs.map((w: any) => w.logged_by_name))).filter(Boolean).join(', ');
-                            const dayComments = Array.from(new Set(dayLogs.map((w: any) => w.notes))).filter((n: any) => n && n !== '-').join('; ');
+                    <div className="space-y-8 print:space-y-0">
+                      {weekPages.map((wp, pageIdx) => {
+                        const weekMonStr = wp.monDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
 
-                            return (
-                              <React.Fragment key={dayKey}>
-                                {/* Sub-row 1: pH */}
-                                <tr className="border-t-2 border-slate-900">
-                                  <td rowSpan={3} className="border border-slate-900 font-black text-slate-900 bg-slate-100 p-1 align-middle text-xs">
-                                    {dayLabel}
-                                  </td>
-                                  <td className="border border-slate-900 font-bold text-red-900 bg-rose-100 p-1">pH</td>
-                                  {displayTanks.map((tankNum) => {
-                                    const log = dayLogs.find((w: any) => cleanTankNum(w.tank_number) === tankNum);
+                        return (
+                          <div
+                            key={pageIdx}
+                            className="bg-white border-2 border-slate-900 p-6 shadow-sm text-slate-900 font-sans print:border-slate-900 print:p-2 print:break-after-page page-break mb-6"
+                          >
+                            {/* Form Header */}
+                            <div className="border-b-2 border-slate-900 pb-3 mb-3 flex items-center justify-between gap-4">
+                              <div className="flex items-center gap-3">
+                                <img src="/uwin-logo.webp" alt="University of Windsor Logo" className="h-12 w-auto object-contain" />
+                                <div>
+                                  <div className="text-[10px] font-bold tracking-widest uppercase text-slate-700">University of Windsor</div>
+                                  <h2 className="text-sm font-black uppercase text-slate-900 leading-tight">
+                                    APPENDIX 6 Daily Water Quality Log
+                                  </h2>
+                                  <div className="text-[9px] font-semibold text-slate-600">
+                                    ACC SOP AH24 Daily Water Quality Log - Appendix 6 (June 2026)
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-right text-[11px] border-l border-slate-400 pl-3 space-y-0.5">
+                                <div><strong>AUPP#:</strong> <span className="underline font-mono">{sopProject.aupp_number}</span></div>
+                                <div><strong>PI:</strong> {sopProject.pi_name}</div>
+                              </div>
+                            </div>
+
+                            {/* Form Metadata Line */}
+                            <div className="grid grid-cols-4 gap-2 border border-slate-900 p-2 text-[11px] mb-3 bg-slate-50 font-medium">
+                              <div><strong>Room:</strong> RM {sopProject.room_number || '101'}</div>
+                              <div><strong>Species:</strong> {sopProject.species || 'Zebrafish'}</div>
+                              <div><strong>Week of (D/M/Y):</strong> <span className="font-bold underline">{weekMonStr}</span></div>
+                              <div><strong>Page:</strong> <span className="font-bold">{pageIdx + 1} of {weekPages.length}</span></div>
+                            </div>
+
+                            {/* Weekly Form Table */}
+                            <div className="overflow-x-auto">
+                              <table className="w-full border-collapse border-2 border-slate-900 text-[10px] text-center">
+                                <thead>
+                                  <tr className="bg-[#005596] text-white border-b-2 border-slate-900 font-bold uppercase">
+                                    <th className="border border-slate-900 p-1.5 w-12 text-center" colSpan={2}>Day</th>
+                                    {displayTanks.map((tn) => (
+                                      <th key={tn} className="border border-slate-900 p-1 w-8 text-center">{tn}</th>
+                                    ))}
+                                    <th className="border border-slate-900 p-1.5 w-24 text-center">Initials</th>
+                                    <th className="border border-slate-900 p-1.5 w-28 text-center">Comments</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {daysOfWeekConfig.map(({ offset, key: dayKey, label: dayLabel }) => {
+                                    const cellDate = new Date(wp.monDate);
+                                    cellDate.setDate(cellDate.getDate() + offset);
+                                    cellDate.setHours(12, 0, 0, 0);
+
+                                    // Strictly check if cell date is within the requested range [startDateObj, endDateObj]
+                                    const isEligible = cellDate >= startDateObj && cellDate <= endDateObj;
+                                    const cellIso = cellDate.toISOString().slice(0, 10);
+
+                                    const dayLogs = isEligible
+                                      ? sopWq.filter((w: any) => w.iso_date === cellIso || (w.day_of_week === dayKey && (!w.iso_date || w.iso_date === cellIso)))
+                                      : [];
+
+                                    const dayInitials = isEligible ? Array.from(new Set(dayLogs.map((w: any) => w.logged_by_name))).filter(Boolean).join(', ') : '';
+                                    const dayComments = isEligible ? Array.from(new Set(dayLogs.map((w: any) => w.notes))).filter((n: any) => n && n !== '-').join('; ') : '';
+
                                     return (
-                                      <td key={`ph-${tankNum}`} className="border border-slate-400 p-1 text-slate-900 font-semibold">
-                                        {log && log.pH !== null && log.pH !== undefined ? String(log.pH) : ''}
-                                      </td>
+                                      <React.Fragment key={dayKey}>
+                                        {/* Sub-row 1: pH */}
+                                        <tr className="border-t-2 border-slate-900">
+                                          <td rowSpan={3} className="border border-slate-900 font-black text-slate-900 bg-slate-100 p-1 align-middle text-xs">
+                                            {dayLabel}
+                                          </td>
+                                          <td className="border border-slate-900 font-bold text-red-900 bg-rose-100 p-1">pH</td>
+                                          {displayTanks.map((tankNum) => {
+                                            const log = isEligible ? dayLogs.find((w: any) => cleanTankNum(w.tank_number) === tankNum) : null;
+                                            return (
+                                              <td key={`ph-${tankNum}`} className="border border-slate-400 p-1 text-slate-900 font-semibold">
+                                                {log && log.pH !== null && log.pH !== undefined ? String(log.pH) : ''}
+                                              </td>
+                                            );
+                                          })}
+                                          <td rowSpan={3} className="border border-slate-900 p-1 text-[9px] font-semibold text-slate-800 align-middle">
+                                            {dayInitials || ''}
+                                          </td>
+                                          <td rowSpan={3} className="border border-slate-900 p-1 text-[9px] text-slate-700 align-middle text-left">
+                                            {dayComments || ''}
+                                          </td>
+                                        </tr>
+
+                                        {/* Sub-row 2: DO */}
+                                        <tr>
+                                          <td className="border border-slate-900 font-bold text-emerald-900 bg-emerald-100 p-1">DO</td>
+                                          {displayTanks.map((tankNum) => {
+                                            const log = isEligible ? dayLogs.find((w: any) => cleanTankNum(w.tank_number) === tankNum) : null;
+                                            return (
+                                              <td key={`do-${tankNum}`} className="border border-slate-400 p-1 text-slate-900 font-semibold">
+                                                {log && log.dissolved_oxygen !== null && log.dissolved_oxygen !== undefined ? String(log.dissolved_oxygen) : ''}
+                                              </td>
+                                            );
+                                          })}
+                                        </tr>
+
+                                        {/* Sub-row 3: Temp */}
+                                        <tr>
+                                          <td className="border border-slate-900 font-bold text-amber-900 bg-amber-100 p-1">Temp</td>
+                                          {displayTanks.map((tankNum) => {
+                                            const log = isEligible ? dayLogs.find((w: any) => cleanTankNum(w.tank_number) === tankNum) : null;
+                                            return (
+                                              <td key={`temp-${tankNum}`} className="border border-slate-400 p-1 text-slate-900 font-semibold">
+                                                {log && log.temperature_celsius !== null && log.temperature_celsius !== undefined ? `${log.temperature_celsius}°` : ''}
+                                              </td>
+                                            );
+                                          })}
+                                        </tr>
+                                      </React.Fragment>
                                     );
                                   })}
-                                  <td rowSpan={3} className="border border-slate-900 p-1 text-[9px] font-semibold text-slate-800 align-middle">
-                                    {dayInitials || ''}
-                                  </td>
-                                  <td rowSpan={3} className="border border-slate-900 p-1 text-[9px] text-slate-700 align-middle text-left">
-                                    {dayComments || ''}
-                                  </td>
-                                </tr>
-
-                                {/* Sub-row 2: DO */}
-                                <tr>
-                                  <td className="border border-slate-900 font-bold text-emerald-900 bg-emerald-100 p-1">DO</td>
-                                  {displayTanks.map((tankNum) => {
-                                    const log = dayLogs.find((w: any) => cleanTankNum(w.tank_number) === tankNum);
-                                    return (
-                                      <td key={`do-${tankNum}`} className="border border-slate-400 p-1 text-slate-900 font-semibold">
-                                        {log && log.dissolved_oxygen !== null && log.dissolved_oxygen !== undefined ? String(log.dissolved_oxygen) : ''}
-                                      </td>
-                                    );
-                                  })}
-                                </tr>
-
-                                {/* Sub-row 3: Temp */}
-                                <tr>
-                                  <td className="border border-slate-900 font-bold text-amber-900 bg-amber-100 p-1">Temp</td>
-                                  {displayTanks.map((tankNum) => {
-                                    const log = dayLogs.find((w: any) => cleanTankNum(w.tank_number) === tankNum);
-                                    return (
-                                      <td key={`temp-${tankNum}`} className="border border-slate-400 p-1 text-slate-900 font-semibold">
-                                        {log && log.temperature_celsius !== null && log.temperature_celsius !== undefined ? `${log.temperature_celsius}°` : ''}
-                                      </td>
-                                    );
-                                  })}
-                                </tr>
-                              </React.Fragment>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   );
                 })()}
