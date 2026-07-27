@@ -413,40 +413,32 @@ export const Reports: React.FC = () => {
               </div>
             </div>
 
-            {/* Rendered Form Document */}
+            {/* Rendered Form Document (Isolated for Print) */}
             {sopProject && (
-              <div className="bg-white border-2 border-slate-900 p-6 shadow-sm text-slate-900 font-sans print:border-slate-900 print:p-2">
-                {/* Form Header */}
-                <div className="border-b-2 border-slate-900 pb-3 mb-4 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <img src="/uwin-logo.webp" alt="University of Windsor Logo" className="h-14 w-auto object-contain" />
-                    <div>
-                      <div className="text-xs font-bold tracking-widest uppercase text-slate-700">University of Windsor</div>
-                      <h2 className="text-base font-black uppercase text-slate-900 leading-tight">
-                        {selectedForm === 'appendix6' && 'APPENDIX 6 Daily Water Quality Log'}
-                        {selectedForm === 'appendix7' && 'APPENDIX 7 Water Quality Aquarium Test Strips'}
-                        {selectedForm === 'incidents' && 'AQUATIC INCIDENT REPORTS'}
-                      </h2>
-                      <div className="text-[10px] font-semibold text-slate-600">
-                        {selectedForm === 'appendix6' && 'ACC SOP AH24 Daily Water Quality Log - Appendix 6 (June 2026)'}
-                        {selectedForm === 'appendix7' && 'Fresh Water - Static and Recirculated Tanks - Appendix 7 (Revised May 2024)'}
-                        {selectedForm === 'incidents' && 'Official Aquatic Health & Incident Monitoring Log'}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-right text-xs border-l border-slate-400 pl-4 space-y-1">
-                    <div><strong>AUPP#:</strong> <span className="underline font-mono">{sopProject.aupp_number}</span></div>
-                    <div><strong>PI:</strong> {sopProject.pi_name}</div>
-                  </div>
-                </div>
-
-                {/* Form Metadata */}
-                <div className="grid grid-cols-4 gap-2 border border-slate-900 p-3 text-xs mb-4 bg-slate-50 font-medium">
-                  <div><strong>Room:</strong> RM {sopProject.room_number || '101'}</div>
-                  <div><strong>Species:</strong> {sopProject.species || 'Zebrafish'}</div>
-                  <div><strong>Date Range:</strong> {(!dateFrom && !dateTo) ? 'Past 1 Month (Auto)' : `${dateFrom || 'Start'} to ${dateTo || 'Today'}`}</div>
-                  <div><strong>Status:</strong> <span className="uppercase font-bold">{sopProject.status}</span></div>
-                </div>
+              <div id="official-sop-print-area" className="bg-white text-slate-900 font-sans">
+                <style>{`
+                  @media print {
+                    body * {
+                      visibility: hidden !important;
+                    }
+                    #official-sop-print-area, #official-sop-print-area * {
+                      visibility: visible !important;
+                    }
+                    #official-sop-print-area {
+                      position: absolute !important;
+                      left: 0 !important;
+                      top: 0 !important;
+                      width: 100% !important;
+                      margin: 0 !important;
+                      padding: 0 !important;
+                      background: white !important;
+                    }
+                    .print\\:break-after-page {
+                      break-after: page !important;
+                      page-break-after: always !important;
+                    }
+                  }
+                `}</style>
 
                 {/* Form 1: Appendix 6 (Weekly Multi-Page Generator) */}
                 {selectedForm === 'appendix6' && (() => {
@@ -629,62 +621,121 @@ export const Reports: React.FC = () => {
                   const testStripLogs = sopWq.filter((w: any) => w.type === 'test_strip' || (w.parameters && (w.parameters.nitrate != null || w.parameters.hardness != null || w.parameters.chlorine != null)));
 
                   return (
-                    <div className="overflow-x-auto space-y-3">
-                      <div className="bg-blue-50 border border-blue-200 rounded p-2 text-[10px] text-blue-900 font-medium">
-                        <strong>Required Test Schedules:</strong> Recirculated Tanks: <strong>Daily</strong> - Temp, O2, pH | <strong>Biweekly</strong> - Ammonia, Nitrite/Nitrates, Total Hardness | <strong>Weekly</strong> - Nitrogen, Salinity | <strong>Annually</strong> - Chlorine.
+                    <div className="bg-white border-2 border-slate-900 p-6 shadow-sm text-slate-900 font-sans print:border-slate-900 print:p-2 space-y-4">
+                      {/* Form Header */}
+                      <div className="border-b-2 border-slate-900 pb-3 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <img src="/uwin-logo.webp" alt="University of Windsor Logo" className="h-12 w-auto object-contain" />
+                          <div>
+                            <div className="text-[10px] font-bold tracking-widest uppercase text-slate-700">University of Windsor</div>
+                            <h2 className="text-sm font-black uppercase text-slate-900 leading-tight">
+                              APPENDIX 7 Water Quality Aquarium Test Strips
+                            </h2>
+                            <div className="text-[9px] font-semibold text-slate-600">
+                              Fresh Water - Static and Recirculated Tanks - Appendix 7 (Revised May 2024)
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right text-[11px] border-l border-slate-400 pl-3 space-y-0.5">
+                          <div><strong>AUPP#:</strong> <span className="underline font-mono">{sopProject.aupp_number}</span></div>
+                          <div><strong>PI:</strong> {sopProject.pi_name}</div>
+                        </div>
                       </div>
-                      <table className="w-full border-collapse border border-slate-900 text-center text-xs">
-                        <thead>
-                          <tr className="bg-slate-200 border-b border-slate-900 font-bold uppercase text-[10px]">
-                            <th className="border border-slate-900 p-2">Date</th>
-                            <th className="border border-slate-900 p-2">Tank ID</th>
-                            <th className="border border-slate-900 p-2">Nitrate<br/><span className="text-[8px] font-normal">0–40 ppm</span></th>
-                            <th className="border border-slate-900 p-2">Nitrite<br/><span className="text-[8px] font-normal">0 ppm</span></th>
-                            <th className="border border-slate-900 p-2">Total Hardness<br/><span className="text-[8px] font-normal">20–450 ppm</span></th>
-                            <th className="border border-slate-900 p-2">Total Chlorine<br/><span className="text-[8px] font-normal">0 ppm</span></th>
-                            <th className="border border-slate-900 p-2">Total Alkalinity<br/><span className="text-[8px] font-normal">120–180 ppm</span></th>
-                            <th className="border border-slate-900 p-2">pH<br/><span className="text-[8px] font-normal">6.5–9.0</span></th>
-                            <th className="border border-slate-900 p-2">Ammonia<br/><span className="text-[8px] font-normal">0–0.5 ppm</span></th>
-                            <th className="border border-slate-900 p-2">Comments / Initials</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {testStripLogs.length === 0 ? (
-                            <tr>
-                              <td colSpan={10} className="p-4 text-slate-500 italic text-center border border-slate-900">
-                                No test strip records recorded for this period.
-                              </td>
+
+                      {/* Metadata */}
+                      <div className="grid grid-cols-4 gap-2 border border-slate-900 p-2 text-[11px] bg-slate-50 font-medium">
+                        <div><strong>Room:</strong> RM {sopProject.room_number || '101'}</div>
+                        <div><strong>Species:</strong> {sopProject.species || 'Zebrafish'}</div>
+                        <div><strong>Date Range:</strong> {(!dateFrom && !dateTo) ? 'Past 1 Month (Auto)' : `${dateFrom || 'Start'} to ${dateTo || 'Today'}`}</div>
+                        <div><strong>Status:</strong> <span className="uppercase font-bold">{sopProject.status}</span></div>
+                      </div>
+
+                      <div className="overflow-x-auto space-y-3">
+                        <div className="bg-blue-50 border border-blue-200 rounded p-2 text-[10px] text-blue-900 font-medium">
+                          <strong>Required Test Schedules:</strong> Recirculated Tanks: <strong>Daily</strong> - Temp, O2, pH | <strong>Biweekly</strong> - Ammonia, Nitrite/Nitrates, Total Hardness | <strong>Weekly</strong> - Nitrogen, Salinity | <strong>Annually</strong> - Chlorine.
+                        </div>
+                        <table className="w-full border-collapse border border-slate-900 text-center text-xs">
+                          <thead>
+                            <tr className="bg-slate-200 border-b border-slate-900 font-bold uppercase text-[10px]">
+                              <th className="border border-slate-900 p-2">Date</th>
+                              <th className="border border-slate-900 p-2">Tank ID</th>
+                              <th className="border border-slate-900 p-2">Nitrate<br/><span className="text-[8px] font-normal">0–40 ppm</span></th>
+                              <th className="border border-slate-900 p-2">Nitrite<br/><span className="text-[8px] font-normal">0 ppm</span></th>
+                              <th className="border border-slate-900 p-2">Total Hardness<br/><span className="text-[8px] font-normal">20–450 ppm</span></th>
+                              <th className="border border-slate-900 p-2">Total Chlorine<br/><span className="text-[8px] font-normal">0 ppm</span></th>
+                              <th className="border border-slate-900 p-2">Total Alkalinity<br/><span className="text-[8px] font-normal">120–180 ppm</span></th>
+                              <th className="border border-slate-900 p-2">pH<br/><span className="text-[8px] font-normal">6.5–9.0</span></th>
+                              <th className="border border-slate-900 p-2">Ammonia<br/><span className="text-[8px] font-normal">0–0.5 ppm</span></th>
+                              <th className="border border-slate-900 p-2">Comments / Initials</th>
                             </tr>
-                          ) : (
-                            testStripLogs.map((wq: any, idx: number) => {
-                              const params = wq.parameters || {};
-                              return (
-                                <tr key={idx} className="border-b border-slate-400">
-                                  <td className="border border-slate-900 p-2 font-semibold">{wq.date?.slice(0, 12)}</td>
-                                  <td className="border border-slate-900 p-2 font-bold text-[#005596]">Tank {wq.tank_number}</td>
-                                  <td className="border border-slate-400 p-2">{params.nitrate ? `${params.nitrate} ppm` : ''}</td>
-                                  <td className="border border-slate-400 p-2">{params.nitrite ? `${params.nitrite} ppm` : ''}</td>
-                                  <td className="border border-slate-400 p-2">{params.hardness ? `${params.hardness} ppm` : ''}</td>
-                                  <td className="border border-slate-400 p-2">{params.chlorine ? `${params.chlorine} ppm` : ''}</td>
-                                  <td className="border border-slate-400 p-2">{params.alkalinity ? `${params.alkalinity} ppm` : ''}</td>
-                                  <td className="border border-slate-400 p-2 font-bold text-emerald-700">{wq.pH ? String(wq.pH) : ''}</td>
-                                  <td className="border border-slate-400 p-2">{params.ammonia ? `${params.ammonia} ppm` : ''}</td>
-                                  <td className="border border-slate-900 p-2 text-[10px] text-slate-600">
-                                    {wq.notes && wq.notes !== '-' ? wq.notes : 'Logged'} / {wq.logged_by_name?.slice(0, 3).toUpperCase()}
-                                  </td>
-                                </tr>
-                              );
-                            })
-                          )}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {testStripLogs.length === 0 ? (
+                              <tr>
+                                <td colSpan={10} className="p-4 text-slate-500 italic text-center border border-slate-900">
+                                  No test strip records recorded for this period.
+                                </td>
+                              </tr>
+                            ) : (
+                              testStripLogs.map((wq: any, idx: number) => {
+                                const params = wq.parameters || {};
+                                return (
+                                  <tr key={idx} className="border-b border-slate-400">
+                                    <td className="border border-slate-900 p-2 font-semibold">{wq.date?.slice(0, 12)}</td>
+                                    <td className="border border-slate-900 p-2 font-bold text-[#005596]">Tank {wq.tank_number}</td>
+                                    <td className="border border-slate-400 p-2">{params.nitrate ? `${params.nitrate} ppm` : ''}</td>
+                                    <td className="border border-slate-400 p-2">{params.nitrite ? `${params.nitrite} ppm` : ''}</td>
+                                    <td className="border border-slate-400 p-2">{params.hardness ? `${params.hardness} ppm` : ''}</td>
+                                    <td className="border border-slate-400 p-2">{params.chlorine ? `${params.chlorine} ppm` : ''}</td>
+                                    <td className="border border-slate-400 p-2">{params.alkalinity ? `${params.alkalinity} ppm` : ''}</td>
+                                    <td className="border border-slate-400 p-2 font-bold text-emerald-700">{wq.pH ? String(wq.pH) : ''}</td>
+                                    <td className="border border-slate-400 p-2">{params.ammonia ? `${params.ammonia} ppm` : ''}</td>
+                                    <td className="border border-slate-900 p-2 text-[10px] text-slate-600">
+                                      {wq.notes && wq.notes !== '-' ? wq.notes : 'Logged'} / {wq.logged_by_name?.slice(0, 3).toUpperCase()}
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   );
                 })()}
 
                 {/* Form 3: Aquatic Incident Report Form */}
                 {selectedForm === 'incidents' && (
-                  <div className="overflow-x-auto space-y-4">
+                  <div className="bg-white border-2 border-slate-900 p-6 shadow-sm text-slate-900 font-sans print:border-slate-900 print:p-2 space-y-4">
+                    {/* Form Header */}
+                    <div className="border-b-2 border-slate-900 pb-3 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <img src="/uwin-logo.webp" alt="University of Windsor Logo" className="h-12 w-auto object-contain" />
+                        <div>
+                          <div className="text-[10px] font-bold tracking-widest uppercase text-slate-700">University of Windsor</div>
+                          <h2 className="text-sm font-black uppercase text-slate-900 leading-tight">
+                            AQUATIC INCIDENT REPORTS
+                          </h2>
+                          <div className="text-[9px] font-semibold text-slate-600">
+                            Official Aquatic Health & Incident Monitoring Log
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right text-[11px] border-l border-slate-400 pl-3 space-y-0.5">
+                        <div><strong>AUPP#:</strong> <span className="underline font-mono">{sopProject.aupp_number}</span></div>
+                        <div><strong>PI:</strong> {sopProject.pi_name}</div>
+                      </div>
+                    </div>
+
+                    {/* Metadata */}
+                    <div className="grid grid-cols-4 gap-2 border border-slate-900 p-2 text-[11px] bg-slate-50 font-medium">
+                      <div><strong>Room:</strong> RM {sopProject.room_number || '101'}</div>
+                      <div><strong>Species:</strong> {sopProject.species || 'Zebrafish'}</div>
+                      <div><strong>Date Range:</strong> {(!dateFrom && !dateTo) ? 'Past 1 Month (Auto)' : `${dateFrom || 'Start'} to ${dateTo || 'Today'}`}</div>
+                      <div><strong>Status:</strong> <span className="uppercase font-bold">{sopProject.status}</span></div>
+                    </div>
+
+                    <div className="overflow-x-auto space-y-4">
                     <table className="w-full border-collapse border border-slate-900 text-left text-xs">
                       <thead>
                         <tr className="bg-slate-200 border-b border-slate-900 font-bold uppercase text-[10px] text-center">
