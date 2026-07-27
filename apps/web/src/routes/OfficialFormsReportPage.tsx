@@ -114,17 +114,20 @@ export const OfficialFormsReportPage: React.FC = () => {
       {selectedForm === 'appendix6' && project && (
         <div className="bg-white border-2 border-slate-900 p-6 shadow-md text-slate-900 font-sans print:border-slate-900 print:shadow-none print:p-4 print:w-full">
           {/* Form Header Block */}
-          <div className="border-b-2 border-slate-900 pb-3 mb-4 flex items-start justify-between">
-            <div>
-              <div className="text-xs font-bold tracking-widest uppercase text-slate-600">University of Windsor • Animal Care Committee</div>
-              <h2 className="text-lg font-black uppercase text-slate-900 mt-0.5">
-                ACC SOP AH24 Daily Water Quality Log — Appendix 6
-              </h2>
-              <div className="text-[10px] font-semibold text-slate-500">Revised June 2026 • Official Animal Care Facility Record</div>
+          <div className="border-b-2 border-slate-900 pb-3 mb-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <img src="/uwin-logo.png" alt="University of Windsor Logo" className="h-14 w-auto object-contain" />
+              <div>
+                <div className="text-xs font-bold tracking-widest uppercase text-slate-700">University of Windsor</div>
+                <h2 className="text-base font-black uppercase text-slate-900 leading-tight">
+                  APPENDIX 6 Daily Water Quality Log
+                </h2>
+                <div className="text-[10px] font-semibold text-slate-600">ACC SOP AH24 Daily Water Quality Log - Appendix 6 (June 2026)</div>
+              </div>
             </div>
-            <div className="text-right text-xs">
-              <div className="font-extrabold text-slate-800">AUPP#: <span className="underline font-mono">{project.aupp_number}</span></div>
-              <div className="font-semibold text-slate-700">PI: {project.pi_name}</div>
+            <div className="text-right text-xs border-l border-slate-400 pl-4 space-y-1">
+              <div><strong>AUPP#:</strong> <span className="underline font-mono">{project.aupp_number}</span></div>
+              <div><strong>PI:</strong> {project.pi_name}</div>
             </div>
           </div>
 
@@ -222,17 +225,20 @@ export const OfficialFormsReportPage: React.FC = () => {
       {/* ────────────────────────────────────────────────────────────────────── */}
       {selectedForm === 'appendix7' && project && (
         <div className="bg-white border-2 border-slate-900 p-6 shadow-md text-slate-900 font-sans print:border-slate-900 print:shadow-none print:p-4 print:w-full">
-          <div className="border-b-2 border-slate-900 pb-3 mb-4 flex items-start justify-between">
-            <div>
-              <div className="text-xs font-bold tracking-widest uppercase text-slate-600">University of Windsor • Animal Care Committee</div>
-              <h2 className="text-lg font-black uppercase text-slate-900 mt-0.5">
-                ACC SOP AH24 Water Quality Aquarium Test Strips — Appendix 7
-              </h2>
-              <div className="text-[10px] font-semibold text-slate-500">Fresh Water - Static & Recirculated Tanks (Revised May 2024)</div>
+          <div className="border-b-2 border-slate-900 pb-3 mb-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <img src="/uwin-logo.png" alt="University of Windsor Logo" className="h-14 w-auto object-contain" />
+              <div>
+                <div className="text-xs font-bold tracking-widest uppercase text-slate-700">University of Windsor</div>
+                <h2 className="text-base font-black uppercase text-slate-900 leading-tight">
+                  APPENDIX 7 Water Quality Aquarium Test Strips
+                </h2>
+                <div className="text-[10px] font-semibold text-slate-600">Fresh Water - Static and Recirculated Tanks - Appendix 7 (Revised May 2024)</div>
+              </div>
             </div>
-            <div className="text-right text-xs">
-              <div className="font-extrabold text-slate-800">AUPP#: <span className="underline font-mono">{project.aupp_number}</span></div>
-              <div className="font-semibold text-slate-700">PI: {project.pi_name}</div>
+            <div className="text-right text-xs border-l border-slate-400 pl-4 space-y-1">
+              <div><strong>AUPP#:</strong> <span className="underline font-mono">{project.aupp_number}</span></div>
+              <div><strong>PI:</strong> {project.pi_name}</div>
             </div>
           </div>
 
@@ -301,17 +307,20 @@ export const OfficialFormsReportPage: React.FC = () => {
       {/* ────────────────────────────────────────────────────────────────────── */}
       {selectedForm === 'incidents' && project && (
         <div className="bg-white border-2 border-slate-900 p-6 shadow-md text-slate-900 font-sans print:border-slate-900 print:shadow-none print:p-4 print:w-full">
-          <div className="border-b-2 border-slate-900 pb-3 mb-4 flex items-start justify-between">
-            <div>
-              <div className="text-xs font-bold tracking-widest uppercase text-slate-600">University of Windsor • Animal Care Committee</div>
-              <h2 className="text-lg font-black uppercase text-slate-900 mt-0.5">
-                AQUATIC INCIDENT REPORT FORM
-              </h2>
-              <div className="text-[10px] font-semibold text-slate-500">Official Aquatic Health & Incident Monitoring Log</div>
+          <div className="border-b-2 border-slate-900 pb-3 mb-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <img src="/uwin-logo.png" alt="University of Windsor Logo" className="h-14 w-auto object-contain" />
+              <div>
+                <div className="text-xs font-bold tracking-widest uppercase text-slate-700">University of Windsor</div>
+                <h2 className="text-base font-black uppercase text-slate-900 leading-tight">
+                  AQUATIC INCIDENT REPORTS
+                </h2>
+                <div className="text-[10px] font-semibold text-slate-600">Official Aquatic Health & Incident Monitoring Log</div>
+              </div>
             </div>
-            <div className="text-right text-xs">
-              <div className="font-extrabold text-slate-800">AUPP#: <span className="underline font-mono">{project.aupp_number}</span></div>
-              <div className="font-semibold text-slate-700">PI: {project.pi_name}</div>
+            <div className="text-right text-xs border-l border-slate-400 pl-4 space-y-1">
+              <div><strong>AUPP#:</strong> <span className="underline font-mono">{project.aupp_number}</span></div>
+              <div><strong>PI:</strong> {project.pi_name}</div>
             </div>
           </div>
 
