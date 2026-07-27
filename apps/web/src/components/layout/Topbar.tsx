@@ -18,9 +18,11 @@ export const Topbar: React.FC = () => {
         >
           <Menu className="h-5 w-5" />
         </button>
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brandBlue text-white font-bold">
-          AC
-        </div>
+        <img
+          src="/topBarWinLogo.jpeg"
+          alt="University of Windsor Logo"
+          className="h-10 w-auto object-contain"
+        />
         <span className="text-lg font-semibold text-textPrimary">ACare Aquatic System</span>
       </div>
 
