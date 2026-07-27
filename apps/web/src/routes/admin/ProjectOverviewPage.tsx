@@ -364,11 +364,11 @@ export const ProjectOverviewPage: React.FC = () => {
                           <td className="p-3">
                             {t.is_quarantined ? (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-full font-semibold bg-amber-100 text-amber-800 border border-amber-300">
-                                🛡️ Quarantined {t.quarantine_end_date ? `(until ${formatDate(t.quarantine_end_date)})` : ''}
+                                Quarantined {t.quarantine_end_date ? `(until ${formatDate(t.quarantine_end_date)})` : ''}
                               </span>
                             ) : (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                                ✅ Clear / Active
+                                Clear / Active
                               </span>
                             )}
                           </td>
@@ -394,7 +394,7 @@ export const ProjectOverviewPage: React.FC = () => {
                 }}
                 className="w-full sm:w-auto px-4 py-2 bg-[#005596] hover:bg-blue-800 text-white text-xs font-bold rounded-lg shadow transition-colors"
               >
-                📊 View Full Project Audit & Comprehensive Report
+                View Full Project Audit & Comprehensive Report
               </button>
               <button
                 onClick={() => setSelectedProject(null)}

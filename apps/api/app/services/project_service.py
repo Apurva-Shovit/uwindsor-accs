@@ -262,17 +262,22 @@ class ProjectService:
             })
 
         # 5. Project audit logs
-        audits = await AuditLog.find({"$or": [
-            {"entity_type": "project", "entity_id": project_id},
-            {"entity_type": "tank_assignment", "after.project_id": project_id},
-            {"entity_type": "census_event", "after.project_id": project_id},
-            {"entity_type": "incident_report", "after.project_id": project_id}
-        ]}).sort("-timestamp").to_list()
+        try:
+            audits = await AuditLog.find({"$or": [
+                {"entity_type": "project", "entity_id": project_id},
+                {"entity_type": "tank_assignment", "after.project_id": project_id},
+                {"entity_type": "census_event", "after.project_id": project_id},
+                {"entity_type": "incident_report", "after.project_id": project_id}
+            ]}).sort("-created_at").to_list()
+        except Exception:
+            all_audits = await AuditLog.find_all().to_list()
+            audits = [a for a in all_audits if (getattr(a, "entity_type", "") == "project" and getattr(a, "entity_id", "") == project_id) or (isinstance(getattr(a, "after", None), dict) and a.after.get("project_id") == project_id)]
 
         audit_list = []
         for a in audits:
             actor = await EntityResolver.resolve_user_name(a.actor_id)
-            ts_str = a.timestamp.strftime("%a, %b %d, %Y, %I:%M %p") if a.timestamp else "-"
+            aud_dt = getattr(a, "created_at", getattr(a, "timestamp", None))
+            ts_str = aud_dt.strftime("%a, %b %d, %Y, %I:%M %p") if aud_dt else "-"
             clean_before = await EntityResolver.resolve_payload_ids(a.before)
             clean_after = await EntityResolver.resolve_payload_ids(a.after)
             audit_list.append({

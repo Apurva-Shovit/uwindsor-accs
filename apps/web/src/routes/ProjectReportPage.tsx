@@ -45,7 +45,7 @@ export const ProjectReportPage: React.FC = () => {
           onClick={() => navigate(-1)}
           className="px-4 py-2 bg-red-600 text-white font-bold text-sm rounded-lg hover:bg-red-700"
         >
-          ← Go Back
+          Go Back
         </button>
       </div>
     );
@@ -182,7 +182,7 @@ export const ProjectReportPage: React.FC = () => {
             activeTab === 'tanks' ? 'bg-[#005596] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
         >
-          🗄️ Occupied Tanks ({occupied_tanks.length})
+          Occupied Tanks ({occupied_tanks.length})
         </button>
         <button
           onClick={() => setActiveTab('deaths')}
@@ -190,7 +190,7 @@ export const ProjectReportPage: React.FC = () => {
             activeTab === 'deaths' ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
         >
-          💀 Deaths & Mortality ({deaths.length})
+          Deaths & Mortality ({deaths.length})
         </button>
         <button
           onClick={() => setActiveTab('incidents')}
@@ -198,7 +198,7 @@ export const ProjectReportPage: React.FC = () => {
             activeTab === 'incidents' ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
         >
-          🚨 Incident Reports ({incidents.length})
+          Incident Reports ({incidents.length})
         </button>
         <button
           onClick={() => setActiveTab('census')}
@@ -206,7 +206,7 @@ export const ProjectReportPage: React.FC = () => {
             activeTab === 'census' ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
         >
-          📈 Census History ({census_events.length})
+          Census History ({census_events.length})
         </button>
         <button
           onClick={() => setActiveTab('water_quality')}
@@ -214,7 +214,7 @@ export const ProjectReportPage: React.FC = () => {
             activeTab === 'water_quality' ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
         >
-          🧪 Water Quality ({water_quality_logs.length})
+          Water Quality ({water_quality_logs.length})
         </button>
         <button
           onClick={() => setActiveTab('audits')}
@@ -222,7 +222,7 @@ export const ProjectReportPage: React.FC = () => {
             activeTab === 'audits' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
         >
-          🔍 Audit Trail Logs ({audit_logs.length})
+          Audit Trail Logs ({audit_logs.length})
         </button>
       </div>
 
@@ -255,11 +255,11 @@ export const ProjectReportPage: React.FC = () => {
                       <td className="p-3">
                         {t.is_quarantined ? (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                            🛡️ Quarantined {t.quarantine_end_date ? `(until ${new Date(t.quarantine_end_date).toLocaleDateString()})` : ''}
+                            Quarantined {t.quarantine_end_date ? `(until ${new Date(t.quarantine_end_date).toLocaleDateString()})` : ''}
                           </span>
                         ) : (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                            ✅ Active & Healthy
+                            Active & Healthy
                           </span>
                         )}
                       </td>

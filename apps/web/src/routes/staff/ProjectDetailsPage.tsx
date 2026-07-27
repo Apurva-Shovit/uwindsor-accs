@@ -293,7 +293,7 @@ export const ProjectDetailsPage: React.FC = () => {
                   onClick={() => navigate(`/staff/projects/${getId(selectedProj)}/report`)}
                   className="rounded-lg bg-[#005596] px-4 py-2 text-xs font-extrabold text-white hover:bg-blue-800 transition-colors shadow"
                 >
-                  📊 View Full Project Audit & Report
+                  View Full Project Audit & Report
                 </button>
                 {selectedProj.status === 'active' && isManagerPlus && (
                   <button onClick={() => setShowCloseModal(true)}
@@ -419,11 +419,11 @@ export const ProjectDetailsPage: React.FC = () => {
                           <td className="p-3">
                             {t.is_quarantined ? (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-full font-semibold bg-amber-100 text-amber-800 border border-amber-300">
-                                🛡️ Quarantined {t.quarantine_end_date ? `(until ${new Date(t.quarantine_end_date).toLocaleDateString()})` : ''}
+                                Quarantined {t.quarantine_end_date ? `(until ${new Date(t.quarantine_end_date).toLocaleDateString()})` : ''}
                               </span>
                             ) : (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                                ✅ Clear / Active
+                                Clear / Active
                               </span>
                             )}
                           </td>
