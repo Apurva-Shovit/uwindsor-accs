@@ -12,13 +12,15 @@ export const ProjectReportPage: React.FC = () => {
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'tanks' | 'deaths' | 'incidents' | 'census' | 'water_quality' | 'audits'>('tanks');
   const [timePeriod, setTimePeriod] = useState<string>('all');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [page, setPage] = useState<number>(1);
   const limit = 10;
 
   useEffect(() => {
     if (id) {
       setLoading(true);
-      getProjectReport(id, timePeriod, page, limit)
+      getProjectReport(id, timePeriod, page, limit, startDate, endDate)
         .then(r => {
           setData(r.data);
           setLoading(false);
@@ -28,7 +30,7 @@ export const ProjectReportPage: React.FC = () => {
           setLoading(false);
         });
     }
-  }, [id, timePeriod, page]);
+  }, [id, timePeriod, startDate, endDate, page]);
 
   if (loading && !data) {
     return (
@@ -111,12 +113,12 @@ export const ProjectReportPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Time Period Filter</label>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Preset Period</label>
             <select
               value={timePeriod}
-              onChange={e => { setTimePeriod(e.target.value); setPage(1); }}
+              onChange={e => { setTimePeriod(e.target.value); setStartDate(''); setEndDate(''); setPage(1); }}
               className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#005596]"
             >
               <option value="all">All Time</option>
@@ -126,9 +128,39 @@ export const ProjectReportPage: React.FC = () => {
               <option value="1y">Past 1 Year</option>
             </select>
           </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">From Date</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={e => { setStartDate(e.target.value); setPage(1); }}
+              className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#005596]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">To Date</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={e => { setEndDate(e.target.value); setPage(1); }}
+              className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#005596]"
+            />
+          </div>
+
+          {(startDate || endDate) && (
+            <button
+              onClick={() => { setStartDate(''); setEndDate(''); setPage(1); }}
+              className="text-xs font-bold text-red-600 hover:underline mt-3"
+            >
+              Clear Range
+            </button>
+          )}
+
           <button
             onClick={() => window.print()}
-            className="flex items-center gap-2 px-4 py-2.5 bg-[#005596] text-white font-bold text-xs rounded-xl shadow hover:bg-blue-800 transition-colors mt-4 sm:mt-0"
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#005596] text-white font-bold text-xs rounded-xl shadow hover:bg-blue-800 transition-colors mt-3 sm:mt-0"
           >
             <Printer className="w-4 h-4" /> Print Full Audit Report
           </button>

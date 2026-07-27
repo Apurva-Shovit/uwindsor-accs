@@ -107,6 +107,8 @@ class ProjectService:
         project_id: str, 
         current_user: User,
         time_period: str = "all",
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
         page: int = 1,
         limit: int = 10
     ) -> Dict[str, Any]:
@@ -123,7 +125,7 @@ class ProjectService:
         p_data["id"] = str(p.id)
         p_data["pi_name"] = getattr(p, "pi_name", None) or await EntityResolver.resolve_user_name(getattr(p, "pi_id", None)) or "N/A"
 
-        # Calculate time period cutoff
+        # Calculate time period cutoff or custom start_date/end_date range
         now = datetime.now(timezone.utc)
         cutoff = None
         if time_period == "7d":
@@ -134,6 +136,19 @@ class ProjectService:
             cutoff = now - timedelta(days=90)
         elif time_period == "1y":
             cutoff = now - timedelta(days=365)
+
+        start_dt = None
+        end_dt = None
+        if start_date:
+            try:
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            except Exception:
+                pass
+        if end_date:
+            try:
+                end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
+            except Exception:
+                pass
 
         def get_dt(obj):
             dt = getattr(obj, "created_at", None)
@@ -148,6 +163,17 @@ class ProjectService:
             if dt and dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
             return dt
+
+        def is_in_range(dt):
+            if not dt:
+                return True
+            if start_dt and dt < start_dt:
+                return False
+            if end_dt and dt > end_dt:
+                return False
+            if not start_dt and not end_dt and cutoff and dt < cutoff:
+                return False
+            return True
 
         # 1. Occupied Tanks
         assignments = await TankAssignment.find({"project_id": project_id, "current_count": {"$gt": 0}}).to_list()
@@ -173,7 +199,6 @@ class ProjectService:
 
         # 2. Census events (all & deaths)
         census_events = await CensusEvent.find({"project_id": project_id}).to_list()
-        # Sort time-descending
         census_events.sort(key=lambda x: get_dt(x) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
 
         census_list = []
@@ -182,7 +207,7 @@ class ProjectService:
 
         for c in census_events:
             c_dt = get_dt(c)
-            if cutoff and c_dt and c_dt < cutoff:
+            if not is_in_range(c_dt):
                 continue
 
             actor = await EntityResolver.resolve_user_name(c.created_by)
@@ -227,7 +252,7 @@ class ProjectService:
         incidents_list = []
         for inc in incidents:
             inc_dt = get_dt(inc)
-            if cutoff and inc_dt and inc_dt < cutoff:
+            if not is_in_range(inc_dt):
                 continue
 
             creator_id = getattr(inc, "created_by", getattr(inc, "reported_by", None))
@@ -270,7 +295,7 @@ class ProjectService:
 
         for wq in wq_records:
             wq_dt = get_dt(wq)
-            if cutoff and wq_dt and wq_dt < cutoff:
+            if not is_in_range(wq_dt):
                 continue
 
             creator_id = getattr(wq, "created_by", getattr(wq, "logged_by", None))
@@ -309,7 +334,7 @@ class ProjectService:
         audit_list = []
         for a in audits:
             aud_dt = get_dt(a)
-            if cutoff and aud_dt and aud_dt < cutoff:
+            if not is_in_range(aud_dt):
                 continue
 
             actor = await EntityResolver.resolve_user_name(a.actor_id)

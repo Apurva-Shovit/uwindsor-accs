@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from ..models.user import User
 from ..models.project import Project
@@ -35,12 +36,16 @@ async def get_project_details(id: str, current: User = Depends(get_current_user)
 @router.get("/{id}/report")
 async def get_project_report(
     id: str, 
-    time_period: str = "all", 
+    time_period: str = "all",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     page: int = 1, 
     limit: int = 10,
     current: User = Depends(get_current_user)
 ):
-    return await ProjectService.get_project_report(id, current, time_period=time_period, page=page, limit=limit)
+    return await ProjectService.get_project_report(
+        id, current, time_period=time_period, start_date=start_date, end_date=end_date, page=page, limit=limit
+    )
 
 
 @router.get("/{id}")
