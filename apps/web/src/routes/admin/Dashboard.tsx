@@ -213,11 +213,15 @@ export const Dashboard: React.FC = () => {
                 className="rounded-lg border border-slate-300 bg-white p-2 text-xs font-semibold text-slate-800 shadow-sm focus:ring-2 focus:ring-[#005596]"
               >
                 <option value="all">All Facility Tanks</option>
-                {tankOptions.map((t: any) => (
-                  <option key={t.id} value={t.id}>
-                    Tank {t.tank_number}
-                  </option>
-                ))}
+                <option value="group_1_8">Tanks 1 - 8 (Group)</option>
+                <option value="group_9_14">Tanks 9 - 14 (Group)</option>
+                <optgroup label="Individual Tanks">
+                  {tankOptions.map((t: any) => (
+                    <option key={t.id} value={t.id}>
+                      Tank {t.tank_number}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
             </div>
 

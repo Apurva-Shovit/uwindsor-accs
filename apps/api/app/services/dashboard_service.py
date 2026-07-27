@@ -69,7 +69,15 @@ class DashboardService:
         
         query: dict = {"date": {"$gte": cutoff}}
         if tank_id and tank_id != "all":
-            query["tank_id"] = tank_id
+            if tank_id in ("group_1_8", "group_9_14"):
+                all_tanks_objs = await Tank.find({"deleted": False}).to_list()
+                if tank_id == "group_1_8":
+                    matched_ids = [str(t.id) for t in all_tanks_objs if str(t.tank_number).isdigit() and 1 <= int(t.tank_number) <= 8]
+                else:
+                    matched_ids = [str(t.id) for t in all_tanks_objs if str(t.tank_number).isdigit() and 9 <= int(t.tank_number) <= 14]
+                query["tank_id"] = {"$in": matched_ids}
+            else:
+                query["tank_id"] = tank_id
 
         logs = await WaterQualityLog.find(query).sort("+date").to_list()
         
