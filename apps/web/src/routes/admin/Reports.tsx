@@ -841,33 +841,23 @@ export const Reports: React.FC = () => {
 
                   return (
                     <div className="bg-white border-2 border-slate-900 p-6 shadow-sm text-slate-900 font-sans print:border-slate-900 print:p-2 space-y-4">
-                      {/* Form Header */}
-                      <div className="border-b-2 border-slate-900 pb-3 flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                          <img src="/uwin-logo.webp" alt="University of Windsor Logo" className="h-12 w-auto object-contain" />
-                          <div>
-                            <div className="text-[10px] font-bold tracking-widest uppercase text-slate-700">University of Windsor</div>
-                            <h2 className="text-sm font-black uppercase text-slate-900 leading-tight">
-                              AQUATIC INCIDENT REPORTS
-                            </h2>
-                            <div className="text-[9px] font-semibold text-slate-600">
-                              Official Aquatic Health &amp; Incident Monitoring Log
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right text-[11px] border-l border-slate-400 pl-3 space-y-0.5">
-                          <div><strong>AUPP#:</strong> <span className="underline font-mono">{sopProject.aupp_number}</span></div>
-                          <div><strong>PI:</strong> {sopProject.pi_name}</div>
-                        </div>
+                      {/* Form Header — centered logo + title */}
+                      <div className="border-b-2 border-slate-900 pb-3 flex flex-col items-center text-center gap-1">
+                        <img src="/uwin-logo.webp" alt="University of Windsor Logo" className="h-12 w-auto object-contain" />
+                        <div className="text-[10px] font-bold tracking-widest uppercase text-slate-700">University of Windsor</div>
+                        <h2 className="text-sm font-black uppercase text-slate-900 leading-tight">
+                          AQUATIC INCIDENT REPORTS
+                        </h2>
                       </div>
 
-                      {/* Metadata */}
-                      <div className="grid grid-cols-4 gap-2 border border-slate-900 p-2 text-[11px] bg-slate-50 font-medium">
-                        <div><strong>Room:</strong> RM {sopProject.room_number || ''}</div>
-                        <div><strong>Species:</strong> {sopProject.species || ''}</div>
-                        <div><strong>Date Est.:</strong> {dateEst}</div>
-                        <div><strong>Status:</strong> <span className="uppercase font-bold">{sopProject.status}</span></div>
+                      {/* Metadata — single 4-col row: Room | Species | PI | AUPP# */}
+                      <div className="grid grid-cols-4 gap-0 border border-slate-900 text-[11px] font-medium">
+                        <div className="border-r border-slate-900 p-2"><strong>Room:</strong> {sopProject.room_number || ''}</div>
+                        <div className="border-r border-slate-900 p-2"><strong>Species:</strong> {sopProject.species || ''}</div>
+                        <div className="border-r border-slate-900 p-2"><strong>PI:</strong> {sopProject.pi_name}</div>
+                        <div className="p-2"><strong>AUPP#:</strong> <span className="font-mono">{sopProject.aupp_number}</span></div>
                       </div>
+
 
                       <div className="overflow-x-auto">
                         <table className="w-full border-collapse border border-slate-900 text-left text-[10px]">
