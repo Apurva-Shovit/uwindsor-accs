@@ -124,15 +124,17 @@ export const Sidebar: React.FC = () => {
         </NavLink>
 
         {/* 10. Reports */}
-        <NavLink
-          end
-          to={isManagerPlus ? '/admin/reports' : '/staff/reports'}
-          title="Reports"
-          className={({ isActive }) => linkClass(isActive)}
-        >
-          <FileText className={`h-5 w-5 ${isSidebarOpen ? 'mr-3' : ''}`} />
-          {isSidebarOpen && <span>Reports</span>}
-        </NavLink>
+        {isManagerPlus && (
+          <NavLink
+            end
+            to="/admin/reports"
+            title="Reports"
+            className={({ isActive }) => linkClass(isActive)}
+          >
+            <FileText className={`h-5 w-5 ${isSidebarOpen ? 'mr-3' : ''}`} />
+            {isSidebarOpen && <span>Reports</span>}
+          </NavLink>
+        )}
 
         {/* 11. Audit Logs */}
         {isManagerPlus && (
