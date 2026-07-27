@@ -215,18 +215,19 @@ export const QuarantinePage: React.FC = () => {
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
                   <th className="p-3">Requested Date</th>
-                  <th className="p-3">Source & Target Tank</th>
+                  <th className="p-3">Source &amp; Target Tank</th>
                   <th className="p-3">Fish Count</th>
                   <th className="p-3">Urgency</th>
                   <th className="p-3">Reason</th>
                   <th className="p-3">Status</th>
+                  <th className="p-3">Authorized / Decision By</th>
                   <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
                 {exemptions.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-6 text-center text-sm font-medium text-slate-500">
+                    <td colSpan={8} className="p-6 text-center text-sm font-medium text-slate-500">
                       No exemption requests found.
                     </td>
                   </tr>
@@ -256,6 +257,29 @@ export const QuarantinePage: React.FC = () => {
                             {ex.status.toUpperCase()}
                           </span>
                         </td>
+                        <td className="p-3 whitespace-nowrap text-xs">
+                          {ex.status === 'pending' ? (
+                            <span className="text-slate-400 italic">Pending Review</span>
+                          ) : ex.status === 'approved' ? (
+                            <div>
+                              <span className="font-bold text-emerald-800">Approved by: {ex.decided_by_name || 'System Admin'}</span>
+                              {ex.decided_at && (
+                                <span className="block text-[10px] text-slate-500 font-mono">
+                                  {new Date(ex.decided_at).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <div>
+                              <span className="font-bold text-red-800">Rejected by: {ex.decided_by_name || 'System Admin'}</span>
+                              {ex.decided_at && (
+                                <span className="block text-[10px] text-slate-500 font-mono">
+                                  {new Date(ex.decided_at).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </td>
                         <td className="p-3 text-right whitespace-nowrap space-x-2">
                           {ex.status === 'pending' && isManagerPlus ? (
                             <div className="inline-flex items-center gap-2">
@@ -263,7 +287,7 @@ export const QuarantinePage: React.FC = () => {
                                 onClick={() => handleDecideExemption(exId, true)}
                                 className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-xs shadow-sm transition-colors"
                               >
-                                Accept & Transfer
+                                Accept &amp; Transfer
                               </button>
                               <button
                                 onClick={() => handleDecideExemption(exId, false)}
