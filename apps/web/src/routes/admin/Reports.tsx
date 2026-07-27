@@ -138,18 +138,40 @@ export const Reports: React.FC = () => {
     const printElement = document.getElementById('official-sop-print-area');
     if (!printElement) return;
 
-    let htmlContent = printElement.innerHTML;
+    // Collect all live CSS text from the current page (Vite-compiled Tailwind + component styles)
+    const styleSheetTexts: string[] = [];
+    for (let i = 0; i < document.styleSheets.length; i++) {
+      try {
+        const sheet = document.styleSheets[i];
+        const rules = sheet.cssRules || sheet.rules;
+        if (rules) {
+          let cssText = '';
+          for (let j = 0; j < rules.length; j++) {
+            cssText += rules[j].cssText + '\n';
+          }
+          styleSheetTexts.push(cssText);
+        }
+      } catch {
+        // Cross-origin stylesheet — skip
+      }
+    }
+
+    const allCSS = styleSheetTexts.join('\n');
     const origin = window.location.origin;
+    let htmlContent = printElement.innerHTML;
     htmlContent = htmlContent.replace(/src="\/uwin-logo\.webp"/g, `src="${origin}/uwin-logo.webp"`);
 
+    // Create iframe with real dimensions so browser renders the content properly
     const iframe = document.createElement('iframe');
     iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
+    iframe.style.top = '0';
+    iframe.style.left = '0';
+    iframe.style.width = '100vw';
+    iframe.style.height = '100vh';
+    iframe.style.zIndex = '-1';
     iframe.style.border = '0';
-
+    iframe.style.opacity = '0';
+    iframe.style.pointerEvents = 'none';
     document.body.appendChild(iframe);
 
     const doc = iframe.contentWindow?.document;
@@ -160,19 +182,16 @@ export const Reports: React.FC = () => {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>ACC Official Form Print</title>
+          <title>University of Windsor — ACC Official SOP Form</title>
           <style>
-            @import url('https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css');
+            ${allCSS}
             @page {
               size: landscape;
-              margin: 6mm;
+              margin: 8mm;
             }
             body {
-              font-family: system-ui, -apple-system, sans-serif;
               background: white !important;
               color: black !important;
-              margin: 0;
-              padding: 0;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
             }
@@ -180,34 +199,12 @@ export const Reports: React.FC = () => {
               break-after: page !important;
               page-break-after: always !important;
               margin-bottom: 0 !important;
-              padding-bottom: 0 !important;
             }
-            table {
-              width: 100% !important;
-              border-collapse: collapse !important;
-              border: 2px solid #000000 !important;
-              text-align: center !important;
-              font-size: 10px !important;
-            }
-            th, td {
-              border: 1px solid #000000 !important;
-              padding: 3px !important;
-            }
-            th {
-              background-color: #005596 !important;
-              color: white !important;
-              font-weight: bold !important;
-            }
-            .bg-rose-100 { background-color: #ffe4e6 !important; color: #881337 !important; }
-            .bg-emerald-100 { background-color: #d1fae5 !important; color: #065f46 !important; }
-            .bg-amber-100 { background-color: #fef3c7 !important; color: #92400e !important; }
-            .bg-slate-100 { background-color: #f1f5f9 !important; }
-            .bg-slate-50 { background-color: #f8fafc !important; }
-            img { max-height: 48px; width: auto; display: block; }
+            img { max-height: 50px !important; width: auto !important; }
           </style>
         </head>
         <body>
-          <div style="width: 100%;">
+          <div id="print-root">
             ${htmlContent}
           </div>
         </body>
@@ -215,40 +212,17 @@ export const Reports: React.FC = () => {
     `);
     doc.close();
 
-    const imgElements = doc.getElementsByTagName('img');
-    let loadedCount = 0;
-    const totalImages = imgElements.length;
-
-    const triggerPrint = () => {
-      iframe.contentWindow?.focus();
-      iframe.contentWindow?.print();
+    iframe.onload = () => {
       setTimeout(() => {
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
-      }, 1000);
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+        }, 1500);
+      }, 300);
     };
-
-    if (totalImages === 0) {
-      setTimeout(triggerPrint, 250);
-    } else {
-      for (let i = 0; i < totalImages; i++) {
-        const img = imgElements[i];
-        if (img.complete) {
-          loadedCount++;
-          if (loadedCount === totalImages) setTimeout(triggerPrint, 250);
-        } else {
-          img.onload = () => {
-            loadedCount++;
-            if (loadedCount === totalImages) setTimeout(triggerPrint, 250);
-          };
-          img.onerror = () => {
-            loadedCount++;
-            if (loadedCount === totalImages) setTimeout(triggerPrint, 250);
-          };
-        }
-      }
-    }
   };
 
   return (
