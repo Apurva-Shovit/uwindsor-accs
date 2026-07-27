@@ -823,87 +823,103 @@ export const Reports: React.FC = () => {
 
 
                 {/* Form 3: Aquatic Incident Report Form */}
-                {selectedForm === 'incidents' && (
-                  <div className="bg-white border-2 border-slate-900 p-6 shadow-sm text-slate-900 font-sans print:border-slate-900 print:p-2 space-y-4">
-                    {/* Form Header */}
-                    <div className="border-b-2 border-slate-900 pb-3 flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-3">
-                        <img src="/uwin-logo.webp" alt="University of Windsor Logo" className="h-12 w-auto object-contain" />
-                        <div>
-                          <div className="text-[10px] font-bold tracking-widest uppercase text-slate-700">University of Windsor</div>
-                          <h2 className="text-sm font-black uppercase text-slate-900 leading-tight">
-                            AQUATIC INCIDENT REPORTS
-                          </h2>
-                          <div className="text-[9px] font-semibold text-slate-600">
-                            Official Aquatic Health & Incident Monitoring Log
+                {selectedForm === 'incidents' && (() => {
+                  // Helper: format date as D/M/Y
+                  const fmtDMY = (dateStr: string | undefined) => {
+                    if (!dateStr) return '';
+                    const d = new Date(dateStr);
+                    if (isNaN(d.getTime())) return dateStr;
+                    return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+                  };
+                  const fmtTime = (dateStr: string | undefined) => {
+                    if (!dateStr) return '';
+                    const d = new Date(dateStr);
+                    if (isNaN(d.getTime())) return '';
+                    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                  };
+                  const dateEst = fmtDMY(sopProject.date_established || sopProject.created_at);
+
+                  return (
+                    <div className="bg-white border-2 border-slate-900 p-6 shadow-sm text-slate-900 font-sans print:border-slate-900 print:p-2 space-y-4">
+                      {/* Form Header */}
+                      <div className="border-b-2 border-slate-900 pb-3 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <img src="/uwin-logo.webp" alt="University of Windsor Logo" className="h-12 w-auto object-contain" />
+                          <div>
+                            <div className="text-[10px] font-bold tracking-widest uppercase text-slate-700">University of Windsor</div>
+                            <h2 className="text-sm font-black uppercase text-slate-900 leading-tight">
+                              AQUATIC INCIDENT REPORTS
+                            </h2>
+                            <div className="text-[9px] font-semibold text-slate-600">
+                              Official Aquatic Health &amp; Incident Monitoring Log
+                            </div>
                           </div>
                         </div>
+                        <div className="text-right text-[11px] border-l border-slate-400 pl-3 space-y-0.5">
+                          <div><strong>AUPP#:</strong> <span className="underline font-mono">{sopProject.aupp_number}</span></div>
+                          <div><strong>PI:</strong> {sopProject.pi_name}</div>
+                        </div>
                       </div>
-                      <div className="text-right text-[11px] border-l border-slate-400 pl-3 space-y-0.5">
-                        <div><strong>AUPP#:</strong> <span className="underline font-mono">{sopProject.aupp_number}</span></div>
-                        <div><strong>PI:</strong> {sopProject.pi_name}</div>
+
+                      {/* Metadata */}
+                      <div className="grid grid-cols-4 gap-2 border border-slate-900 p-2 text-[11px] bg-slate-50 font-medium">
+                        <div><strong>Room:</strong> RM {sopProject.room_number || ''}</div>
+                        <div><strong>Species:</strong> {sopProject.species || ''}</div>
+                        <div><strong>Date Est.:</strong> {dateEst}</div>
+                        <div><strong>Status:</strong> <span className="uppercase font-bold">{sopProject.status}</span></div>
                       </div>
-                    </div>
 
-                    {/* Metadata */}
-                    <div className="grid grid-cols-4 gap-2 border border-slate-900 p-2 text-[11px] bg-slate-50 font-medium">
-                      <div><strong>Room:</strong> RM {sopProject.room_number || '101'}</div>
-                      <div><strong>Species:</strong> {sopProject.species || 'Zebrafish'}</div>
-                      <div><strong>Date Range:</strong> {(!dateFrom && !dateTo) ? 'Past 1 Month (Auto)' : `${dateFrom || 'Start'} to ${dateTo || 'Today'}`}</div>
-                      <div><strong>Status:</strong> <span className="uppercase font-bold">{sopProject.status}</span></div>
-                    </div>
-
-                    <div className="overflow-x-auto space-y-4">
-                    <table className="w-full border-collapse border border-slate-900 text-left text-xs">
-                      <thead>
-                        <tr className="bg-slate-200 border-b border-slate-900 font-bold uppercase text-[10px] text-center">
-                          <th className="border border-slate-900 p-2">Date & Time</th>
-                          <th className="border border-slate-900 p-2">Tank #</th>
-                          <th className="border border-slate-900 p-2">Problem Description</th>
-                          <th className="border border-slate-900 p-2">Treatment / Solution</th>
-                          <th className="border border-slate-900 p-2">Aquatic Checked</th>
-                          <th className="border border-slate-900 p-2">Vet Contacted</th>
-                          <th className="border border-slate-900 p-2">Researcher Notified</th>
-                          <th className="border border-slate-900 p-2">Reporter</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sopIncidents.length === 0 ? (
-                          <tr>
-                            <td colSpan={8} className="p-4 text-slate-500 italic text-center border border-slate-900">
-                              No aquatic incidents reported for this period.
-                            </td>
-                          </tr>
-                        ) : (
-                          sopIncidents.map((inc: any) => (
-                            <tr key={inc.id} className="border-b border-slate-400">
-                              <td className="border border-slate-900 p-2 font-semibold whitespace-nowrap">{inc.date}</td>
-                              <td className="border border-slate-900 p-2 font-bold text-[#005596] text-center">{inc.tank_number}</td>
-                              <td className="border border-slate-900 p-2">{inc.description}</td>
-                              <td className="border border-slate-900 p-2">{inc.notes}</td>
-                              <td className="border border-slate-900 p-2 text-center font-bold">Yes</td>
-                              <td className="border border-slate-900 p-2 text-center font-bold">
-                                <span className={inc.vet_contacted === 'Yes' ? 'text-red-600' : ''}>{inc.vet_contacted}</span>
-                              </td>
-                              <td className="border border-slate-900 p-2 text-center font-bold">Yes</td>
-                              <td className="border border-slate-900 p-2 font-semibold text-slate-700">{inc.reported_by_name}</td>
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse border border-slate-900 text-left text-[10px]">
+                          <thead>
+                            <tr className="bg-slate-200 border-b border-slate-900 font-bold uppercase text-[10px] text-center">
+                              <th className="border border-slate-900 p-2 whitespace-nowrap">Date<br/><span className="font-normal text-[8px] normal-case">(D/M/Y)</span></th>
+                              <th className="border border-slate-900 p-2 whitespace-nowrap">Time</th>
+                              <th className="border border-slate-900 p-2 whitespace-nowrap">Date Est.<br/><span className="font-normal text-[8px] normal-case">(D/M/Y)</span></th>
+                              <th className="border border-slate-900 p-2">Tank #</th>
+                              <th className="border border-slate-900 p-2">Problem Description</th>
+                              <th className="border border-slate-900 p-2">Comments</th>
+                              <th className="border border-slate-900 p-2">Treatment / Solution</th>
+                              <th className="border border-slate-900 p-2">Aquatic Checked</th>
+                              <th className="border border-slate-900 p-2">Vet Contacted</th>
+                              <th className="border border-slate-900 p-2">Researcher Notified</th>
+                              <th className="border border-slate-900 p-2">Initials</th>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-
-                    <div className="mt-6 pt-4 border-t border-slate-900 grid grid-cols-2 gap-4 text-xs">
-                      <div>
-                        <strong>Facility Manager Signature:</strong> ___________________________
-                      </div>
-                      <div>
-                        <strong>Principal Investigator Signature:</strong> ___________________________
+                          </thead>
+                          <tbody>
+                            {sopIncidents.length === 0 ? (
+                              Array.from({ length: 8 }).map((_, i) => (
+                                <tr key={i} className="border-b border-slate-300 h-8">
+                                  {Array.from({ length: 11 }).map((_, j) => (
+                                    <td key={j} className="border border-slate-300 p-1">&nbsp;</td>
+                                  ))}
+                                </tr>
+                              ))
+                            ) : (
+                              sopIncidents.map((inc: any) => (
+                                <tr key={inc.id} className="border-b border-slate-400">
+                                  <td className="border border-slate-900 p-2 font-semibold whitespace-nowrap">{fmtDMY(inc.date || inc.created_at)}</td>
+                                  <td className="border border-slate-900 p-2 whitespace-nowrap text-slate-700">{fmtTime(inc.date || inc.created_at)}</td>
+                                  <td className="border border-slate-900 p-2 whitespace-nowrap text-slate-700">{dateEst}</td>
+                                  <td className="border border-slate-900 p-2 font-bold text-[#005596] text-center">{inc.tank_number}</td>
+                                  <td className="border border-slate-900 p-2">{inc.description}</td>
+                                  <td className="border border-slate-900 p-2 text-slate-600">{inc.comments || ''}</td>
+                                  <td className="border border-slate-900 p-2">{inc.notes}</td>
+                                  <td className="border border-slate-900 p-2 text-center font-bold">Yes</td>
+                                  <td className="border border-slate-900 p-2 text-center font-bold">
+                                    <span className={inc.vet_contacted === 'Yes' ? 'text-red-600' : ''}>{inc.vet_contacted}</span>
+                                  </td>
+                                  <td className="border border-slate-900 p-2 text-center font-bold">Yes</td>
+                                  <td className="border border-slate-900 p-2 font-semibold text-slate-700 whitespace-nowrap">{inc.reported_by_name || ''}</td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
-                  </div>
-                </div>
-              )}
+                  );
+                })()}
             </div>
           )}
         </div>
