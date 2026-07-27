@@ -87,10 +87,10 @@ class DashboardService:
                     "log_count": 0
                 }
             
-            params = wq.parameters or {}
-            ph_val = wq.pH if wq.pH is not None else params.get("ph") or params.get("pH")
-            temp_val = wq.temperature_celsius if wq.temperature_celsius is not None else params.get("temperature") or params.get("temperature_celsius")
-            do_val = wq.dissolved_oxygen if wq.dissolved_oxygen is not None else params.get("dissolved_oxygen") or params.get("do")
+            params = getattr(wq, "parameters", {}) or {}
+            ph_val = params.get("ph") if params.get("ph") is not None else params.get("pH")
+            temp_val = params.get("temperature") if params.get("temperature") is not None else (params.get("temperature_celsius") or params.get("temp"))
+            do_val = params.get("dissolved_oxygen") if params.get("dissolved_oxygen") is not None else params.get("do")
 
             if ph_val is not None:
                 try: daily_map[date_str]["ph_values"].append(float(ph_val))
