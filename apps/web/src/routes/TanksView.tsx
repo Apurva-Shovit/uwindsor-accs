@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getTanksSummary, createTank, deleteTank, getTankHistory, toggleTankQuarantine } from '../lib/api';
-
-
+import { useAuth } from '../context/AuthContext';
 import { Database, Plus } from 'lucide-react';
 
 interface TankSummary {
@@ -20,6 +19,9 @@ interface TanksViewProps {
 }
 
 export const TanksView: React.FC<TanksViewProps> = ({ isAdminMode = false }) => {
+  const { user } = useAuth();
+  const canDelete = ['super_admin', 'chair', 'admin'].includes(user?.role || '');
+
   const [tanks, setTanks] = useState<TankSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -408,7 +410,7 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-4 border-t border-border mt-4">
-                {isAdminMode && (
+                {isAdminMode && canDelete && (
                   <button
                     onClick={async () => {
                       if (!selectedTank) return;

@@ -6,14 +6,14 @@ from ..schemas.user import (
     UserRoleUpdate, UserStatusUpdate, UserTankAssignmentsUpdate
 )
 from ..services.user_service import UserService
-from ..core.permissions import get_current_user, require_manager_plus
+from ..core.permissions import get_current_user, require_chair_or_admin
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 @router.get("")
 async def list_all_users(
     status_filter: Optional[str] = Query(None),
-    current: User = Depends(require_manager_plus),
+    current: User = Depends(require_chair_or_admin),
 ):
     return await UserService.list_all_users(status_filter, current)
 
@@ -22,23 +22,23 @@ async def list_pending(current: User = Depends(get_current_user)):
     return await UserService.get_pending_users(current)
 
 @router.patch("/{user_id}/approve")
-async def approve_user(user_id: str, body: ApproveRequest, current: User = Depends(require_manager_plus)):
+async def approve_user(user_id: str, body: ApproveRequest, current: User = Depends(require_chair_or_admin)):
     role_value = await UserService.approve_user(user_id, body, current)
     return {"message": "User approved", "role": role_value}
 
 @router.patch("/{user_id}/reject")
-async def reject_user(user_id: str, body: RejectRequest, current: User = Depends(require_manager_plus)):
+async def reject_user(user_id: str, body: RejectRequest, current: User = Depends(require_chair_or_admin)):
     await UserService.reject_user(user_id, body, current)
     return {"message": "User rejected"}
 
 @router.patch("/{user_id}/role")
-async def update_user_role(user_id: str, body: UserRoleUpdate, current: User = Depends(require_manager_plus)):
+async def update_user_role(user_id: str, body: UserRoleUpdate, current: User = Depends(require_chair_or_admin)):
     return await UserService.update_user_role(user_id, body.role, current)
 
 @router.patch("/{user_id}/status")
-async def update_user_status(user_id: str, body: UserStatusUpdate, current: User = Depends(require_manager_plus)):
+async def update_user_status(user_id: str, body: UserStatusUpdate, current: User = Depends(require_chair_or_admin)):
     return await UserService.update_user_status(user_id, body.status, current)
 
 @router.patch("/{user_id}/tank-assignments")
-async def update_tank_assignments(user_id: str, body: UserTankAssignmentsUpdate, current: User = Depends(require_manager_plus)):
+async def update_tank_assignments(user_id: str, body: UserTankAssignmentsUpdate, current: User = Depends(require_chair_or_admin)):
     return await UserService.update_tank_assignments(user_id, body.assigned_tank_ids, current)

@@ -8,6 +8,7 @@ export const Sidebar: React.FC = () => {
   const { user } = useAuth();
   const { isSidebarOpen } = useSidebar();
   const isAdminOrChair = ['super_admin', 'chair', 'admin'].includes(user?.role || '');
+  const isManagerPlus = ['super_admin', 'chair', 'admin', 'manager'].includes(user?.role || '');
 
   const linkClass = (isActive: boolean) =>
     `flex items-center rounded-md text-sm font-medium transition-colors ${
@@ -26,7 +27,7 @@ export const Sidebar: React.FC = () => {
     >
       <nav className="space-y-1">
         {/* 1. Dashboard */}
-        {isAdminOrChair && (
+        {isManagerPlus && (
           <NavLink
             to="/admin/dashboard"
             title="Dashboard"
@@ -77,8 +78,8 @@ export const Sidebar: React.FC = () => {
           {isSidebarOpen && <span>Quarantine Monitor</span>}
         </NavLink>
 
-        {/* User Management */}
-        {['super_admin', 'chair', 'admin', 'manager'].includes(user?.role || '') && (
+        {/* User Management (Chair / Admin / Super Admin only) */}
+        {isAdminOrChair && (
           <NavLink
             to="/admin/users"
             title="User Management"
@@ -91,7 +92,7 @@ export const Sidebar: React.FC = () => {
 
         {/* 7. Tanks & Racks */}
         <NavLink
-          to={isAdminOrChair ? '/admin/facility' : '/staff/tanks'}
+          to={isManagerPlus ? '/admin/facility' : '/staff/tanks'}
           title="Tanks & Racks"
           className={({ isActive }) => linkClass(isActive)}
         >
@@ -101,7 +102,7 @@ export const Sidebar: React.FC = () => {
 
         {/* 8. Tank History Explorer */}
         <NavLink
-          to={isAdminOrChair ? '/admin/tanks/history' : '/staff/tanks/history'}
+          to={isManagerPlus ? '/admin/tanks/history' : '/staff/tanks/history'}
           title="Tank History Explorer"
           className={({ isActive }) => linkClass(isActive)}
         >
@@ -111,7 +112,7 @@ export const Sidebar: React.FC = () => {
 
         {/* 9. Research Projects */}
         <NavLink
-          to={isAdminOrChair ? '/admin/projects' : '/staff/projects'}
+          to={isManagerPlus ? '/admin/projects' : '/staff/projects'}
           title="Research Projects"
           className={({ isActive }) => linkClass(isActive)}
         >
@@ -121,7 +122,7 @@ export const Sidebar: React.FC = () => {
 
         {/* 10. Reports */}
         <NavLink
-          to={isAdminOrChair ? '/admin/reports' : '/staff/projects'}
+          to={isManagerPlus ? '/admin/reports' : '/staff/projects'}
           title="Reports"
           className={({ isActive }) => linkClass(isActive)}
         >
@@ -129,8 +130,8 @@ export const Sidebar: React.FC = () => {
           {isSidebarOpen && <span>Reports</span>}
         </NavLink>
 
-        {/* 11. Audit Logs (Admin/Chair only) */}
-        {isAdminOrChair && (
+        {/* 11. Audit Logs */}
+        {isManagerPlus && (
           <NavLink
             to="/admin/audit-logs"
             title="Audit Logs"

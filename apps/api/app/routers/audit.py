@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional
 
 from ..models.user import User, RoleEnum, AuditLog
-from ..core.permissions import require_chair_or_admin
+from ..core.permissions import require_manager_plus
 
 router = APIRouter(prefix="/audit-logs", tags=["audit-logs"])
 
@@ -16,7 +16,7 @@ async def get_audit_logs(
     date_to: Optional[datetime] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    current: User = Depends(require_chair_or_admin),
+    current: User = Depends(require_manager_plus),
 ):
     from ..services.audit_service import AuditService
     
