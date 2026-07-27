@@ -24,7 +24,7 @@ export const Login: React.FC = () => {
       if (['super_admin', 'chair', 'admin', 'manager'].includes(role)) {
         navigate('/admin');
       } else {
-        navigate('/staff');
+        navigate('/staff/tanks');
       }
     } catch (err: any) {
       if (err.response?.status === 403 && err.response?.data?.detail?.includes('pending')) {
