@@ -450,6 +450,7 @@ export const Reports: React.FC = () => {
 
                 {/* Form 1: Appendix 6 */}
                 {selectedForm === 'appendix6' && (() => {
+                  const cleanTankNum = (val: any) => String(val || '').replace(/tank\s*/i, '').trim();
                   const displayTanks = Array.from({ length: 14 }, (_, i) => String(i + 1));
                   const daysOfWeek = ['Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat', 'Sun'];
 
@@ -482,7 +483,7 @@ export const Reports: React.FC = () => {
                         </thead>
                         <tbody>
                           {displayTanks.map((tankNum: string) => {
-                            const tankLogs = sopWq.filter((w: any) => String(w.tank_number) === tankNum);
+                            const tankLogs = sopWq.filter((w: any) => cleanTankNum(w.tank_number) === cleanTankNum(tankNum));
                             const tankComment = tankLogs.find((w: any) => w.notes && w.notes !== '-')?.notes || '';
                             const tankLogger = tankLogs[0]?.logged_by_name?.slice(0, 3).toUpperCase() || '';
 
