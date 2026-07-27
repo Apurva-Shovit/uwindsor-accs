@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Users, LayoutDashboard, Database, Activity, ClipboardList, TrendingUp, RefreshCw, BookOpen, FileText } from 'lucide-react';
+import { Users, LayoutDashboard, Database, Activity, ClipboardList, TrendingUp, RefreshCw, BookOpen, FileText, ChevronDown, Fish } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSidebar } from '../../context/SidebarContext';
 
@@ -9,6 +9,7 @@ export const Sidebar: React.FC = () => {
   const { isSidebarOpen } = useSidebar();
   const isAdminOrChair = ['super_admin', 'chair', 'admin'].includes(user?.role || '');
   const isManagerPlus = ['super_admin', 'chair', 'admin', 'manager'].includes(user?.role || '');
+  const [isFishMgmtOpen, setIsFishMgmtOpen] = useState(true);
 
   const linkClass = (isActive: boolean) =>
     `flex items-center rounded-md text-sm font-medium transition-colors ${
@@ -38,45 +39,121 @@ export const Sidebar: React.FC = () => {
           </NavLink>
         )}
 
-        {/* 2. Daily Log Entry */}
-        <NavLink
-          to="/staff/log-entry"
-          title="Daily Log Entry"
-          className={({ isActive }) => linkClass(isActive)}
-        >
-          <ClipboardList className={`h-5 w-5 text-brandBlue ${isSidebarOpen ? 'mr-3' : ''}`} />
-          {isSidebarOpen && <span>Daily Log Entry</span>}
-        </NavLink>
+        {/* Fish Management Collapsible Group */}
+        {isManagerPlus ? (
+          <div className="space-y-1 py-1">
+            <button
+              onClick={() => setIsFishMgmtOpen((prev) => !prev)}
+              className={`w-full flex items-center justify-between rounded-md text-sm font-bold text-slate-700 hover:bg-slate-100 transition-colors ${
+                isSidebarOpen ? 'px-3 py-2' : 'p-2 justify-center'
+              }`}
+              title="Fish Management"
+            >
+              <div className="flex items-center gap-2">
+                <Fish className={`h-5 w-5 text-[#005596] ${isSidebarOpen ? 'mr-1' : ''}`} />
+                {isSidebarOpen && <span>Fish Management</span>}
+              </div>
+              {isSidebarOpen && (
+                <ChevronDown
+                  className={`h-4 w-4 text-slate-400 transition-transform duration-200 ${
+                    isFishMgmtOpen ? 'transform rotate-180' : ''
+                  }`}
+                />
+              )}
+            </button>
 
-        {/* 3. Population Census */}
-        <NavLink
-          to="/staff/census"
-          title="Population Census"
-          className={({ isActive }) => linkClass(isActive)}
-        >
-          <TrendingUp className={`h-5 w-5 text-emerald-600 ${isSidebarOpen ? 'mr-3' : ''}`} />
-          {isSidebarOpen && <span>Population Census</span>}
-        </NavLink>
+            {isFishMgmtOpen && (
+              <div className={`space-y-1 ${isSidebarOpen ? 'pl-2 border-l-2 border-slate-200 ml-3' : ''}`}>
+                {/* 2. Daily Log Entry */}
+                <NavLink
+                  end
+                  to="/staff/log-entry"
+                  title="Daily Log Entry"
+                  className={({ isActive }) => linkClass(isActive)}
+                >
+                  <ClipboardList className={`h-4 w-4 text-brandBlue ${isSidebarOpen ? 'mr-2.5' : ''}`} />
+                  {isSidebarOpen && <span className="text-xs font-semibold">Daily Log Entry</span>}
+                </NavLink>
 
-        {/* 4. Tank Transfers */}
-        <NavLink
-          to="/staff/transfers"
-          title="Tank Transfers"
-          className={({ isActive }) => linkClass(isActive)}
-        >
-          <RefreshCw className={`h-5 w-5 text-indigo-600 ${isSidebarOpen ? 'mr-3' : ''}`} />
-          {isSidebarOpen && <span>Tank Transfers</span>}
-        </NavLink>
+                {/* 3. Population Census */}
+                <NavLink
+                  end
+                  to="/staff/census"
+                  title="Population Census"
+                  className={({ isActive }) => linkClass(isActive)}
+                >
+                  <TrendingUp className={`h-4 w-4 text-emerald-600 ${isSidebarOpen ? 'mr-2.5' : ''}`} />
+                  {isSidebarOpen && <span className="text-xs font-semibold">Population Census</span>}
+                </NavLink>
 
-        {/* 5. Quarantine Monitor */}
-        <NavLink
-          to="/staff/quarantine"
-          title="Quarantine Monitor"
-          className={({ isActive }) => linkClass(isActive)}
-        >
-          <Activity className={`h-5 w-5 text-amber-600 ${isSidebarOpen ? 'mr-3' : ''}`} />
-          {isSidebarOpen && <span>Quarantine Monitor</span>}
-        </NavLink>
+                {/* 4. Tank Transfers */}
+                <NavLink
+                  end
+                  to="/staff/transfers"
+                  title="Tank Transfers"
+                  className={({ isActive }) => linkClass(isActive)}
+                >
+                  <RefreshCw className={`h-4 w-4 text-indigo-600 ${isSidebarOpen ? 'mr-2.5' : ''}`} />
+                  {isSidebarOpen && <span className="text-xs font-semibold">Tank Transfers</span>}
+                </NavLink>
+
+                {/* 5. Quarantine Monitor */}
+                <NavLink
+                  end
+                  to="/staff/quarantine"
+                  title="Quarantine Monitor"
+                  className={({ isActive }) => linkClass(isActive)}
+                >
+                  <Activity className={`h-4 w-4 text-amber-600 ${isSidebarOpen ? 'mr-2.5' : ''}`} />
+                  {isSidebarOpen && <span className="text-xs font-semibold">Quarantine Monitor</span>}
+                </NavLink>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Flat links for staff */}
+            <NavLink
+              end
+              to="/staff/log-entry"
+              title="Daily Log Entry"
+              className={({ isActive }) => linkClass(isActive)}
+            >
+              <ClipboardList className={`h-5 w-5 text-brandBlue ${isSidebarOpen ? 'mr-3' : ''}`} />
+              {isSidebarOpen && <span>Daily Log Entry</span>}
+            </NavLink>
+
+            <NavLink
+              end
+              to="/staff/census"
+              title="Population Census"
+              className={({ isActive }) => linkClass(isActive)}
+            >
+              <TrendingUp className={`h-5 w-5 text-emerald-600 ${isSidebarOpen ? 'mr-3' : ''}`} />
+              {isSidebarOpen && <span>Population Census</span>}
+            </NavLink>
+
+            <NavLink
+              end
+              to="/staff/transfers"
+              title="Tank Transfers"
+              className={({ isActive }) => linkClass(isActive)}
+            >
+              <RefreshCw className={`h-5 w-5 text-indigo-600 ${isSidebarOpen ? 'mr-3' : ''}`} />
+              {isSidebarOpen && <span>Tank Transfers</span>}
+            </NavLink>
+
+            <NavLink
+              end
+              to="/staff/quarantine"
+              title="Quarantine Monitor"
+              className={({ isActive }) => linkClass(isActive)}
+            >
+              <Activity className={`h-5 w-5 text-amber-600 ${isSidebarOpen ? 'mr-3' : ''}`} />
+              {isSidebarOpen && <span>Quarantine Monitor</span>}
+            </NavLink>
+          </>
+        )}
 
         {/* User Management (Chair / Admin / Super Admin only) */}
         {isAdminOrChair && (
