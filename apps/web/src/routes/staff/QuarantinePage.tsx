@@ -103,84 +103,99 @@ export const QuarantinePage: React.FC = () => {
     }
   };
 
+  const handleDecideExemption = async (exemptionId: string, approved: boolean) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:8000/quarantine/exemption/${exemptionId}/decide`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ approved })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to process exemption decision');
+      }
+      refetchExemptions();
+      refetchTanks();
+    } catch (err: any) {
+      alert(err.message || 'Error processing exemption decision');
+    }
+  };
+
+  const quarantinedTanks = tanks?.filter((t: any) => t.is_quarantined === true) || [];
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-start border-b border-slate-200 pb-4">
+      <div className="flex justify-between items-center border-b border-slate-200 pb-4">
         <div>
-          <h1 className="text-2xl font-bold text-[#005596] flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <ShieldAlert className="w-7 h-7 text-amber-600" />
-            14-Day Mandatory Quarantine Monitor
+            Quarantine & Biosecurity Monitoring
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Tracking isolation windows for newly acquired fish. Transfers are restricted during active quarantine unless authorized by Admin/Chair.
+            Track active quarantine isolations, biosecurity protocols, and special transfer exemptions.
           </p>
         </div>
+
         <button
           onClick={() => setIsModalOpen(true)}
-          className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-2 rounded-lg text-sm shadow-sm transition-colors flex items-center gap-2"
+          className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-semibold text-sm shadow transition-colors"
         >
-          <AlertTriangle className="w-4 h-4" />
-          Request Special Transfer Exemption
+          Request Transfer Exemption
         </button>
       </div>
 
-      {/* Active Quarantined Tanks */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
-        <h2 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2">
-          <Clock className="w-5 h-5 text-brandBlue" />
-          Currently Quarantined Tanks
-        </h2>
-        
-        {!tanks ? (
-          <div className="text-center py-4 text-slate-400 text-sm italic">Loading tanks...</div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {tanks.filter((t: any) => t.is_quarantined === true).map((t: any) => {
-              const start = new Date(t.quarantine_start_date);
-              const end = new Date(t.quarantine_end_date);
-              const now = new Date();
-              const daysLeft = Math.ceil((end.getTime() - now.getTime()) / (1000 * 3600 * 24));
-              
-              return (
-                <div key={t.id || t._id} className="border border-amber-200 bg-amber-50 rounded-lg p-4 flex flex-col gap-2">
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-amber-900 text-lg">Tank {t.tank_number}</span>
-                    <span className="bg-amber-200 text-amber-800 text-xs font-bold px-2 py-1 rounded">
-                      {daysLeft > 0 ? `${daysLeft} days left` : 'Expired'}
-                    </span>
-                  </div>
-                  <div className="text-xs text-amber-700">
-                    <div><strong>Started:</strong> {start.toLocaleDateString()}</div>
-                    <div><strong>Ends:</strong> {end.toLocaleDateString()}</div>
-                  </div>
-                  {isManagerPlus && (
-                    <button 
-                      onClick={() => {
-                        setLiftModalTank(t);
-                        setLiftVerification('');
-                      }}
-                      className="mt-2 text-xs font-bold w-full bg-white text-amber-700 border border-amber-300 py-1.5 rounded hover:bg-amber-100 transition-colors"
-                    >
-                      Lift Quarantine
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-            {tanks.filter((t: any) => t.is_quarantined === true).length === 0 && (
-              <div className="col-span-full text-center py-4 text-slate-400 text-sm italic">
-                No tanks are currently in quarantine.
-              </div>
-            )}
+      {/* Active Quarantined Tanks Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {quarantinedTanks.length === 0 ? (
+          <div className="col-span-full bg-emerald-50 border border-emerald-200 rounded-xl p-6 text-center text-emerald-800 font-semibold text-sm">
+            ✓ No tanks currently in quarantine. Facility status clear.
           </div>
+        ) : (
+          quarantinedTanks.map((tank: any) => {
+            const daysInQ = Math.floor(
+              (new Date().getTime() - new Date(tank.quarantine_start_date || Date.now()).getTime()) / (1000 * 3600 * 24)
+            );
+            return (
+              <div key={tank.id || tank._id} className="bg-white border-2 border-amber-500/40 rounded-xl p-4 shadow-sm space-y-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className="text-xs font-bold text-amber-700 uppercase tracking-wider block">Quarantined Tank</span>
+                    <h3 className="text-lg font-black text-slate-900">Tank {tank.tank_number}</h3>
+                  </div>
+                  <span className="px-2 py-1 bg-amber-100 text-amber-800 text-[10px] font-extrabold uppercase rounded-full">
+                    Day {daysInQ}
+                  </span>
+                </div>
+
+                <div className="text-xs text-slate-600 space-y-1 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                  <div><strong>Room:</strong> RM {tank.room_number || 'N/A'}</div>
+                  <div><strong>Start Date:</strong> {new Date(tank.quarantine_start_date).toLocaleDateString()}</div>
+                  <div><strong>Expected End:</strong> {tank.quarantine_end_date ? new Date(tank.quarantine_end_date).toLocaleDateString() : 'Indefinite'}</div>
+                </div>
+
+                {isManagerPlus && (
+                  <button
+                    onClick={() => setLiftModalTank(tank)}
+                    className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors shadow-sm"
+                  >
+                    Lift Quarantine Status
+                  </button>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
 
       {/* Quarantine Exemption Requests Table */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
         <h2 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-3">
-          Special Exemption Requests History
+          Special Exemption Requests History & Decision Queue
         </h2>
 
         {!exemptions || exemptions.length === 0 ? (
@@ -198,41 +213,67 @@ export const QuarantinePage: React.FC = () => {
                   <th className="p-3">Urgency</th>
                   <th className="p-3">Reason</th>
                   <th className="p-3">Status</th>
+                  <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
                 {exemptions.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-6 text-center text-sm font-medium text-slate-500">
+                    <td colSpan={7} className="p-6 text-center text-sm font-medium text-slate-500">
                       No exemption requests found.
                     </td>
                   </tr>
                 ) : (
-                  exemptions.map((ex: any) => (
-                    <tr key={ex.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-3 font-medium text-slate-900 whitespace-nowrap">
-                        {new Date(ex.requested_at).toLocaleDateString()}
-                      </td>
-                      <td className="p-3 font-semibold text-slate-700">
-                        Tank {tanks?.find((t: any) => (t.id || (t as any)._id) === ex.tank_id)?.tank_number || 'Unknown'} → Tank {tanks?.find((t: any) => (t.id || (t as any)._id) === ex.target_tank_id)?.tank_number || 'Unknown'}
-                      </td>
-                      <td className="p-3 font-bold text-slate-800">{ex.count} fish</td>
-                      <td className="p-3 uppercase text-xs font-bold text-amber-600">{ex.urgency}</td>
-                      <td className="p-3 text-slate-600 text-xs max-w-xs">{ex.reason}</td>
-                      <td className="p-3 whitespace-nowrap">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                          ex.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                          ex.status === 'rejected' ? 'bg-red-50 text-red-700 border border-red-200' :
-                          'bg-amber-50 text-amber-700 border border-amber-200 animate-pulse'
-                        }`}>
-                          {ex.status === 'approved' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
-                          {ex.status === 'rejected' && <XCircle className="w-3.5 h-3.5 text-red-600" />}
-                          {ex.status === 'pending' && <Clock className="w-3.5 h-3.5 text-amber-600" />}
-                          {ex.status.toUpperCase()}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
+                  exemptions.map((ex: any) => {
+                    const exId = ex.id || ex._id;
+                    return (
+                      <tr key={exId} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-3 font-medium text-slate-900 whitespace-nowrap">
+                          {new Date(ex.requested_at).toLocaleDateString()}
+                        </td>
+                        <td className="p-3 font-semibold text-slate-700">
+                          Tank {tanks?.find((t: any) => (t.id || (t as any)._id) === ex.tank_id)?.tank_number || 'Unknown'} → Tank {tanks?.find((t: any) => (t.id || (t as any)._id) === ex.target_tank_id)?.tank_number || 'Unknown'}
+                        </td>
+                        <td className="p-3 font-bold text-slate-800">{ex.fish_count || ex.count} fish</td>
+                        <td className="p-3 uppercase text-xs font-bold text-amber-600">{ex.urgency}</td>
+                        <td className="p-3 text-slate-600 text-xs max-w-xs">{ex.reason}</td>
+                        <td className="p-3 whitespace-nowrap">
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                            ex.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                            ex.status === 'rejected' ? 'bg-red-50 text-red-700 border border-red-200' :
+                            'bg-amber-50 text-amber-700 border border-amber-200 animate-pulse'
+                          }`}>
+                            {ex.status === 'approved' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
+                            {ex.status === 'rejected' && <XCircle className="w-3.5 h-3.5 text-red-600" />}
+                            {ex.status === 'pending' && <Clock className="w-3.5 h-3.5 text-amber-600" />}
+                            {ex.status.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right whitespace-nowrap space-x-2">
+                          {ex.status === 'pending' && isManagerPlus ? (
+                            <div className="inline-flex items-center gap-2">
+                              <button
+                                onClick={() => handleDecideExemption(exId, true)}
+                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-xs shadow-sm transition-colors"
+                              >
+                                Accept & Transfer
+                              </button>
+                              <button
+                                onClick={() => handleDecideExemption(exId, false)}
+                                className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded text-xs shadow-sm transition-colors"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400 italic">
+                              {ex.status === 'approved' ? 'Transferred' : ex.status === 'rejected' ? 'Rejected' : 'No Action'}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

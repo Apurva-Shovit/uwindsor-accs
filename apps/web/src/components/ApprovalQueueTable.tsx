@@ -186,6 +186,149 @@ export const ApprovalQueueTable: React.FC = () => {
         </div>
       )}
 
+      {/* Pending Quarantine Exemption Requests Section */}
+      <PendingQuarantineExemptionsSection />
+    </div>
+  );
+};
+
+const PendingQuarantineExemptionsSection: React.FC = () => {
+  const [exemptions, setExemptions] = useState<any[]>([]);
+  const [tanks, setTanks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchExemptions = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const [exRes, tanksRes] = await Promise.all([
+        fetch('http://localhost:8000/quarantine/exemptions?status_filter=pending', {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch('http://localhost:8000/facilities-structure/tanks/summary', {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      ]);
+      if (exRes.ok) {
+        const data = await exRes.json();
+        setExemptions(data);
+      }
+      if (tanksRes.ok) {
+        const tData = await tanksRes.json();
+        setTanks(tData);
+      }
+    } catch (err) {
+      console.error('Failed to load pending exemptions', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchExemptions();
+  }, []);
+
+  const handleDecide = async (id: string, approved: boolean) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:8000/quarantine/exemption/${id}/decide`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ approved })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to decide exemption request');
+      }
+      fetchExemptions();
+    } catch (err: any) {
+      alert(err.message || 'Error processing exemption decision');
+    }
+  };
+
+  return (
+    <div className="space-y-4 pt-6 border-t border-slate-200">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900">Quarantine Transfer Exemption Requests</h2>
+          <p className="text-sm text-slate-500">Review and authorize special fish transfers out of quarantine isolations.</p>
+        </div>
+        <button
+          onClick={fetchExemptions}
+          className="rounded-md bg-white border border-border px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          Refresh Queue
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex py-6 justify-center">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-amber-600 border-t-transparent"></div>
+        </div>
+      ) : exemptions.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-white p-8 text-center">
+          <p className="text-sm text-slate-500 italic">No pending quarantine transfer exemption requests.</p>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          <table className="min-w-full divide-y divide-slate-200 text-sm">
+            <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px]">
+              <tr>
+                <th className="px-4 py-3 text-left">Requested Date</th>
+                <th className="px-4 py-3 text-left">Source → Target Tank</th>
+                <th className="px-4 py-3 text-left">Fish Count</th>
+                <th className="px-4 py-3 text-left">Urgency</th>
+                <th className="px-4 py-3 text-left">Reason</th>
+                <th className="px-4 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 font-medium">
+              {exemptions.map((ex: any) => {
+                const exId = ex.id || ex._id;
+                const sourceNum = tanks.find((t: any) => (t.id || t._id) === ex.tank_id)?.tank_number || 'Unknown';
+                const targetNum = tanks.find((t: any) => (t.id || t._id) === ex.target_tank_id)?.tank_number || 'Unknown';
+                return (
+                  <tr key={exId} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 font-mono text-xs text-slate-600 whitespace-nowrap">
+                      {new Date(ex.requested_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-3 font-bold text-slate-900">
+                      Tank {sourceNum} → Tank {targetNum}
+                    </td>
+                    <td className="px-4 py-3 font-bold text-[#005596]">
+                      {ex.fish_count || ex.count} fish
+                    </td>
+                    <td className="px-4 py-3 uppercase text-xs font-bold text-amber-600">
+                      {ex.urgency}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-600 max-w-xs">
+                      {ex.reason}
+                    </td>
+                    <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
+                      <button
+                        onClick={() => handleDecide(exId, true)}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-md shadow-sm transition-colors"
+                      >
+                        Accept &amp; Transfer
+                      </button>
+                      <button
+                        onClick={() => handleDecide(exId, false)}
+                        className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-md shadow-sm transition-colors"
+                      >
+                        Reject
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* Approve Modal */}
       {selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
