@@ -2,6 +2,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 from fastapi import HTTPException
 from ..models.user import User, RoleEnum, StatusEnum, AuditLog
+from ..models.facility import Tank
 from ..schemas.user import ApproveRequest, RejectRequest, PendingUserResponse
 from ..repositories.user_repository import UserRepository
 from ..repositories.audit_repository import AuditRepository
