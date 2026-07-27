@@ -11,6 +11,7 @@ import { ProjectReportPage } from '../ProjectReportPage';
 import { CensusPage } from './CensusPage';
 import { TransferPage } from './TransferPage';
 import { QuarantinePage } from './QuarantinePage';
+import { TankHistoryPage } from '../admin/TankHistoryPage';
 
 export const StaffLayout: React.FC = () => {
   return (
@@ -21,6 +22,7 @@ export const StaffLayout: React.FC = () => {
         <main className="flex-1 p-6">
           <Routes>
             <Route path="tanks" element={<TanksView />} />
+            <Route path="tanks/history" element={<TankHistoryPage />} />
             <Route path="log-entry" element={<LogEntryPage />} />
             <Route path="projects" element={<ProjectDetailsPage />} />
             <Route path="projects/:id/report" element={<ProjectReportPage />} />
