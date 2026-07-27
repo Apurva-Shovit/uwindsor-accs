@@ -1,24 +1,40 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getProjects, getTanks, api } from '../lib/api';
-import { Printer, FileText, ArrowLeft } from 'lucide-react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { getProjects, api } from '../lib/api';
+import { Printer, FileText, Calendar, Filter, ArrowLeft } from 'lucide-react';
 
 export const OfficialFormsReportPage: React.FC = () => {
-  const [selectedForm, setSelectedForm] = useState<'appendix6' | 'appendix7' | 'incidents'>('appendix6');
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
-  const [selectedWeek, setSelectedWeek] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const initialProjectId = searchParams.get('project_id') || '';
+  const initialForm = (searchParams.get('form') as any) || 'appendix6';
+
+  const [selectedForm, setSelectedForm] = useState<'appendix6' | 'appendix7' | 'incidents'>(initialForm);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(initialProjectId);
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
 
   const { data: projectsData } = useQuery({
     queryKey: ['projectsList'],
     queryFn: async () => (await getProjects()).data
   });
 
+  // Effective filtering: if no custom start/end date specified, auto-filter past 1 month ('30d')
+  const timePeriodParam = (!startDate && !endDate) ? '30d' : 'all';
+
   const { data: reportData, isLoading } = useQuery({
-    queryKey: ['officialSopReport', selectedProjectId, selectedForm, selectedWeek],
+    queryKey: ['officialSopReport', selectedProjectId, selectedForm, timePeriodParam, startDate, endDate],
     queryFn: async () => {
       if (!selectedProjectId) return null;
       const res = await api.get(`/projects/${selectedProjectId}/report`, {
-        params: { time_period: 'all', page: 1, limit: 100 }
+        params: {
+          time_period: timePeriodParam,
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
+          page: 1,
+          limit: 100
+        }
       });
       return res.data;
     },
@@ -29,7 +45,7 @@ export const OfficialFormsReportPage: React.FC = () => {
     if (projectsData && projectsData.length > 0 && !selectedProjectId) {
       setSelectedProjectId(projectsData[0].id || projectsData[0]._id);
     }
-  }, [projectsData]);
+  }, [projectsData, selectedProjectId]);
 
   const project = reportData?.project;
   const occupiedTanks = reportData?.occupied_tanks || [];
@@ -42,6 +58,12 @@ export const OfficialFormsReportPage: React.FC = () => {
       <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4 print:hidden">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
           <div>
+            <button
+              onClick={() => navigate(-1)}
+              className="flex items-center text-xs font-bold text-[#005596] hover:underline mb-2"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 mr-1" /> Back
+            </button>
             <h1 className="text-xl font-extrabold text-[#005596] flex items-center gap-2">
               <FileText className="w-6 h-6 text-[#005596]" />
               Official Computerized ACC SOP Form Reports
@@ -51,23 +73,30 @@ export const OfficialFormsReportPage: React.FC = () => {
             </p>
           </div>
 
-          <button
-            onClick={() => window.print()}
-            disabled={!selectedProjectId}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#005596] text-white font-extrabold text-xs rounded-xl shadow hover:bg-blue-800 disabled:opacity-50 transition-colors"
-          >
-            <Printer className="w-4 h-4" /> Print Populated SOP Form
-          </button>
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-[#005596]" />
+              {(!startDate && !endDate) ? 'Auto-Filtered: Past 1 Month (Default)' : `Range: ${startDate || 'Start'} to ${endDate || 'Today'}`}
+            </span>
+
+            <button
+              onClick={() => window.print()}
+              disabled={!selectedProjectId}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#005596] text-white font-extrabold text-xs rounded-xl shadow hover:bg-blue-800 disabled:opacity-50 transition-colors"
+            >
+              <Printer className="w-4 h-4" /> Print Populated SOP Form
+            </button>
+          </div>
         </div>
 
-        {/* Filters */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-semibold">
+        {/* Filters Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs font-semibold">
           <div>
-            <label className="block text-[10px] font-extrabold text-slate-400 uppercase mb-1">Select SOP Form Template</label>
+            <label className="block text-[10px] font-extrabold text-slate-400 uppercase mb-1">SOP Form Template</label>
             <select
               value={selectedForm}
               onChange={e => setSelectedForm(e.target.value as any)}
-              className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-bold text-slate-800 shadow-sm focus:ring-2 focus:ring-[#005596]"
+              className="w-full rounded-xl border border-slate-300 bg-white p-2 text-xs font-bold text-slate-800 shadow-sm focus:ring-2 focus:ring-[#005596]"
             >
               <option value="appendix6">Appendix 6: Daily Water Quality Log Sheet</option>
               <option value="appendix7">Appendix 7: Water Quality Test Strip Log Sheet</option>
@@ -76,11 +105,11 @@ export const OfficialFormsReportPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-[10px] font-extrabold text-slate-400 uppercase mb-1">Select Research Project / AUPP</label>
+            <label className="block text-[10px] font-extrabold text-slate-400 uppercase mb-1">Research Project / AUPP</label>
             <select
               value={selectedProjectId}
               onChange={e => setSelectedProjectId(e.target.value)}
-              className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-bold text-slate-800 shadow-sm focus:ring-2 focus:ring-[#005596]"
+              className="w-full rounded-xl border border-slate-300 bg-white p-2 text-xs font-bold text-slate-800 shadow-sm focus:ring-2 focus:ring-[#005596]"
             >
               {projectsData?.map((p: any) => (
                 <option key={p.id || p._id} value={p.id || p._id}>
@@ -91,13 +120,33 @@ export const OfficialFormsReportPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-[10px] font-extrabold text-slate-400 uppercase mb-1">Week Of / Date</label>
+            <label className="block text-[10px] font-extrabold text-slate-400 uppercase mb-1">From Date (Optional)</label>
             <input
               type="date"
-              value={selectedWeek}
-              onChange={e => setSelectedWeek(e.target.value)}
-              className="w-full rounded-xl border border-slate-300 bg-white p-2 text-xs font-bold text-slate-800 shadow-sm focus:ring-2 focus:ring-[#005596]"
+              value={startDate}
+              onChange={e => setStartDate(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 bg-white p-1.5 text-xs font-bold text-slate-800 shadow-sm focus:ring-2 focus:ring-[#005596]"
             />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-extrabold text-slate-400 uppercase mb-1">To Date (Optional)</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={endDate}
+                onChange={e => setEndDate(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-white p-1.5 text-xs font-bold text-slate-800 shadow-sm focus:ring-2 focus:ring-[#005596]"
+              />
+              {(startDate || endDate) && (
+                <button
+                  onClick={() => { setStartDate(''); setEndDate(''); }}
+                  className="text-[10px] text-red-600 font-bold hover:underline whitespace-nowrap"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

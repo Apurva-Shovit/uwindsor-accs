@@ -159,6 +159,13 @@ export const ProjectReportPage: React.FC = () => {
           )}
 
           <button
+            onClick={() => navigate(`/staff/sop-forms?project_id=${id}`)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-700 text-white font-bold text-xs rounded-xl shadow hover:bg-emerald-800 transition-colors mt-3 sm:mt-0"
+          >
+            <FileText className="w-4 h-4" /> Official SOP Form (1-Month Auto)
+          </button>
+
+          <button
             onClick={() => window.print()}
             className="flex items-center gap-2 px-4 py-2.5 bg-[#005596] text-white font-bold text-xs rounded-xl shadow hover:bg-blue-800 transition-colors mt-3 sm:mt-0"
           >
