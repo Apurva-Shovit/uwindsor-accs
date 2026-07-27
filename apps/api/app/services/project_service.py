@@ -121,7 +121,7 @@ class ProjectService:
 
         p_data = p.model_dump(mode="json")
         p_data["id"] = str(p.id)
-        p_data["pi_name"] = await EntityResolver.resolve_user_name(p.pi_id)
+        p_data["pi_name"] = getattr(p, "pi_name", None) or await EntityResolver.resolve_user_name(getattr(p, "pi_id", None)) or "N/A"
 
         # Calculate time period cutoff
         now = datetime.now(timezone.utc)
