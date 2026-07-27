@@ -138,91 +138,57 @@ export const Reports: React.FC = () => {
     const printElement = document.getElementById('official-sop-print-area');
     if (!printElement) return;
 
-    // Collect all live CSS text from the current page (Vite-compiled Tailwind + component styles)
-    const styleSheetTexts: string[] = [];
-    for (let i = 0; i < document.styleSheets.length; i++) {
-      try {
-        const sheet = document.styleSheets[i];
-        const rules = sheet.cssRules || sheet.rules;
-        if (rules) {
-          let cssText = '';
-          for (let j = 0; j < rules.length; j++) {
-            cssText += rules[j].cssText + '\n';
-          }
-          styleSheetTexts.push(cssText);
+    // 1. Clone the real rendered DOM node (deep clone keeps all inline styles/computed classes)
+    const cloned = printElement.cloneNode(true) as HTMLElement;
+    cloned.id = 'sop-print-portal';
+    cloned.style.display = 'block';
+    cloned.style.position = 'fixed';
+    cloned.style.top = '0';
+    cloned.style.left = '0';
+    cloned.style.width = '100%';
+    cloned.style.zIndex = '999999';
+    cloned.style.background = 'white';
+
+    // 2. Inject a print-only style tag that hides all body children except our portal
+    const style = document.createElement('style');
+    style.id = 'sop-print-override';
+    style.textContent = `
+      @media print {
+        @page { size: landscape; margin: 8mm; }
+        body > *:not(#sop-print-portal) { display: none !important; visibility: hidden !important; }
+        #sop-print-portal {
+          display: block !important;
+          visibility: visible !important;
+          position: static !important;
+          width: 100% !important;
+          z-index: 0 !important;
         }
-      } catch {
-        // Cross-origin stylesheet — skip
+        #sop-print-portal * { visibility: visible !important; }
+        .page-break {
+          break-after: page !important;
+          page-break-after: always !important;
+          margin-bottom: 0 !important;
+        }
+        img { max-height: 50px !important; width: auto !important; }
       }
-    }
+    `;
 
-    const allCSS = styleSheetTexts.join('\n');
-    const origin = window.location.origin;
-    let htmlContent = printElement.innerHTML;
-    htmlContent = htmlContent.replace(/src="\/uwin-logo\.webp"/g, `src="${origin}/uwin-logo.webp"`);
+    document.head.appendChild(style);
+    document.body.appendChild(cloned);
 
-    // Create iframe with real dimensions so browser renders the content properly
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.top = '0';
-    iframe.style.left = '0';
-    iframe.style.width = '100vw';
-    iframe.style.height = '100vh';
-    iframe.style.zIndex = '-1';
-    iframe.style.border = '0';
-    iframe.style.opacity = '0';
-    iframe.style.pointerEvents = 'none';
-    document.body.appendChild(iframe);
-
-    const doc = iframe.contentWindow?.document;
-    if (!doc) return;
-
-    doc.open();
-    doc.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>University of Windsor — ACC Official SOP Form</title>
-          <style>
-            ${allCSS}
-            @page {
-              size: landscape;
-              margin: 8mm;
-            }
-            body {
-              background: white !important;
-              color: black !important;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-            .page-break {
-              break-after: page !important;
-              page-break-after: always !important;
-              margin-bottom: 0 !important;
-            }
-            img { max-height: 50px !important; width: auto !important; }
-          </style>
-        </head>
-        <body>
-          <div id="print-root">
-            ${htmlContent}
-          </div>
-        </body>
-      </html>
-    `);
-    doc.close();
-
-    iframe.onload = () => {
-      setTimeout(() => {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
+    // 3. Give browser one frame to paint before printing
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.print();
+        // 4. Cleanup after print dialog closes
         setTimeout(() => {
-          if (document.body.contains(iframe)) {
-            document.body.removeChild(iframe);
-          }
-        }, 1500);
-      }, 300);
-    };
+          const portal = document.getElementById('sop-print-portal');
+          const override = document.getElementById('sop-print-override');
+          if (portal) document.body.removeChild(portal);
+          if (override) document.head.removeChild(override);
+        }, 500);
+      });
+    });
   };
 
   return (
