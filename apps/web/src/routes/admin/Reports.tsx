@@ -509,8 +509,26 @@ export const Reports: React.FC = () => {
                     return new Date(date.setDate(diff));
                   };
 
-                  const startDateObj = dateFrom ? new Date(dateFrom + 'T00:00:00') : new Date(Date.now() - 30 * 86400 * 1000);
-                  const endDateObj = dateTo ? new Date(dateTo + 'T23:59:59') : new Date();
+                  let startDateObj: Date;
+                  let endDateObj: Date;
+
+                  if (dateFrom || dateTo) {
+                    startDateObj = dateFrom ? new Date(dateFrom + 'T00:00:00') : new Date(Date.now() - 28 * 86400 * 1000);
+                    endDateObj = dateTo ? new Date(dateTo + 'T23:59:59') : new Date();
+                  } else {
+                    // Default mode: Current week + past 3 weeks (Exactly 4 calendar weeks)
+                    const currentMonday = getMonday(new Date());
+                    const threeWeeksAgoMonday = new Date(currentMonday);
+                    threeWeeksAgoMonday.setDate(threeWeeksAgoMonday.getDate() - 21);
+                    threeWeeksAgoMonday.setHours(0, 0, 0, 0);
+
+                    const currentSunday = new Date(currentMonday);
+                    currentSunday.setDate(currentSunday.getDate() + 6);
+                    currentSunday.setHours(23, 59, 59, 999);
+
+                    startDateObj = threeWeeksAgoMonday;
+                    endDateObj = currentSunday;
+                  }
 
                   const weekPages = [];
                   let currMon = getMonday(startDateObj);
