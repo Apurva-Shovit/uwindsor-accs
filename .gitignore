@@ -1,23 +1,31 @@
-# Node modules
+# Node modules & build artifacts
 node_modules/
 dist/
 build/
+.vite/
 .env
+.env.*
+*.log
 
-# Python
+# Python virtualenvs & cache
 __pycache__/
 *.py[cod]
 *$py.class
 venv/
 .venv/
 env/
-.env
 
 # OS files
 .DS_Store
 Thumbs.db
 
-# Root Scratch Scripts
+# Agent Customization & Documentation Exclusions
+.agents/
+.gemini/
+.antigravity/
+docs/
+
+# Root Scratch & Helper Scripts
 check_rooms.py
 fix_rooms.py
 fix_stuck_projects.py
@@ -26,5 +34,7 @@ migrate_facility.py
 reset_db.py
 test_db.py
 test_login.py
+test_close.py
 update_password.py
+
 
