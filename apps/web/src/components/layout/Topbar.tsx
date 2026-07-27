@@ -8,7 +8,7 @@ export const Topbar: React.FC = () => {
   const { toggleSidebar } = useSidebar();
 
   return (
-    <header className="flex h-16 w-full items-center justify-between border-b border-border bg-white px-6 shadow-sm">
+    <header className="flex h-16 flex-shrink-0 z-40 w-full items-center justify-between border-b border-border bg-white px-6 shadow-sm">
       <div className="flex items-center space-x-3">
         <button
           onClick={toggleSidebar}

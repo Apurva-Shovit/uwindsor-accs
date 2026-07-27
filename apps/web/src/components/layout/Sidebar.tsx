@@ -22,7 +22,7 @@ export const Sidebar: React.FC = () => {
 
   return (
     <aside
-      className={`border-r border-border bg-white transition-all duration-300 ease-in-out ${
+      className={`border-r border-border bg-white transition-all duration-300 ease-in-out h-full overflow-y-auto flex-shrink-0 ${
         isSidebarOpen ? 'w-64 p-4' : 'w-16 p-2'
       }`}
     >

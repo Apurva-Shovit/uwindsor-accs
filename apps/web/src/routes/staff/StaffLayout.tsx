@@ -15,11 +15,11 @@ import { TankHistoryPage } from '../admin/TankHistoryPage';
 
 export const StaffLayout: React.FC = () => {
   return (
-    <div className="flex flex-col min-h-screen bg-surface">
+    <div className="flex flex-col h-screen overflow-hidden bg-surface">
       <Topbar />
-      <div className="flex flex-1">
+      <div className="flex flex-1 overflow-hidden">
         <Sidebar />
-        <main className="flex-1 p-6">
+        <main className="flex-1 overflow-y-auto p-6">
           <Routes>
             <Route path="tanks" element={<TanksView />} />
             <Route path="tanks/history" element={<TankHistoryPage />} />
