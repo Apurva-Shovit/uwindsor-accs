@@ -1,4 +1,4 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 from fastapi import HTTPException
 from ..models.user import User, RoleEnum, StatusEnum, AuditLog

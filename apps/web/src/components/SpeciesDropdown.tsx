@@ -40,8 +40,6 @@ const SpeciesDropdown: React.FC<SpeciesDropdownProps> = ({ species, setSpecies }
     }
   };
 
-  const selectedValue = showOtherInput ? 'Other' : (speciesList.includes(species) ? species : '');
-
   const handleAddNewSpecies = async () => {
     if (!newSpecies.trim()) return;
     try {
@@ -55,14 +53,16 @@ const SpeciesDropdown: React.FC<SpeciesDropdownProps> = ({ species, setSpecies }
     }
   };
 
+  const selectedValue = showOtherInput ? 'Other' : species;
+
   return (
     <div className="space-y-2">
       <select
         value={selectedValue}
         onChange={handleSelectChange}
-        className="w-full rounded border border-border px-3 py-1.5 text-xs focus:outline-none focus:border-brandBlue"
+        className="w-full rounded border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#005596]"
       >
-        <option value="" disabled>
+        <option value="">
           Select species
         </option>
         {speciesList.map((s) => (
@@ -70,7 +70,12 @@ const SpeciesDropdown: React.FC<SpeciesDropdownProps> = ({ species, setSpecies }
             {s}
           </option>
         ))}
-        <option value="Other">Other</option>
+        {species && !speciesList.includes(species) && (
+          <option value={species}>
+            {species}
+          </option>
+        )}
+        <option value="Other">+ Add Other Species...</option>
       </select>
 
       {showOtherInput && (
