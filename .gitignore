@@ -2,9 +2,10 @@
 node_modules/
 dist/
 build/
-.vite/
+# Environment & Logs
 .env
 .env.*
+!.env.example
 *.log
 
 # Python virtualenvs & cache
