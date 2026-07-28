@@ -113,8 +113,6 @@ export const TankHistoryPage: React.FC = () => {
               <option value="">All Categories</option>
               <option value="census">Census Events</option>
               <option value="quarantine">Quarantine Events</option>
-              <option value="quarantine_placed">Quarantine Placed</option>
-              <option value="quarantine_lifted">Quarantine Lifted</option>
               <option value="water_quality">Water Quality</option>
               <option value="incident">Incidents</option>
             </select>
