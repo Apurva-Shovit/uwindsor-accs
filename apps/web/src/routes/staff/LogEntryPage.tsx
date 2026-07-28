@@ -25,6 +25,7 @@ const fieldLabel: Record<string, string> = {
 const safeRangeHint: Record<string, string> = {
   nitrate: '0–40 ppm', nitrite: '0 ppm', hardness: '20–450 ppm',
   chlorine: '0 ppm', alkalinity: '120–180 ppm', ph: '6.5–9.0', ammonia: '0–0.5 ppm',
+  temperature: '0–40 °C', dissolved_oxygen: '5.0–15.0 mg/L',
 };
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
@@ -103,6 +104,7 @@ function WaterQualityForm({ tanks }: { tanks: Tank[] }) {
   const [date, setDate] = useState(today());
   const [ph, setPh] = useState('');
   const [temp, setTemp] = useState('');
+  const [dissolvedOxygen, setDissolvedOxygen] = useState('');
   const [comments, setComments] = useState('');
   const [loading, setLoading] = useState(false);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
@@ -113,14 +115,17 @@ function WaterQualityForm({ tanks }: { tanks: Tank[] }) {
     e.preventDefault();
     setLoading(true); setError(''); setValidation(null);
     try {
+      const params: Record<string, number> = { ph: +ph, temperature: +temp };
+      if (dissolvedOxygen !== '') params.dissolved_oxygen = +dissolvedOxygen;
+
       const res = await postWaterQualityLog({
         tank_id: tankId, type: 'daily', date,
-        parameters: { ph: +ph, temperature: +temp },
+        parameters: params,
         comments: comments || undefined,
       });
       setValidation(res.data.validation);
       setToast('Daily log created!');
-      setPh(''); setTemp(''); setComments('');
+      setPh(''); setTemp(''); setDissolvedOxygen(''); setComments('');
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Submission failed');
     } finally {
@@ -139,9 +144,10 @@ function WaterQualityForm({ tanks }: { tanks: Tank[] }) {
             className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brandBlue" required />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <FieldInput label={fieldLabel.ph} name="ph" value={ph} onChange={setPh} result={validation || undefined} />
-        <FieldInput label={fieldLabel.temperature} name="temperature" value={temp} onChange={setTemp} result={validation || undefined} />
+      <div className="grid grid-cols-3 gap-4">
+        <FieldInput label={fieldLabel.ph} name="ph" value={ph} onChange={setPh} hint={safeRangeHint.ph} result={validation || undefined} />
+        <FieldInput label={fieldLabel.temperature} name="temperature" value={temp} onChange={setTemp} hint={safeRangeHint.temperature} result={validation || undefined} />
+        <FieldInput label={fieldLabel.dissolved_oxygen} name="dissolved_oxygen" value={dissolvedOxygen} onChange={setDissolvedOxygen} hint={safeRangeHint.dissolved_oxygen} result={validation || undefined} />
       </div>
       <div>
         <label className="block text-xs font-semibold text-textSecondary uppercase tracking-wide mb-1">Comments</label>
