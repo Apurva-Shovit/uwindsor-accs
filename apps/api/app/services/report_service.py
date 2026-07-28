@@ -102,7 +102,7 @@ class ReportService:
                 "created_at": inc.created_at.isoformat(),
             })
 
-        # Census Events
+        # Census & Quarantine Events
         census_query: dict = {}
         if tank_id: census_query["tank_id"] = tank_id
         if project_id: census_query["project_id"] = project_id
@@ -112,13 +112,21 @@ class ReportService:
             fac_name, room_name, tank_name, log_fac_id = resolve_location(c.tank_id)
             if facility_id and log_fac_id != facility_id: continue
             proj_obj = proj_map.get(str(c.project_id)) if c.project_id else None
+            is_quarantine_ev = c.event_type in ("quarantine_placed", "quarantine_lifted")
+            event_type_name = "Quarantine" if is_quarantine_ev else "Census"
+            if is_quarantine_ev:
+                action_label = "Quarantine Placed" if c.event_type == "quarantine_placed" else "Quarantine Lifted"
+                summary_str = f"{action_label}: {c.reason or 'Biosecurity Isolation'}"
+            else:
+                summary_str = f"{c.event_type}: {c.change}"
+
             results.append({
                 "date": c.date.isoformat(),
                 "facility": fac_name, "room": room_name, "tank": tank_name,
                 "project": c.project_id or "",
                 "aupp_number": proj_obj.aupp_number if proj_obj else "N/A",
-                "event_type": "Census",
-                "summary": f"{c.event_type}: {c.change}",
+                "event_type": event_type_name,
+                "summary": summary_str,
                 "performed_by": c.created_by,
                 "created_at": c.created_at.isoformat(),
             })

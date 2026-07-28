@@ -270,6 +270,7 @@ export const Reports: React.FC = () => {
             >
               <option value="">All Events</option>
               <option value="Census">Census</option>
+              <option value="Quarantine">Quarantine</option>
               <option value="Water Quality">Water Quality</option>
               <option value="Incident">Incident</option>
               <option value="Project Closure">Project Closure</option>
@@ -348,10 +349,10 @@ export const Reports: React.FC = () => {
                         {row.aupp_number || 'N/A'}
                       </span>
                     </td>
-                    <td className="p-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    <td className="p-4 whitespace-nowrap">                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         row.event_type === 'Incident' ? 'bg-red-50 text-red-700 border border-red-100' :
                         row.event_type === 'Water Quality' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
+                        row.event_type === 'Quarantine' ? 'bg-amber-50 text-amber-800 border border-amber-200' :
                         row.event_type === 'Project Closure' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
                         'bg-blue-50 text-blue-700 border border-blue-100'
                       }`}>
@@ -384,6 +385,7 @@ export const Reports: React.FC = () => {
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${
                       row.event_type === 'Incident' ? 'bg-red-50 text-red-700 border-red-100' :
                       row.event_type === 'Water Quality' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                      row.event_type === 'Quarantine' ? 'bg-amber-50 text-amber-800 border-amber-200' :
                       row.event_type === 'Project Closure' ? 'bg-amber-50 text-amber-700 border-amber-100' :
                       'bg-blue-50 text-blue-700 border-blue-100'
                     }`}>
