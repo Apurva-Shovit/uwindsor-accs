@@ -496,8 +496,11 @@ export const ProjectReportPage: React.FC = () => {
                     <tr className="bg-teal-50/50 border-b border-slate-200 text-teal-900 font-bold uppercase">
                       <th className="p-3">Timestamp</th>
                       <th className="p-3">Tank</th>
+                      <th className="p-3">Log Type</th>
                       <th className="p-3">pH</th>
                       <th className="p-3">Temp (°C)</th>
+                      <th className="p-3">Dissolved Oxygen</th>
+                      <th className="p-3">Comments / Notes</th>
                       <th className="p-3">Logged By</th>
                     </tr>
                   </thead>
@@ -505,9 +508,20 @@ export const ProjectReportPage: React.FC = () => {
                     {water_quality_logs.map((wq: any) => (
                       <tr key={wq.id} className="hover:bg-slate-50">
                         <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">{wq.date}</td>
-                        <td className="p-3 font-bold text-slate-800">{wq.tank_number}</td>
+                        <td className="p-3 font-bold text-slate-800">Tank {wq.tank_number}</td>
+                        <td className="p-3 capitalize">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            wq.type === 'daily' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
+                          }`}>
+                            {wq.type === 'test_strip' ? 'Test Strip' : 'Daily Log'}
+                          </span>
+                        </td>
                         <td className="p-3 font-bold text-teal-700">{wq.pH ?? 'N/A'}</td>
                         <td className="p-3 font-bold text-teal-700">{wq.temperature_celsius ? `${wq.temperature_celsius}°C` : 'N/A'}</td>
+                        <td className="p-3 font-bold text-teal-700">
+                          {wq.dissolved_oxygen !== null && wq.dissolved_oxygen !== undefined ? `${wq.dissolved_oxygen} mg/L` : 'N/A'}
+                        </td>
+                        <td className="p-3 text-slate-600 max-w-xs truncate">{wq.notes || '-'}</td>
                         <td className="p-3 text-slate-700 font-semibold">{wq.logged_by_name}</td>
                       </tr>
                     ))}
