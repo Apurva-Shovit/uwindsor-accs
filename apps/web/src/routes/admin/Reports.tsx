@@ -118,7 +118,7 @@ export const Reports: React.FC = () => {
       if (dateFrom) params.append('start_date', dateFrom);
       if (dateTo) params.append('end_date', dateTo);
       params.append('page', '1');
-      params.append('limit', '100');
+      params.append('limit', '1000');
 
       const res = await fetch(`http://localhost:8000/projects/${selectedProjectId}/report?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` }

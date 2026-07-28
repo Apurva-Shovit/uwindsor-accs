@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException, status
+from beanie.operators import In, Or
 from ..models.user import User, AuditLog, RoleEnum
 from ..models.project import Project
 from ..models.tank_assignment import TankAssignment
@@ -295,18 +296,16 @@ class ProjectService:
                 "date": inc_date
             })
 
-        # 4. Water quality logs for assigned tanks (Daily logs only)
+        # 4. Water quality logs for assigned tanks (Daily and Test Strip logs)
         wq_logs = []
         wq_records = []
         if assigned_tank_ids:
             try:
-                wq_records = await WaterQualityLog.find({
-                    "type": "daily",
-                    "$or": [{"project_id": project_id}, {"tank_id": {"$in": assigned_tank_ids}}]
-                }).to_list()
+                wq_records = await WaterQualityLog.find(
+                    Or(In(WaterQualityLog.project_id, [project_id]), In(WaterQualityLog.tank_id, assigned_tank_ids))
+                ).to_list()
             except Exception:
-                all_wq = await WaterQualityLog.find_all().to_list()
-                wq_records = [w for w in all_wq if getattr(w, "type", "daily") == "daily" and (getattr(w, "project_id", None) == project_id or getattr(w, "tank_id", None) in assigned_tank_ids)]
+                wq_records = await WaterQualityLog.find(In(WaterQualityLog.tank_id, assigned_tank_ids)).to_list()
 
         wq_records.sort(key=lambda x: get_dt(x) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
 
