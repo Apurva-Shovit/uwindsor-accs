@@ -114,19 +114,18 @@ class FacilityService:
         if not ta:
             ta = await TankAssignment.find_one({"tank_id": tank_id})
         
-        if ta:
-            q_ev = CensusEvent(
-                project_id=ta.project_id,
-                tank_assignment_id=str(ta.id),
-                tank_id=tank_id,
-                date=date.today(),
-                event_type="quarantine_placed" if is_quarantined else "quarantine_lifted",
-                change=0,
-                reason="Mandatory 14-day Biosecurity Quarantine Initiated" if is_quarantined else "Quarantine Period Completed & Cleared",
-                notes=f"Quarantine {'initiated' if is_quarantined else 'cleared'} by {current_user.first_name} {current_user.last_name}",
-                created_by=str(current_user.id),
-            )
-            await q_ev.insert()
+        q_ev = CensusEvent(
+            project_id=ta.project_id if ta else "",
+            tank_assignment_id=str(ta.id) if ta else "",
+            tank_id=tank_id,
+            date=date.today(),
+            event_type="quarantine_placed" if is_quarantined else "quarantine_lifted",
+            change=0,
+            reason="Mandatory 14-day Biosecurity Quarantine Initiated" if is_quarantined else "Quarantine Period Completed & Cleared",
+            notes=f"Quarantine {'initiated' if is_quarantined else 'cleared'} by {current_user.first_name} {current_user.last_name}",
+            created_by=str(current_user.id),
+        )
+        await q_ev.insert()
         
         return t
 

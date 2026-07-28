@@ -159,6 +159,40 @@ class ReportService:
                 "created_at": closed_at.isoformat() if closed_at else "",
             })
 
+        # AuditLog Quarantine Toggles (for unassigned tanks or direct audit records)
+        from ..models.user import AuditLog
+        aud_query: dict = {"action": {"$in": ["placed_in_quarantine", "lifted_quarantine", "tank_quarantine_toggle"]}}
+        if tank_id: aud_query["entity_id"] = tank_id
+        q_audits = await AuditLog.find(aud_query).to_list()
+        
+        existing_q_keys = set()
+        for r in results:
+            if r.get("event_type") == "Quarantine":
+                existing_q_keys.add((r.get("tank"), r.get("created_at", "")[:16]))
+
+        for a in q_audits:
+            a_dt = a.created_at
+            if not date_filter({"date": a_dt}): continue
+            fac_name, room_name, tank_name, log_fac_id = resolve_location(a.entity_id)
+            if facility_id and log_fac_id != facility_id: continue
+            
+            key = (tank_name, a_dt.isoformat()[:16])
+            if key in existing_q_keys: continue
+
+            is_placed = a.action == "placed_in_quarantine" or (isinstance(a.after, dict) and a.after.get("is_quarantined") is True)
+            action_label = "Quarantine Placed" if is_placed else "Quarantine Lifted"
+            
+            results.append({
+                "date": a_dt.isoformat(),
+                "facility": fac_name, "room": room_name, "tank": tank_name,
+                "project": "",
+                "aupp_number": "N/A",
+                "event_type": "Quarantine",
+                "summary": f"{action_label}: Biosecurity isolation toggle",
+                "performed_by": a.actor_id,
+                "created_at": a_dt.isoformat(),
+            })
+
         results.sort(key=lambda x: x.get("created_at") or x["date"], reverse=True)
 
         user_ids = {r["performed_by"] for r in results if r.get("performed_by")}
