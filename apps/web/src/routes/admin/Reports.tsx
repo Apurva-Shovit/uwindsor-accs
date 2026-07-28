@@ -703,8 +703,8 @@ export const Reports: React.FC = () => {
                     (w.parameters && (w.parameters.nitrate != null || w.parameters.hardness != null || w.parameters.nitrite != null || w.parameters.chlorine != null || w.parameters.ammonia != null))
                   );
 
-                  // Chunk into pages of 14 records per page
-                  const pageSize = 14;
+                  // Chunk into pages of 10 records per page
+                  const pageSize = 10;
                   const pages = [];
                   if (testStripLogs.length === 0) {
                     pages.push([]);
@@ -717,7 +717,7 @@ export const Reports: React.FC = () => {
                   return (
                     <div className="space-y-8 print:space-y-0">
                       {pages.map((pageLogs, pageIdx) => {
-                        const paddingCount = Math.max(0, 14 - pageLogs.length);
+                        const paddingCount = Math.max(0, 10 - pageLogs.length);
 
                         return (
                           <div
