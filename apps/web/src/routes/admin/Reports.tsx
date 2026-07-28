@@ -106,8 +106,8 @@ export const Reports: React.FC = () => {
     }
   }, [projectsList, selectedProjectId]);
 
-  // Official Report Data query (defaults to 30d if dateFrom/dateTo empty)
-  const timePeriodParam = (!dateFrom && !dateTo) ? '30d' : 'all';
+  // Official Report Data query (fetches all available project logs for generator)
+  const timePeriodParam = 'all';
   const { data: sopReportData } = useQuery({
     queryKey: ['sopReportData', selectedProjectId, timePeriodParam, dateFrom, dateTo],
     queryFn: async () => {
@@ -516,20 +516,20 @@ export const Reports: React.FC = () => {
                   let endDateObj: Date;
 
                   if (dateFrom || dateTo) {
-                    startDateObj = dateFrom ? new Date(dateFrom + 'T00:00:00') : new Date(Date.now() - 28 * 86400 * 1000);
+                    startDateObj = dateFrom ? new Date(dateFrom + 'T00:00:00') : new Date(Date.now() - 35 * 86400 * 1000);
                     endDateObj = dateTo ? new Date(dateTo + 'T23:59:59') : new Date();
                   } else {
-                    // Default mode: Current week + past 3 weeks (Exactly 4 calendar weeks)
+                    // Default mode: Current week + past 4 weeks (Includes June 29)
                     const currentMonday = getMonday(new Date());
-                    const threeWeeksAgoMonday = new Date(currentMonday);
-                    threeWeeksAgoMonday.setDate(threeWeeksAgoMonday.getDate() - 21);
-                    threeWeeksAgoMonday.setHours(0, 0, 0, 0);
+                    const fourWeeksAgoMonday = new Date(currentMonday);
+                    fourWeeksAgoMonday.setDate(fourWeeksAgoMonday.getDate() - 28);
+                    fourWeeksAgoMonday.setHours(0, 0, 0, 0);
 
                     const currentSunday = new Date(currentMonday);
                     currentSunday.setDate(currentSunday.getDate() + 6);
                     currentSunday.setHours(23, 59, 59, 999);
 
-                    startDateObj = threeWeeksAgoMonday;
+                    startDateObj = fourWeeksAgoMonday;
                     endDateObj = currentSunday;
                   }
 
