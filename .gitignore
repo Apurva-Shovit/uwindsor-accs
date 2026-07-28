@@ -27,6 +27,7 @@ Thumbs.db
 docs/
 
 # Root Scratch & Helper Scripts
+scratch/
 check_rooms.py
 fix_rooms.py
 fix_stuck_projects.py
