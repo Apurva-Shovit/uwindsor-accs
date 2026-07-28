@@ -182,13 +182,14 @@ class ReportService:
             is_placed = a.action == "placed_in_quarantine" or (isinstance(a.after, dict) and a.after.get("is_quarantined") is True)
             action_label = "Quarantine Placed" if is_placed else "Quarantine Lifted"
             
+            detail_reason = "Manual Biosecurity Quarantine Initiated" if is_placed else "Manually Lifted Prior to Expiration"
             results.append({
                 "date": a_dt.isoformat(),
                 "facility": fac_name, "room": room_name, "tank": tank_name,
                 "project": "",
                 "aupp_number": "N/A",
                 "event_type": "Quarantine",
-                "summary": f"{action_label}: Biosecurity isolation toggle",
+                "summary": f"{action_label}: {detail_reason}",
                 "performed_by": a.actor_id,
                 "created_at": a_dt.isoformat(),
             })

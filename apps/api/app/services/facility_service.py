@@ -121,8 +121,8 @@ class FacilityService:
             date=date.today(),
             event_type="quarantine_placed" if is_quarantined else "quarantine_lifted",
             change=0,
-            reason="Mandatory 14-day Biosecurity Quarantine Initiated" if is_quarantined else "Quarantine Period Completed & Cleared",
-            notes=f"Quarantine {'initiated' if is_quarantined else 'cleared'} by {current_user.first_name} {current_user.last_name}",
+            reason="Manual Biosecurity Quarantine Initiated" if is_quarantined else "Manually Lifted Prior to Expiration",
+            notes=f"Quarantine {'manually initiated' if is_quarantined else 'manually lifted'} by {current_user.first_name} {current_user.last_name}",
             created_by=str(current_user.id),
         )
         await q_ev.insert()
