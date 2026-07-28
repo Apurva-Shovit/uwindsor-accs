@@ -137,7 +137,7 @@ async def seed_data():
     project = Project(
         title="Lake Erie Yellow Perch Restoration Study",
         pi_name="Trevor Pitcher",
-        aupp_number="AUPP-2026-0628",
+        aupp_number="26-01",
         status="active",
         created_by=str(users_by_email["trevorp@uwindsor.ca"].id),
         created_at=start_dt,
