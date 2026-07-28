@@ -3,7 +3,16 @@ import React from 'react';
 export const formatDate = (dateStr: string | null | undefined): string => {
   if (!dateStr) return '-';
   try {
-    const d = new Date(dateStr);
+    let str = String(dateStr).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+      const [y, m, d] = str.split('-').map(Number);
+      const dt = new Date(y, m - 1, d);
+      return dt.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+    }
+    if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(str) && !/[Z+-]\d{2}:?\d{2}$/.test(str) && !str.endsWith('Z')) {
+      str = str.replace(' ', 'T') + 'Z';
+    }
+    const d = new Date(str);
     if (isNaN(d.getTime())) return String(dateStr);
     return d.toLocaleString('en-US', { 
       weekday: 'short', 
@@ -11,7 +20,8 @@ export const formatDate = (dateStr: string | null | undefined): string => {
       month: 'short', 
       day: 'numeric', 
       hour: '2-digit', 
-      minute: '2-digit' 
+      minute: '2-digit',
+      hour12: true
     });
   } catch {
     return String(dateStr);
