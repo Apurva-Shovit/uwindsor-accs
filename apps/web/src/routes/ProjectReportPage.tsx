@@ -57,7 +57,7 @@ export const ProjectReportPage: React.FC = () => {
     );
   }
 
-  const { project, summary, occupied_tanks, deaths, deaths_meta, incidents, incidents_meta, census_events, census_meta, water_quality_logs, water_quality_meta, audit_logs, audit_meta } = data;
+  const { project, summary, occupied_tanks, deaths, deaths_meta, incidents, incidents_meta, census_events, census_meta, quarantine_events = [], quarantine_meta, water_quality_logs, water_quality_meta, audit_logs, audit_meta } = data;
 
   const PaginationControls = ({ meta }: { meta: any }) => {
     if (!meta || meta.total_pages <= 1) return null;
@@ -288,6 +288,14 @@ export const ProjectReportPage: React.FC = () => {
           Census History ({census_events.length})
         </button>
         <button
+          onClick={() => setActiveTab('quarantine')}
+          className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
+            activeTab === 'quarantine' ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+          }`}
+        >
+          Quarantine History ({quarantine_events.length})
+        </button>
+        <button
           onClick={() => setActiveTab('water_quality')}
           className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
             activeTab === 'water_quality' ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -477,6 +485,61 @@ export const ProjectReportPage: React.FC = () => {
                 </table>
               </div>
               <PaginationControls meta={census_meta} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Quarantine History */}
+      {activeTab === 'quarantine' && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-amber-900">Quarantine & Biosecurity History Logs</h3>
+            <span className="text-xs font-bold text-amber-800 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
+              Total Quarantine Events: {quarantine_events.length}
+            </span>
+          </div>
+          {quarantine_events.length === 0 ? (
+            <p className="text-xs text-slate-500 italic p-4 text-center">No quarantine placement or lifting events recorded for this project.</p>
+          ) : (
+            <div className="space-y-3">
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-amber-50/50 border-b border-slate-200 text-amber-900 font-bold uppercase">
+                      <th className="p-3">Timestamp</th>
+                      <th className="p-3">Tank</th>
+                      <th className="p-3">Action</th>
+                      <th className="p-3">Reason / Details</th>
+                      <th className="p-3">Comments / Notes</th>
+                      <th className="p-3">Authorized By</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium">
+                    {quarantine_events.map((q: any) => (
+                      <tr key={q.id} className="hover:bg-slate-50">
+                        <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">{q.date}</td>
+                        <td className="p-3 font-bold text-slate-800">Tank {q.tank_number}</td>
+                        <td className="p-3 whitespace-nowrap">
+                          {q.event_type === 'quarantine_placed' ? (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                              Quarantine Placed
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              Quarantine Lifted
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 text-slate-700">{q.reason || '-'}</td>
+                        <td className="p-3 text-slate-600 max-w-xs truncate">{q.notes || '-'}</td>
+                        <td className="p-3 text-slate-700 font-semibold">{q.actor_name}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <PaginationControls meta={quarantine_meta} />
             </div>
           )}
         </div>

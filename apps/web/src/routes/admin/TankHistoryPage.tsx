@@ -112,6 +112,9 @@ export const TankHistoryPage: React.FC = () => {
             >
               <option value="">All Categories</option>
               <option value="census">Census Events</option>
+              <option value="quarantine">Quarantine Events</option>
+              <option value="quarantine_placed">Quarantine Placed</option>
+              <option value="quarantine_lifted">Quarantine Lifted</option>
               <option value="water_quality">Water Quality</option>
               <option value="incident">Incidents</option>
             </select>
@@ -194,14 +197,21 @@ export const TankHistoryPage: React.FC = () => {
                     <td className="p-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         row.category === 'Census' ? 'bg-purple-50 text-purple-700 border border-purple-200' :
+                        row.category === 'Quarantine' ? 'bg-amber-50 text-amber-800 border border-amber-300' :
                         row.category === 'Water Quality' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
                         'bg-red-50 text-red-700 border border-red-200'
                       }`}>
                         {row.category}
                       </span>
                     </td>
-                    <td className="p-4 font-medium text-slate-700 capitalize whitespace-nowrap">
-                      {row.event_type}
+                    <td className="p-4 font-medium text-slate-700 whitespace-nowrap">
+                      {row.event_type === 'quarantine_placed' ? (
+                        <span className="px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-800">Quarantine Placed</span>
+                      ) : row.event_type === 'quarantine_lifted' ? (
+                        <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-800">Quarantine Lifted</span>
+                      ) : (
+                        <span className="capitalize">{String(row.event_type).replace('_', ' ')}</span>
+                      )}
                     </td>
                     <td className="p-4 text-slate-800 max-w-md font-mono text-xs">
                       {row.details}

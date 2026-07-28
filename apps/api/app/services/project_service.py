@@ -197,12 +197,13 @@ class ProjectService:
                 "status": tank.status if tank else "active"
             })
 
-        # 2. Census events (all & deaths)
+        # 2. Census events (all & deaths & quarantine)
         census_events = await CensusEvent.find({"project_id": project_id}).to_list()
         census_events.sort(key=lambda x: get_dt(x) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
 
         census_list = []
         deaths_list = []
+        quarantine_list = []
         total_deaths = 0
 
         for c in census_events:
@@ -238,6 +239,19 @@ class ProjectService:
                     "notes": c.notes or "-",
                     "date": date_str,
                     "reported_by_name": actor or "Unknown User"
+                })
+
+            if c.event_type in ["quarantine_placed", "quarantine_lifted"]:
+                quarantine_list.append({
+                    "id": str(c.id),
+                    "event_type": c.event_type,
+                    "action_name": "Quarantine Placed" if c.event_type == "quarantine_placed" else "Quarantine Lifted",
+                    "tank_number": tank_num,
+                    "reason": c.reason or "-",
+                    "notes": c.notes or "-",
+                    "date": date_str,
+                    "actor_name": actor or "Unknown User",
+                    "created_at": c.created_at.isoformat() if getattr(c, "created_at", None) else None
                 })
 
         # 3. Incident reports
@@ -385,6 +399,7 @@ class ProjectService:
         p_deaths, deaths_meta = paginate(deaths_list)
         p_incidents, incidents_meta = paginate(incidents_list)
         p_census, census_meta = paginate(census_list)
+        p_quarantine, quarantine_meta = paginate(quarantine_list)
         p_wq, wq_meta = paginate(wq_logs)
         p_audits, audits_meta = paginate(audit_list)
 
@@ -396,6 +411,7 @@ class ProjectService:
                 "total_deaths": total_deaths,
                 "total_incidents": len(incidents_list),
                 "total_census_events": len(census_list),
+                "total_quarantine_events": len(quarantine_list),
                 "total_wq_logs": len(wq_logs),
                 "total_audits": len(audit_list)
             },
@@ -407,6 +423,8 @@ class ProjectService:
             "incidents_meta": incidents_meta,
             "census_events": p_census,
             "census_meta": census_meta,
+            "quarantine_events": p_quarantine,
+            "quarantine_meta": quarantine_meta,
             "water_quality_logs": p_wq,
             "water_quality_meta": wq_meta,
             "audit_logs": p_audits,

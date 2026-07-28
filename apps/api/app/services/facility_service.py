@@ -108,6 +108,25 @@ class FacilityService:
             before=before,
             after=t.model_dump(mode="json")
         ))
+
+        # Emit explicit quarantine CensusEvent for report timelines
+        ta = await TankAssignment.find_one({"tank_id": tank_id, "current_count": {"$gt": 0}})
+        if not ta:
+            ta = await TankAssignment.find_one({"tank_id": tank_id})
+        
+        if ta:
+            q_ev = CensusEvent(
+                project_id=ta.project_id,
+                tank_assignment_id=str(ta.id),
+                tank_id=tank_id,
+                date=date.today(),
+                event_type="quarantine_placed" if is_quarantined else "quarantine_lifted",
+                change=0,
+                reason="Mandatory 14-day Biosecurity Quarantine Initiated" if is_quarantined else "Quarantine Period Completed & Cleared",
+                notes=f"Quarantine {'initiated' if is_quarantined else 'cleared'} by {current_user.first_name} {current_user.last_name}",
+                created_by=str(current_user.id),
+            )
+            await q_ev.insert()
         
         return t
 
@@ -264,21 +283,31 @@ class FacilityService:
         df = datetime.fromisoformat(date_from).date() if date_from else None
         dt = datetime.fromisoformat(date_to).date() if date_to else None
 
-        # 1. Census Events
-        if not event_type or event_type == "census":
+        # 1. Census & Quarantine Events
+        if not event_type or event_type in ["census", "quarantine", "quarantine_placed", "quarantine_lifted"]:
             c_query = {"tank_id": {"$in": target_tank_ids}}
             census = await CensusEvent.find(c_query).to_list()
             for ev in census:
+                is_quarantine_ev = ev.event_type in ["quarantine_placed", "quarantine_lifted"]
+                if event_type == "census" and is_quarantine_ev:
+                    continue
+                if event_type == "quarantine" and not is_quarantine_ev:
+                    continue
+                if event_type in ["quarantine_placed", "quarantine_lifted"] and ev.event_type != event_type:
+                    continue
+
                 if df and ev.date < df: continue
                 if dt and ev.date > dt: continue
                 t_num = tank_map.get(ev.tank_id, "Unknown")
+                category_name = "Quarantine" if is_quarantine_ev else "Census"
+                details_str = f"Status: {ev.reason or 'Quarantine Action'}" if is_quarantine_ev else f"Change: {ev.change:+d} | Reason: {ev.reason or 'N/A'}"
                 item = {
                     "id": str(ev.id),
                     "tank_id": ev.tank_id,
                     "tank_number": t_num,
-                    "category": "Census",
+                    "category": category_name,
                     "event_type": ev.event_type,
-                    "details": f"Change: {ev.change:+d} | Reason: {ev.reason or 'N/A'}",
+                    "details": details_str,
                     "notes": ev.notes or "",
                     "date": str(ev.date),
                     "created_by": ev.created_by,

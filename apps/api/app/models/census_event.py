@@ -18,7 +18,9 @@ class CensusEvent(Document):
         "transfer_in",
         "transfer_out",
         "hatch",
-        "manual_adjustment"
+        "manual_adjustment",
+        "quarantine_placed",
+        "quarantine_lifted"
     ]
     change: int
     reason: Optional[str] = None

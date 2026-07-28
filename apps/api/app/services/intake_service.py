@@ -106,6 +106,20 @@ class IntakeService:
                     after=dest_tank.model_dump(mode="json"),
                 ))
 
+                # Emit explicit quarantine_placed CensusEvent for reports timeline
+                q_ev = CensusEvent(
+                    project_id=body.project_id,
+                    tank_assignment_id=str(ta.id),
+                    tank_id=body.tank_id,
+                    date=date.today(),
+                    event_type="quarantine_placed",
+                    change=0,
+                    reason="Mandatory 14-day Biosecurity Quarantine Initiated",
+                    notes=body.notes or "Placed under 14-day quarantine upon intake arrival",
+                    created_by=str(current_user.id),
+                )
+                await q_ev.insert()
+
         actor_role = str(current_user.role.value if current_user.role else "none")
 
         await AuditRepository.insert(AuditLog(

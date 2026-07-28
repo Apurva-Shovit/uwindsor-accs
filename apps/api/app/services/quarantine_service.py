@@ -146,6 +146,19 @@ class QuarantineService:
                 target_tank_obj.quarantine_end_date = None
                 await target_tank_obj.save()
 
+                q_ev = CensusEvent(
+                    project_id=source_ta.project_id,
+                    tank_assignment_id=str(dest_ta.id),
+                    tank_id=ex.target_tank_id,
+                    date=date.today(),
+                    event_type="quarantine_lifted",
+                    change=0,
+                    reason="Quarantine Exemption Approved & Cleared for Transfer",
+                    notes=f"Exemption approved by {current_user.first_name} {current_user.last_name}",
+                    created_by=str(current_user.id),
+                )
+                await q_ev.insert()
+
             # Generate Census Events for transfer audit
             transfer_group_id = str(uuid.uuid4())
             source_tank_obj = await Tank.get(ex.tank_id)

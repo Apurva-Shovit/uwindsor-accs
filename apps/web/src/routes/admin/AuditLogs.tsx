@@ -121,11 +121,13 @@ export const AuditLogs: React.FC = () => {
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
                           row.action.includes('fail') || row.action.includes('reject')
                             ? 'bg-red-50 text-red-700 border-red-100'
-                            : row.action.includes('create') || row.action.includes('approve')
+                            : row.action === 'placed_in_quarantine'
+                            ? 'bg-amber-50 text-amber-800 border-amber-200'
+                            : row.action === 'lifted_quarantine' || row.action.includes('create') || row.action.includes('approve')
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
                             : 'bg-slate-100 text-slate-700 border-slate-200'
                         }`}>
-                          {row.action.replace('_', ' ')}
+                          {row.action.replace(/_/g, ' ')}
                         </span>
                       </td>
                       <td className="p-4 text-sm text-slate-500 whitespace-nowrap">
