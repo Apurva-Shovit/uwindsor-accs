@@ -485,9 +485,9 @@ export const ProjectReportPage: React.FC = () => {
       {/* Tab 5: Water Quality Logs */}
       {activeTab === 'water_quality' && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
-          <h3 className="text-sm font-bold text-teal-900">Water Quality Logged Parameters</h3>
-          {water_quality_logs.length === 0 ? (
-            <p className="text-xs text-slate-500 italic p-4 text-center">No water quality logs recorded for assigned tanks.</p>
+          <h3 className="text-sm font-bold text-teal-900">Water Quality Logged Parameters (Daily Logs)</h3>
+          {water_quality_logs.filter((wq: any) => wq.type === 'daily').length === 0 ? (
+            <p className="text-xs text-slate-500 italic p-4 text-center">No daily water quality logs recorded for assigned tanks.</p>
           ) : (
             <div className="space-y-3">
               <div className="overflow-x-auto rounded-xl border border-slate-200">
@@ -496,7 +496,6 @@ export const ProjectReportPage: React.FC = () => {
                     <tr className="bg-teal-50/50 border-b border-slate-200 text-teal-900 font-bold uppercase">
                       <th className="p-3">Timestamp</th>
                       <th className="p-3">Tank</th>
-                      <th className="p-3">Log Type</th>
                       <th className="p-3">pH</th>
                       <th className="p-3">Temp (°C)</th>
                       <th className="p-3">Dissolved Oxygen</th>
@@ -505,17 +504,10 @@ export const ProjectReportPage: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium">
-                    {water_quality_logs.map((wq: any) => (
+                    {water_quality_logs.filter((wq: any) => wq.type === 'daily').map((wq: any) => (
                       <tr key={wq.id} className="hover:bg-slate-50">
                         <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">{wq.date}</td>
                         <td className="p-3 font-bold text-slate-800">Tank {wq.tank_number}</td>
-                        <td className="p-3 capitalize">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            wq.type === 'daily' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
-                          }`}>
-                            {wq.type === 'test_strip' ? 'Test Strip' : 'Daily Log'}
-                          </span>
-                        </td>
                         <td className="p-3 font-bold text-teal-700">{wq.pH ?? 'N/A'}</td>
                         <td className="p-3 font-bold text-teal-700">{wq.temperature_celsius ? `${wq.temperature_celsius}°C` : 'N/A'}</td>
                         <td className="p-3 font-bold text-teal-700">
