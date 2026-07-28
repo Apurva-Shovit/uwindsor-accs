@@ -703,124 +703,142 @@ export const Reports: React.FC = () => {
                     (w.parameters && (w.parameters.nitrate != null || w.parameters.hardness != null || w.parameters.nitrite != null || w.parameters.chlorine != null || w.parameters.ammonia != null))
                   );
 
+                  // Chunk into pages of 14 records per page
+                  const pageSize = 14;
+                  const pages = [];
+                  if (testStripLogs.length === 0) {
+                    pages.push([]);
+                  } else {
+                    for (let i = 0; i < testStripLogs.length; i += pageSize) {
+                      pages.push(testStripLogs.slice(i, i + pageSize));
+                    }
+                  }
+
                   return (
-                    <div className="bg-white border-2 border-slate-900 text-slate-900 font-sans space-y-0">
-                      {/* Paper-exact Header: Logo centered + Title */}
-                      <div className="flex flex-col items-center pt-4 pb-2 border-b-2 border-slate-900">
-                        <img src="/uwin-logo.webp" alt="University of Windsor Logo" className="h-12 w-auto object-contain mb-1" />
-                        <div className="text-center">
-                          <div className="text-[11px] font-bold tracking-wide text-slate-800">University of Windsor</div>
-                          <div className="text-sm font-black uppercase text-slate-900 leading-tight">APPENDIX 7</div>
-                          <div className="text-xs font-bold uppercase text-slate-900">Water Quality AQUARIUM TEST STRIPS</div>
-                          <div className="text-[11px] font-semibold text-slate-700">Fresh Water-Static &amp; Recirculated Tanks</div>
-                        </div>
-                      </div>
+                    <div className="space-y-8 print:space-y-0">
+                      {pages.map((pageLogs, pageIdx) => {
+                        const paddingCount = Math.max(0, 14 - pageLogs.length);
 
-                      {/* Paper-exact Metadata Grid */}
-                      <table className="w-full border-collapse border-2 border-slate-900 text-xs">
-                        <tbody>
-                          <tr>
-                            <td className="border border-slate-900 p-1.5 font-bold w-20">Room:</td>
-                            <td className="border border-slate-900 p-1.5 w-40">{sopProject.room_number || ''}</td>
-                            <td className="border border-slate-900 p-1.5 font-bold w-20">AUPP#:</td>
-                            <td className="border border-slate-900 p-1.5 font-mono">{sopProject.aupp_number}</td>
-                          </tr>
-                          <tr>
-                            <td className="border border-slate-900 p-1.5 font-bold">Species:</td>
-                            <td className="border border-slate-900 p-1.5">{sopProject.species || ''}</td>
-                            <td className="border border-slate-900 p-1.5 font-bold">PI:</td>
-                            <td className="border border-slate-900 p-1.5">{sopProject.pi_name}</td>
-                          </tr>
-                        </tbody>
-                      </table>
+                        return (
+                          <div
+                            key={pageIdx}
+                            className="bg-white border-2 border-slate-900 text-slate-900 font-sans p-6 shadow-sm print:border-slate-900 print:p-2 print:break-after-page page-break mb-6"
+                          >
+                            {/* Paper-exact Header: Logo centered + Title */}
+                            <div className="flex flex-col items-center pt-2 pb-2 border-b-2 border-slate-900">
+                              <img src="/uwin-logo.webp" alt="University of Windsor Logo" className="h-12 w-auto object-contain mb-1" />
+                              <div className="text-center">
+                                <div className="text-[11px] font-bold tracking-wide text-slate-800">University of Windsor</div>
+                                <div className="text-sm font-black uppercase text-slate-900 leading-tight">APPENDIX 7</div>
+                                <div className="text-xs font-bold uppercase text-slate-900">Water Quality AQUARIUM TEST STRIPS</div>
+                                <div className="text-[11px] font-semibold text-slate-700">Fresh Water-Static &amp; Recirculated Tanks</div>
+                              </div>
+                            </div>
 
-                      {/* Paper-exact Data Table */}
-                      <div className="overflow-x-auto">
-                        <table className="w-full border-collapse border-2 border-slate-900 text-center text-[10px]">
-                          <thead>
-                            <tr className="bg-slate-100 border-b-2 border-slate-900 font-bold">
-                              <th className="border border-slate-900 p-1.5 text-left">Date</th>
-                              <th className="border border-slate-900 p-1.5">Tank<br/>ID</th>
-                              <th className="border border-slate-900 p-1.5">NITRATE<br/><span className="font-normal text-[9px]">0-40 ppm</span></th>
-                              <th className="border border-slate-900 p-1.5">NITRITE<br/><span className="font-normal text-[9px]">0 ppm</span></th>
-                              <th className="border border-slate-900 p-1.5">TOTAL<br/>HARDNESS<br/><span className="font-normal text-[9px]">20-450<br/>mg/L (ppm)</span></th>
-                              <th className="border border-slate-900 p-1.5">TOTAL<br/>CHLORINE<br/><span className="font-normal text-[9px]">0 ppm</span></th>
-                              <th className="border border-slate-900 p-1.5">TOTAL<br/>ALKALINITY<br/><span className="font-normal text-[9px]">120-180 ppm</span></th>
-                              <th className="border border-slate-900 p-1.5">pH<br/><span className="font-normal text-[9px]">6.5-8 cold<br/>7.5-9warm</span></th>
-                              <th className="border border-slate-900 p-1.5">AMMONIA<br/><span className="font-normal text-[9px]">0-0.5 ppm</span></th>
-                              <th className="border border-slate-900 p-1.5">COMMENTS</th>
-                              <th className="border border-slate-900 p-1.5">INITIALS</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {testStripLogs.length === 0 ? (
-                              // Render 10 blank rows when no data (matching paper form style)
-                              Array.from({ length: 10 }).map((_, i) => (
-                                <tr key={i} className="border-b border-slate-300 h-7">
-                                  {Array.from({ length: 11 }).map((_, j) => (
-                                    <td key={j} className="border border-slate-300 p-1">&nbsp;</td>
-                                  ))}
+                            {/* Paper-exact Metadata Grid */}
+                            <table className="w-full border-collapse border-2 border-slate-900 text-xs my-2">
+                              <tbody>
+                                <tr>
+                                  <td className="border border-slate-900 p-1.5 font-bold w-20">Room:</td>
+                                  <td className="border border-slate-900 p-1.5 w-40">{sopProject.room_number || ''}</td>
+                                  <td className="border border-slate-900 p-1.5 font-bold w-20">AUPP#:</td>
+                                  <td className="border border-slate-900 p-1.5 font-mono">{sopProject.aupp_number}</td>
                                 </tr>
-                              ))
-                            ) : (
-                              testStripLogs.map((wq: any, idx: number) => {
-                                const params = wq.parameters || {};
-                                // Normalize tank number: strip any leading "Tank " prefix to avoid "Tank Tank N"
-                                const rawTank = String(wq.tank_number || '').replace(/^tank\s*/i, '');
-                                const tankLabel = rawTank ? `Tank ${rawTank}` : '';
-                                return (
-                                  <tr key={idx} className="border-b border-slate-300 h-7">
-                                    <td className="border border-slate-900 p-1.5 text-left font-semibold whitespace-nowrap text-[9px]">
-                                      {wq.iso_date || wq.date?.slice(0, 10) || ''}
-                                    </td>
-                                    <td className="border border-slate-900 p-1.5 font-bold text-[#005596]">{tankLabel}</td>
-                                    <td className="border border-slate-400 p-1.5">{params.nitrate != null ? `${params.nitrate}` : ''}</td>
-                                    <td className="border border-slate-400 p-1.5">{params.nitrite != null ? `${params.nitrite}` : ''}</td>
-                                    <td className="border border-slate-400 p-1.5">{params.hardness != null ? `${params.hardness}` : ''}</td>
-                                    <td className="border border-slate-400 p-1.5">{params.chlorine != null ? `${params.chlorine}` : ''}</td>
-                                    <td className="border border-slate-400 p-1.5">{params.alkalinity != null ? `${params.alkalinity}` : ''}</td>
-                                    <td className="border border-slate-400 p-1.5 font-bold">{params.ph != null ? `${params.ph}` : (wq.pH != null ? String(wq.pH) : '')}</td>
-                                    <td className="border border-slate-400 p-1.5">{params.ammonia != null ? `${params.ammonia}` : ''}</td>
-                                    <td className="border border-slate-400 p-1.5 text-left text-[9px]">{wq.notes && wq.notes !== '-' ? wq.notes : ''}</td>
-                                    <td className="border border-slate-900 p-1.5 font-semibold">{wq.logged_by_name || ''}</td>
-                                  </tr>
-                                );
-                              })
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
+                                <tr>
+                                  <td className="border border-slate-900 p-1.5 font-bold">Species:</td>
+                                  <td className="border border-slate-900 p-1.5">{sopProject.species || ''}</td>
+                                  <td className="border border-slate-900 p-1.5 font-bold">PI:</td>
+                                  <td className="border border-slate-900 p-1.5">{sopProject.pi_name}</td>
+                                </tr>
+                              </tbody>
+                            </table>
 
-                      {/* Paper-exact Footer Legend */}
-                      <div className="border-t-2 border-slate-900 text-[9px] p-2 space-y-0.5">
-                        <div className="font-bold">
-                          Recirculated tanks: Daily-Temp, O2, pH &nbsp;|&nbsp; <strong>Biweekly</strong>-Ammonia, Nitrite/Nitrates, Total Hardness &nbsp;|&nbsp; <strong>Weekly</strong>-Nitrogen, Salinity &nbsp;|&nbsp; <strong>Annually</strong>-Chlorine
-                        </div>
-                        <table className="w-full border-collapse border border-slate-600 mt-1 text-[9px]">
-                          <tbody>
-                            <tr>
-                              <td className="border border-slate-600 p-0.5 font-semibold">Biweekly <em>circle</em> M T W T F S S</td>
-                              <td className="border border-slate-600 p-0.5">Ammonia &nbsp; O &nbsp; O</td>
-                              <td className="border border-slate-600 p-0.5">Nitrite &nbsp; O &nbsp; O</td>
-                              <td className="border border-slate-600 p-0.5">Nitrates &nbsp; O &nbsp; O</td>
-                            </tr>
-                            <tr>
-                              <td className="border border-slate-600 p-0.5 font-semibold">Weekly <em>circle</em> M T W T F S S</td>
-                              <td className="border border-slate-600 p-0.5">Nitrogen &nbsp; O</td>
-                              <td className="border border-slate-600 p-0.5">Salinity &nbsp; O</td>
-                              <td className="border border-slate-600 p-0.5"></td>
-                            </tr>
-                            <tr>
-                              <td className="border border-slate-600 p-0.5 font-semibold">Annually &nbsp; Date:</td>
-                              <td className="border border-slate-600 p-0.5">Chlorine</td>
-                              <td className="border border-slate-600 p-0.5"></td>
-                              <td className="border border-slate-600 p-0.5"></td>
-                            </tr>
-                          </tbody>
-                        </table>
-                        <div className="mt-1"><strong>Note:</strong> Salinity requirements vary according to whether they are marine or freshwater in origin.</div>
-                        <div className="mt-0.5 text-slate-500">ACC SOP AH24 Water Quality Aquarium Test Strips- Fresh Water Static and Recirculated Tanks- Appendix 7 (Revised May 2024)</div>
-                      </div>
+                            {/* Paper-exact Data Table */}
+                            <div className="overflow-x-auto">
+                              <table className="w-full border-collapse border-2 border-slate-900 text-center text-[10px]">
+                                <thead>
+                                  <tr className="bg-slate-100 border-b-2 border-slate-900 font-bold">
+                                    <th className="border border-slate-900 p-1.5 text-left">Date</th>
+                                    <th className="border border-slate-900 p-1.5">Tank<br/>ID</th>
+                                    <th className="border border-slate-900 p-1.5">NITRATE<br/><span className="font-normal text-[9px]">0-40 ppm</span></th>
+                                    <th className="border border-slate-900 p-1.5">NITRITE<br/><span className="font-normal text-[9px]">0 ppm</span></th>
+                                    <th className="border border-slate-900 p-1.5">TOTAL<br/>HARDNESS<br/><span className="font-normal text-[9px]">20-450<br/>mg/L (ppm)</span></th>
+                                    <th className="border border-slate-900 p-1.5">TOTAL<br/>CHLORINE<br/><span className="font-normal text-[9px]">0 ppm</span></th>
+                                    <th className="border border-slate-900 p-1.5">TOTAL<br/>ALKALINITY<br/><span className="font-normal text-[9px]">120-180 ppm</span></th>
+                                    <th className="border border-slate-900 p-1.5">pH<br/><span className="font-normal text-[9px]">6.5-8 cold<br/>7.5-9warm</span></th>
+                                    <th className="border border-slate-900 p-1.5">AMMONIA<br/><span className="font-normal text-[9px]">0-0.5 ppm</span></th>
+                                    <th className="border border-slate-900 p-1.5">COMMENTS</th>
+                                    <th className="border border-slate-900 p-1.5">INITIALS</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {pageLogs.map((wq: any, idx: number) => {
+                                    const params = wq.parameters || {};
+                                    const rawTank = String(wq.tank_number || '').replace(/^tank\s*/i, '');
+                                    const tankLabel = rawTank ? `Tank ${rawTank}` : '';
+                                    return (
+                                      <tr key={idx} className="border-b border-slate-300 h-7">
+                                        <td className="border border-slate-900 p-1.5 text-left font-semibold whitespace-nowrap text-[9px]">
+                                          {wq.iso_date || wq.date?.slice(0, 10) || ''}
+                                        </td>
+                                        <td className="border border-slate-900 p-1.5 font-bold text-[#005596]">{tankLabel}</td>
+                                        <td className="border border-slate-400 p-1.5">{params.nitrate != null ? `${params.nitrate}` : ''}</td>
+                                        <td className="border border-slate-400 p-1.5">{params.nitrite != null ? `${params.nitrite}` : ''}</td>
+                                        <td className="border border-slate-400 p-1.5">{params.hardness != null ? `${params.hardness}` : ''}</td>
+                                        <td className="border border-slate-400 p-1.5">{params.chlorine != null ? `${params.chlorine}` : ''}</td>
+                                        <td className="border border-slate-400 p-1.5">{params.alkalinity != null ? `${params.alkalinity}` : ''}</td>
+                                        <td className="border border-slate-400 p-1.5 font-bold">{params.ph != null ? `${params.ph}` : (wq.pH != null ? String(wq.pH) : '')}</td>
+                                        <td className="border border-slate-400 p-1.5">{params.ammonia != null ? `${params.ammonia}` : ''}</td>
+                                        <td className="border border-slate-400 p-1.5 text-left text-[9px]">{wq.notes && wq.notes !== '-' ? wq.notes : ''}</td>
+                                        <td className="border border-slate-900 p-1.5 font-semibold">{wq.logged_by_name || ''}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                  {Array.from({ length: paddingCount }).map((_, pIdx) => (
+                                    <tr key={`pad-${pIdx}`} className="border-b border-slate-300 h-7">
+                                      {Array.from({ length: 11 }).map((_, j) => (
+                                        <td key={j} className="border border-slate-300 p-1">&nbsp;</td>
+                                      ))}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* Paper-exact Footer Legend */}
+                            <div className="border-t-2 border-slate-900 text-[9px] p-2 space-y-0.5 mt-2">
+                              <div className="font-bold flex justify-between">
+                                <span>Recirculated tanks: Daily-Temp, O2, pH &nbsp;|&nbsp; <strong>Biweekly</strong>-Ammonia, Nitrite/Nitrates, Total Hardness &nbsp;|&nbsp; <strong>Weekly</strong>-Nitrogen, Salinity &nbsp;|&nbsp; <strong>Annually</strong>-Chlorine</span>
+                                <span className="font-mono">Page {pageIdx + 1} of {pages.length}</span>
+                              </div>
+                              <table className="w-full border-collapse border border-slate-600 mt-1 text-[9px]">
+                                <tbody>
+                                  <tr>
+                                    <td className="border border-slate-600 p-0.5 font-semibold">Biweekly <em>circle</em> M T W T F S S</td>
+                                    <td className="border border-slate-600 p-0.5">Ammonia &nbsp; O &nbsp; O</td>
+                                    <td className="border border-slate-600 p-0.5">Nitrite &nbsp; O &nbsp; O</td>
+                                    <td className="border border-slate-600 p-0.5">Nitrates &nbsp; O &nbsp; O</td>
+                                  </tr>
+                                  <tr>
+                                    <td className="border border-slate-600 p-0.5 font-semibold">Weekly <em>circle</em> M T W T F S S</td>
+                                    <td className="border border-slate-600 p-0.5">Nitrogen &nbsp; O</td>
+                                    <td className="border border-slate-600 p-0.5">Salinity &nbsp; O</td>
+                                    <td className="border border-slate-600 p-0.5"></td>
+                                  </tr>
+                                  <tr>
+                                    <td className="border border-slate-600 p-0.5 font-semibold">Annually &nbsp; Date:</td>
+                                    <td className="border border-slate-600 p-0.5">Chlorine</td>
+                                    <td className="border border-slate-600 p-0.5"></td>
+                                    <td className="border border-slate-600 p-0.5"></td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                              <div className="mt-1"><strong>Note:</strong> Salinity requirements vary according to whether they are marine or freshwater in origin.</div>
+                              <div className="mt-0.5 text-slate-500">ACC SOP AH24 Water Quality Aquarium Test Strips- Fresh Water Static and Recirculated Tanks- Appendix 7 (Revised May 2024)</div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   );
                 })()}
