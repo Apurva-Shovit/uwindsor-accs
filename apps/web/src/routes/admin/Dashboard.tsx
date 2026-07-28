@@ -56,8 +56,8 @@ export const Dashboard: React.FC = () => {
     unit: string,
     strokeColor: string,
     fillColor: string,
-    minVal: number,
-    maxVal: number
+    defaultMin: number,
+    defaultMax: number
   ) => {
     const validPoints = series
       .map((item: any, idx: number) => ({ idx, val: item[dataKey], date: item.date }))
@@ -71,13 +71,21 @@ export const Dashboard: React.FC = () => {
       );
     }
 
+    const vals = validPoints.map((p: any) => p.val);
+    const minVal = Math.min(...vals) < defaultMin ? Math.floor(Math.min(...vals)) : defaultMin;
+    const maxVal = Math.max(...vals) > defaultMax ? Math.ceil(Math.max(...vals)) : defaultMax;
+    const midVal = +((maxVal + minVal) / 2).toFixed(1);
+
     const width = 600;
-    const height = 140;
-    const padding = 20;
+    const height = 150;
+    const paddingLeft = 45;
+    const paddingRight = 20;
+    const paddingTop = 20;
+    const paddingBottom = 25;
 
     const range = maxVal - minVal || 1;
-    const getX = (index: number) => padding + (index / (series.length - 1 || 1)) * (width - padding * 2);
-    const getY = (val: number) => height - padding - ((val - minVal) / range) * (height - padding * 2);
+    const getX = (index: number) => paddingLeft + (index / (series.length - 1 || 1)) * (width - paddingLeft - paddingRight);
+    const getY = (val: number) => height - paddingBottom - ((val - minVal) / range) * (height - paddingTop - paddingBottom);
 
     const pathD = series.reduce((acc: string, item: any, index: number) => {
       const val = item[dataKey];
@@ -94,17 +102,31 @@ export const Dashboard: React.FC = () => {
             <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: strokeColor }} />
             {title} ({unit})
           </span>
-          <span className="text-[10px] font-semibold text-slate-400">
-            Latest: {validPoints[validPoints.length - 1]?.val} {unit}
+          <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+            Latest: <strong>{validPoints[validPoints.length - 1]?.val}</strong> {unit}
           </span>
         </div>
 
-        <div className="relative w-full overflow-hidden">
-          <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-32 overflow-visible">
+        <div className="relative w-full overflow-visible pt-1">
+          <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-36 overflow-visible">
+            {/* Y Axis numeric ticks */}
+            <text x={paddingLeft - 8} y={paddingTop + 4} textAnchor="end" className="text-[10px] font-bold fill-slate-400">
+              {maxVal}
+            </text>
+            <text x={paddingLeft - 8} y={(paddingTop + height - paddingBottom) / 2 + 3} textAnchor="end" className="text-[10px] font-bold fill-slate-400">
+              {midVal}
+            </text>
+            <text x={paddingLeft - 8} y={height - paddingBottom + 3} textAnchor="end" className="text-[10px] font-bold fill-slate-400">
+              {minVal}
+            </text>
+
+            {/* Y Axis line */}
+            <line x1={paddingLeft} y1={paddingTop} x2={paddingLeft} y2={height - paddingBottom} stroke="#cbd5e1" strokeWidth="1.5" />
+
             {/* Grid lines */}
-            <line x1={padding} y1={padding} x2={width - padding} y2={padding} stroke="#e2e8f0" strokeDasharray="3 3" />
-            <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="#e2e8f0" strokeDasharray="3 3" />
-            <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#cbd5e1" />
+            <line x1={paddingLeft} y1={paddingTop} x2={width - paddingRight} y2={paddingTop} stroke="#e2e8f0" strokeDasharray="3 3" />
+            <line x1={paddingLeft} y1={(paddingTop + height - paddingBottom) / 2} x2={width - paddingRight} y2={(paddingTop + height - paddingBottom) / 2} stroke="#e2e8f0" strokeDasharray="3 3" />
+            <line x1={paddingLeft} y1={height - paddingBottom} x2={width - paddingRight} y2={height - paddingBottom} stroke="#cbd5e1" />
 
             {/* Sparkline Path */}
             {pathD && (
@@ -124,17 +146,52 @@ export const Dashboard: React.FC = () => {
               if (val === null || val === undefined) return null;
               const x = getX(index);
               const y = getY(val);
+              const labelText = `${item.date}: ${val} ${unit}`;
+              const tooltipWidth = labelText.length * 5.8 + 12;
+              const tooltipX = Math.min(Math.max(x - tooltipWidth / 2, paddingLeft), width - paddingRight - tooltipWidth);
+
               return (
                 <g key={index} className="group cursor-pointer">
-                  <circle cx={x} cy={y} r="4" fill={strokeColor} className="transition-all group-hover:r-6" />
-                  <title>{`${item.date}: ${val} ${unit}`}</title>
+                  {/* Hover vertical guide line */}
+                  <line
+                    x1={x} y1={paddingTop} x2={x} y2={height - paddingBottom}
+                    stroke={strokeColor} strokeWidth="1" strokeDasharray="2 2"
+                    className="opacity-0 group-hover:opacity-60 transition-opacity"
+                  />
+                  {/* Point Circle */}
+                  <circle cx={x} cy={y} r="4" fill={strokeColor} className="transition-all group-hover:r-6 group-hover:stroke-white group-hover:stroke-2" />
+
+                  {/* SVG Hover Tooltip Badge showing date and exact value */}
+                  <g className="opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                    <rect
+                      x={tooltipX}
+                      y={Math.max(y - 28, 2)}
+                      width={tooltipWidth}
+                      height="20"
+                      rx="4"
+                      fill="#0f172a"
+                      opacity="0.9"
+                    />
+                    <text
+                      x={tooltipX + tooltipWidth / 2}
+                      y={Math.max(y - 14, 15)}
+                      textAnchor="middle"
+                      fill="#ffffff"
+                      fontSize="10"
+                      fontWeight="bold"
+                    >
+                      {labelText}
+                    </text>
+                  </g>
+
+                  <title>{labelText}</title>
                 </g>
               );
             })}
           </svg>
         </div>
 
-        <div className="flex justify-between text-[9px] text-slate-400 font-semibold pt-1">
+        <div className="flex justify-between text-[9px] text-slate-400 font-semibold pt-1 pl-10">
           <span>{series[0]?.date || ''}</span>
           <span>{series[Math.floor(series.length / 2)]?.date || ''}</span>
           <span>{series[series.length - 1]?.date || ''}</span>
@@ -191,7 +248,7 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Facility Water Quality Analytics Section */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-5">
+      <div className="bg-[#ffffff] rounded-xl border border-slate-200 p-6 shadow-sm space-y-5">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-4">
           <div>
             <h2 className="text-lg font-bold text-[#005596] flex items-center gap-2">
@@ -251,7 +308,7 @@ export const Dashboard: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {renderLineChart('ph', 'pH Level', 'pH', '#dc2626', '#fee2e2', 6.0, 9.5)}
             {renderLineChart('temperature', 'Water Temperature', '°C', '#d97706', '#fef3c7', 18.0, 32.0)}
-            {renderLineChart('dissolved_oxygen', 'Dissolved Oxygen', 'mg/L', '#059669', '#d1fae5', 0.0, 150.0)}
+            {renderLineChart('dissolved_oxygen', 'Dissolved Oxygen', 'mg/L', '#059669', '#d1fae5', 0.0, 15.0)}
           </div>
         )}
       </div>
