@@ -1,5 +1,5 @@
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 from fastapi import HTTPException
 from ..models.user import User, RoleEnum, AuditLog
 from ..models.facility import Facility, Room, Tank
