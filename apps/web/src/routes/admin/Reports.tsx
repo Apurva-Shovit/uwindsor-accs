@@ -619,7 +619,10 @@ export const Reports: React.FC = () => {
 
                                     // Strictly check if cell date is within the requested range [startDateObj, endDateObj]
                                     const isEligible = cellDate >= startDateObj && cellDate <= endDateObj;
-                                    const cellIso = cellDate.toISOString().slice(0, 10);
+                                    const yyyy = cellDate.getFullYear();
+                                    const mm = String(cellDate.getMonth() + 1).padStart(2, '0');
+                                    const dd = String(cellDate.getDate()).padStart(2, '0');
+                                    const cellIso = `${yyyy}-${mm}-${dd}`;
 
                                     const dayLogs = isEligible
                                       ? sopWq.filter((w: any) =>
