@@ -841,11 +841,7 @@ export const Reports: React.FC = () => {
                       })}
                     </div>
                   );
-                })()}
-
-
-
-                {/* Form 3: Aquatic Incident Report Form */}
+                })()}                {/* Form 3: Aquatic Incident Report Form */}
                 {selectedForm === 'incidents' && (() => {
                   // Helper: format date as D/M/Y
                   const fmtDMY = (dateStr: string | undefined) => {
@@ -862,75 +858,113 @@ export const Reports: React.FC = () => {
                   };
                   const dateEst = fmtDMY(sopProject.date_established || sopProject.created_at);
 
+                  // Dynamic chunking based on text length weight (target max weight 6 per page)
+                  const getRowWeight = (inc: any) => {
+                    const totalChars = (inc.description || '').length + (inc.comments || '').length + (inc.notes || '').length;
+                    return Math.max(1, Math.ceil(totalChars / 90));
+                  };
+
+                  const pages: any[][] = [];
+                  if (sopIncidents.length === 0) {
+                    pages.push([]);
+                  } else {
+                    let currentChunk: any[] = [];
+                    let currentWeight = 0;
+                    for (const inc of sopIncidents) {
+                      const w = getRowWeight(inc);
+                      if (currentChunk.length > 0 && currentWeight + w > 6) {
+                        pages.push(currentChunk);
+                        currentChunk = [inc];
+                        currentWeight = w;
+                      } else {
+                        currentChunk.push(inc);
+                        currentWeight += w;
+                      }
+                    }
+                    if (currentChunk.length > 0) {
+                      pages.push(currentChunk);
+                    }
+                  }
+
                   return (
-                    <div className="bg-white border-2 border-slate-900 p-6 shadow-sm text-slate-900 font-sans print:border-slate-900 print:p-2 space-y-4">
-                      {/* Form Header — centered logo + title */}
-                      <div className="border-b-2 border-slate-900 pb-3 flex flex-col items-center text-center gap-1">
-                        <img src="/uwin-logo.webp" alt="University of Windsor Logo" className="h-12 w-auto object-contain" />
-                        <div className="text-[10px] font-bold tracking-widest uppercase text-slate-700">University of Windsor</div>
-                        <h2 className="text-sm font-black uppercase text-slate-900 leading-tight">
-                          AQUATIC INCIDENT REPORTS
-                        </h2>
-                      </div>
+                    <div className="space-y-8 print:space-y-0">
+                      {pages.map((pageIncidents, pageIdx) => {
+                        const paddingCount = Math.max(0, 6 - pageIncidents.length);
 
-                      {/* Metadata — single 4-col row: Room | Species | PI | AUPP# */}
-                      <div className="grid grid-cols-4 gap-0 border border-slate-900 text-[11px] font-medium">
-                        <div className="border-r border-slate-900 p-2"><strong>Room:</strong> {sopProject.room_number || ''}</div>
-                        <div className="border-r border-slate-900 p-2"><strong>Species:</strong> {sopProject.species || ''}</div>
-                        <div className="border-r border-slate-900 p-2"><strong>PI:</strong> {sopProject.pi_name}</div>
-                        <div className="p-2"><strong>AUPP#:</strong> <span className="font-mono">{sopProject.aupp_number}</span></div>
-                      </div>
+                        return (
+                          <div
+                            key={pageIdx}
+                            className="bg-white border-2 border-slate-900 p-6 shadow-sm text-slate-900 font-sans print:border-slate-900 print:p-2 print:break-after-page page-break mb-6"
+                          >
+                            {/* Form Header — centered logo + title */}
+                            <div className="border-b-2 border-slate-900 pb-3 flex flex-col items-center text-center gap-1">
+                              <img src="/uwin-logo.webp" alt="University of Windsor Logo" className="h-12 w-auto object-contain" />
+                              <div className="text-[10px] font-bold tracking-widest uppercase text-slate-700">University of Windsor</div>
+                              <h2 className="text-sm font-black uppercase text-slate-900 leading-tight">
+                                AQUATIC INCIDENT REPORTS
+                              </h2>
+                            </div>
 
+                            {/* Metadata — single 4-col row: Room | Species | PI | AUPP# */}
+                            <div className="grid grid-cols-4 gap-0 border border-slate-900 text-[11px] font-medium my-3">
+                              <div className="border-r border-slate-900 p-2"><strong>Room:</strong> {sopProject.room_number || ''}</div>
+                              <div className="border-r border-slate-900 p-2"><strong>Species:</strong> {sopProject.species || ''}</div>
+                              <div className="border-r border-slate-900 p-2"><strong>PI:</strong> {sopProject.pi_name}</div>
+                              <div className="p-2"><strong>AUPP#:</strong> <span className="font-mono">{sopProject.aupp_number}</span></div>
+                            </div>
 
-                      <div className="overflow-x-auto">
-                        <table className="w-full border-collapse border border-slate-900 text-left text-[10px]">
-                          <thead>
-                            <tr className="bg-slate-200 border-b border-slate-900 font-bold uppercase text-[10px] text-center">
-                              <th className="border border-slate-900 p-2 whitespace-nowrap">Date<br/><span className="font-normal text-[8px] normal-case">(D/M/Y)</span></th>
-                              <th className="border border-slate-900 p-2 whitespace-nowrap">Time</th>
-                              <th className="border border-slate-900 p-2 whitespace-nowrap">Date Est.<br/><span className="font-normal text-[8px] normal-case">(D/M/Y)</span></th>
-                              <th className="border border-slate-900 p-2">Tank #</th>
-                              <th className="border border-slate-900 p-2">Problem Description</th>
-                              <th className="border border-slate-900 p-2">Comments</th>
-                              <th className="border border-slate-900 p-2">Treatment / Solution</th>
-                              <th className="border border-slate-900 p-2">Aquatic Checked</th>
-                              <th className="border border-slate-900 p-2">Vet Contacted</th>
-                              <th className="border border-slate-900 p-2">Researcher Notified</th>
-                              <th className="border border-slate-900 p-2">Initials</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {sopIncidents.length === 0 ? (
-                              Array.from({ length: 8 }).map((_, i) => (
-                                <tr key={i} className="border-b border-slate-300 h-8">
-                                  {Array.from({ length: 11 }).map((_, j) => (
-                                    <td key={j} className="border border-slate-300 p-1">&nbsp;</td>
+                            {/* Data Table */}
+                            <div className="overflow-x-auto">
+                              <table className="w-full border-collapse border border-slate-900 text-left text-[10px]">
+                                <thead>
+                                  <tr className="bg-slate-200 border-b border-slate-900 font-bold uppercase text-[10px] text-center">
+                                    <th className="border border-slate-900 p-2 whitespace-nowrap">Date<br/><span className="font-normal text-[8px] normal-case">(D/M/Y)</span></th>
+                                    <th className="border border-slate-900 p-2 whitespace-nowrap">Time</th>
+                                    <th className="border border-slate-900 p-2 whitespace-nowrap">Date Est.<br/><span className="font-normal text-[8px] normal-case">(D/M/Y)</span></th>
+                                    <th className="border border-slate-900 p-2">Tank #</th>
+                                    <th className="border border-slate-900 p-2">Problem Description</th>
+                                    <th className="border border-slate-900 p-2">Comments</th>
+                                    <th className="border border-slate-900 p-2">Treatment / Solution</th>
+                                    <th className="border border-slate-900 p-2">Aquatic Checked</th>
+                                    <th className="border border-slate-900 p-2">Vet Contacted</th>
+                                    <th className="border border-slate-900 p-2">Researcher Notified</th>
+                                    <th className="border border-slate-900 p-2">Initials</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {pageIncidents.map((inc: any) => (
+                                    <tr key={inc.id} className="border-b border-slate-400">
+                                      <td className="border border-slate-900 p-2 font-semibold whitespace-nowrap">{fmtDMY(inc.date || inc.created_at)}</td>
+                                      <td className="border border-slate-900 p-2 whitespace-nowrap text-slate-700">{fmtTime(inc.date || inc.created_at)}</td>
+                                      <td className="border border-slate-900 p-2 whitespace-nowrap text-slate-700">{dateEst}</td>
+                                      <td className="border border-slate-900 p-2 font-bold text-[#005596] text-center">{inc.tank_number}</td>
+                                      <td className="border border-slate-900 p-2">{inc.description}</td>
+                                      <td className="border border-slate-900 p-2 text-slate-600">{inc.comments || ''}</td>
+                                      <td className="border border-slate-900 p-2">{inc.notes}</td>
+                                      <td className="border border-slate-900 p-2 text-center font-bold">Yes</td>
+                                      <td className="border border-slate-900 p-2 text-center font-bold">
+                                        <span className={inc.vet_contacted === 'Yes' ? 'text-red-600' : ''}>{inc.vet_contacted}</span>
+                                      </td>
+                                      <td className="border border-slate-900 p-2 text-center font-bold">Yes</td>
+                                      <td className="border border-slate-900 p-2 font-semibold text-slate-700 whitespace-nowrap">{inc.reported_by_name || ''}</td>
+                                    </tr>
                                   ))}
-                                </tr>
-                              ))
-                            ) : (
-                              sopIncidents.map((inc: any) => (
-                                <tr key={inc.id} className="border-b border-slate-400">
-                                  <td className="border border-slate-900 p-2 font-semibold whitespace-nowrap">{fmtDMY(inc.date || inc.created_at)}</td>
-                                  <td className="border border-slate-900 p-2 whitespace-nowrap text-slate-700">{fmtTime(inc.date || inc.created_at)}</td>
-                                  <td className="border border-slate-900 p-2 whitespace-nowrap text-slate-700">{dateEst}</td>
-                                  <td className="border border-slate-900 p-2 font-bold text-[#005596] text-center">{inc.tank_number}</td>
-                                  <td className="border border-slate-900 p-2">{inc.description}</td>
-                                  <td className="border border-slate-900 p-2 text-slate-600">{inc.comments || ''}</td>
-                                  <td className="border border-slate-900 p-2">{inc.notes}</td>
-                                  <td className="border border-slate-900 p-2 text-center font-bold">Yes</td>
-                                  <td className="border border-slate-900 p-2 text-center font-bold">
-                                    <span className={inc.vet_contacted === 'Yes' ? 'text-red-600' : ''}>{inc.vet_contacted}</span>
-                                  </td>
-                                  <td className="border border-slate-900 p-2 text-center font-bold">Yes</td>
-                                  <td className="border border-slate-900 p-2 font-semibold text-slate-700 whitespace-nowrap">{inc.reported_by_name || ''}</td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
+                                  {Array.from({ length: paddingCount }).map((_, i) => (
+                                    <tr key={`pad-${i}`} className="border-b border-slate-300 h-8">
+                                      {Array.from({ length: 11 }).map((_, j) => (
+                                        <td key={j} className="border border-slate-300 p-1">&nbsp;</td>
+                                      ))}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                            <div className="mt-3 text-right text-[10px] font-mono text-slate-500">
+                              Page {pageIdx + 1} of {pages.length}
+                            </div>
+                          </div>
+                        );
+                      })}
                   );
                 })()}
             </div>
