@@ -12,7 +12,7 @@ export const QuarantinePage: React.FC = () => {
   const [reason, setReason] = useState('');
   const [urgency, setUrgency] = useState('normal');
   const [submitting, setSubmitting] = useState(false);
-  
+
   const { user } = useAuth();
   const isManagerPlus = ['super_admin', 'admin', 'chair', 'manager'].includes(user?.role || '');
 
@@ -84,7 +84,7 @@ export const QuarantinePage: React.FC = () => {
       alert("Verification failed. Please type the exact text.");
       return;
     }
-    
+
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`http://localhost:8000/facilities-structure/tanks/${liftModalTank.id || liftModalTank._id}/quarantine`, {
@@ -153,7 +153,7 @@ export const QuarantinePage: React.FC = () => {
           <Clock className="w-5 h-5 text-[#005596]" />
           Currently Quarantined Tanks
         </h2>
-        
+
         {!tanks ? (
           <div className="text-center py-4 text-slate-400 text-sm italic">Loading tanks...</div>
         ) : (
@@ -162,8 +162,10 @@ export const QuarantinePage: React.FC = () => {
               const start = new Date(t.quarantine_start_date);
               const end = new Date(t.quarantine_end_date);
               const now = new Date();
-              const daysLeft = Math.ceil((end.getTime() - now.getTime()) / (1000 * 3600 * 24));
-              
+              const diffMs = end.getTime() - now.getTime();
+              const rawDays = diffMs / (1000 * 3600 * 24);
+              const daysLeft = Math.max(0, Math.min(14, Math.ceil(rawDays)));
+
               return (
                 <div key={t.id || t._id} className="border border-amber-200 bg-amber-50 rounded-lg p-4 flex flex-col gap-2">
                   <div className="flex justify-between items-center">
@@ -177,7 +179,7 @@ export const QuarantinePage: React.FC = () => {
                     <div><strong>Ends:</strong> {end.toLocaleDateString()}</div>
                   </div>
                   {isManagerPlus && (
-                    <button 
+                    <button
                       onClick={() => {
                         setLiftModalTank(t);
                         setLiftVerification('');
@@ -246,11 +248,10 @@ export const QuarantinePage: React.FC = () => {
                         <td className="p-3 uppercase text-xs font-bold text-amber-600">{ex.urgency}</td>
                         <td className="p-3 text-slate-600 text-xs max-w-xs">{ex.reason}</td>
                         <td className="p-3 whitespace-nowrap">
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                            ex.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                            ex.status === 'rejected' ? 'bg-red-50 text-red-700 border border-red-200' :
-                            'bg-amber-50 text-amber-700 border border-amber-200 animate-pulse'
-                          }`}>
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${ex.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                              ex.status === 'rejected' ? 'bg-red-50 text-red-700 border border-red-200' :
+                                'bg-amber-50 text-amber-700 border border-amber-200 animate-pulse'
+                            }`}>
                             {ex.status === 'approved' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
                             {ex.status === 'rejected' && <XCircle className="w-3.5 h-3.5 text-red-600" />}
                             {ex.status === 'pending' && <Clock className="w-3.5 h-3.5 text-amber-600" />}
