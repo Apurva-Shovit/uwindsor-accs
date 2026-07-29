@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, UserCheck, UserX, Shield, Database, Lock, Search, CheckCircle, AlertCircle, RefreshCw, X } from 'lucide-react';
+import { Users, UserCheck, UserX, Shield, Database, Search, AlertCircle, X } from 'lucide-react';
 import { formatDate } from '../../utils/formatters';
 import { useAuth } from '../../context/AuthContext';
 

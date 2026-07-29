@@ -2,7 +2,6 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Topbar } from '../../components/layout/Topbar';
 import { Sidebar } from '../../components/layout/Sidebar';
-import { useAuth } from '../../context/AuthContext';
 
 import { TanksView } from '../TanksView';
 import { LogEntryPage } from './LogEntryPage';

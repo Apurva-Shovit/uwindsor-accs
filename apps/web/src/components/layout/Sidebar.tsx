@@ -7,7 +7,6 @@ import { useSidebar } from '../../context/SidebarContext';
 export const Sidebar: React.FC = () => {
   const { user } = useAuth();
   const { isSidebarOpen } = useSidebar();
-  const isAdminOrChair = ['super_admin', 'chair', 'admin'].includes(user?.role || '');
   const isManagerPlus = ['super_admin', 'chair', 'admin', 'manager'].includes(user?.role || '');
   const [isFishMgmtOpen, setIsFishMgmtOpen] = useState(true);
 

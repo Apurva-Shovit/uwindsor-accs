@@ -130,7 +130,6 @@ export const Reports: React.FC = () => {
   });
 
   const sopProject = sopReportData?.project;
-  const sopTanks = sopReportData?.occupied_tanks || [];
   const sopWq = sopReportData?.water_quality_logs || [];
   const sopIncidents = sopReportData?.incidents || [];
 
@@ -965,13 +964,14 @@ export const Reports: React.FC = () => {
                           </div>
                         );
                       })}
+                    </div>
                   );
                 })()}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-    )}
-  </div>
-);
+      )}
+    </div>
+  );
 };

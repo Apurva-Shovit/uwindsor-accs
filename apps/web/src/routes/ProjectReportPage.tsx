@@ -10,7 +10,7 @@ export const ProjectReportPage: React.FC = () => {
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState<'tanks' | 'deaths' | 'incidents' | 'census' | 'water_quality' | 'audits'>('tanks');
+  const [activeTab, setActiveTab] = useState<'tanks' | 'deaths' | 'incidents' | 'census' | 'quarantine' | 'water_quality' | 'audits'>('tanks');
   const [timePeriod, setTimePeriod] = useState<string>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');

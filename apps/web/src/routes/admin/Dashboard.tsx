@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { formatDate } from '../../utils/formatters';
-import { Activity, Filter, Calendar, Sliders } from 'lucide-react';
+import { Activity, Filter } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
   const [selectedTank, setSelectedTank] = useState<string>('all');
@@ -55,7 +54,7 @@ export const Dashboard: React.FC = () => {
     title: string,
     unit: string,
     strokeColor: string,
-    fillColor: string,
+    _fillColor: string,
     defaultMin: number,
     defaultMax: number
   ) => {
