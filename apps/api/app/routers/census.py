@@ -1,14 +1,18 @@
 from typing import Optional
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from ..models.user import User
 from ..core.permissions import get_current_user
+from ..core.limiter import limiter
+from ..config import settings
 from ..schemas.census import CensusEventCreate
 from ..services.census_service import CensusService
 
 router = APIRouter(tags=["census"])
 
 @router.post("/census-events", status_code=201)
+@limiter.limit(settings.RATE_LIMIT_DATA_ENTRY)
 async def create_census_event(
+    request: Request,
     body: CensusEventCreate,
     current: User = Depends(get_current_user),
 ):

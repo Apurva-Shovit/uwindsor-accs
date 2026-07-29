@@ -32,10 +32,27 @@ class EntityResolver:
     async def resolve_users_by_ids(cls, user_ids: List[str]) -> Dict[str, str]:
         if not user_ids:
             return {}
-        res: Dict[str, str] = {}
         unique_ids = list(set([uid for uid in user_ids if uid]))
+        valid_oids = [ObjectId(uid) for uid in unique_ids if ObjectId.is_valid(uid)]
+        email_ids = [uid for uid in unique_ids if not ObjectId.is_valid(uid)]
+        
+        users_by_oid = await User.find({"_id": {"$in": valid_oids}}).to_list() if valid_oids else []
+        users_by_email = await User.find({"email": {"$in": email_ids}}).to_list() if email_ids else []
+        
+        user_map: Dict[str, str] = {}
+        for u in users_by_oid:
+            user_map[str(u.id)] = f"{u.first_name} {u.last_name}".strip()
+        for u in users_by_email:
+            user_map[u.email] = f"{u.first_name} {u.last_name}".strip()
+            
+        res: Dict[str, str] = {}
         for uid in unique_ids:
-            res[uid] = await cls.resolve_user_name(uid) or uid
+            if uid in user_map:
+                res[uid] = user_map[uid]
+            elif ObjectId.is_valid(uid):
+                res[uid] = "Unknown User"
+            else:
+                res[uid] = uid
         return res
 
     @classmethod
@@ -141,10 +158,4 @@ class EntityResolver:
                     cleaned[k] = str(v) if isinstance(v, ObjectId) else v
         return cleaned
 
-
-async def resolve_user_name(user_id: Optional[str]) -> Optional[str]:
-    return await EntityResolver.resolve_user_name(user_id)
-
-async def resolve_tank_number(tank_id: Optional[str]) -> Optional[str]:
-    return await EntityResolver.resolve_tank_number(tank_id)
 

@@ -1,6 +1,7 @@
 from typing import Dict, Any, Optional
 from fastapi import HTTPException
-from ..models.user import User, AuditLog
+from ..models.user import User
+from ..models.audit_log import AuditLog
 from ..models.individual_fish import IndividualFish
 from ..schemas.individual_fish import RegisterFishRequest
 from ..repositories.audit_repository import AuditRepository

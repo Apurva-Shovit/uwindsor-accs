@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Optional
 from fastapi import HTTPException, status
-from ..models.user import User, AuditLog, RoleEnum
+from ..models.user import User, RoleEnum
+from ..models.audit_log import AuditLog
 from ..models.incident_report import IncidentReport
 from ..models.tank_assignment import TankAssignment
 from ..schemas.incident_report import IncidentReportCreate
@@ -60,8 +61,10 @@ class IncidentReportService:
     async def list_reports(
         vet_contacted: Optional[bool],
         tank_id: Optional[str],
-        current_user: User
-    ) -> List[IncidentReport]:
+        current_user: User,
+        page: int = 1,
+        limit: int = 20,
+    ) -> Dict[str, Any]:
         if current_user.role not in MANAGER_PLUS:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Managers and above only")
 
@@ -71,4 +74,8 @@ class IncidentReportService:
         if tank_id:
             query["tank_id"] = tank_id
 
-        return await IncidentReport.find(query).sort("-created_at").to_list()
+        skip = (page - 1) * limit
+        total = await IncidentReport.find(query).count()
+        items = await IncidentReport.find(query).sort("-created_at").skip(skip).limit(limit).to_list()
+        total_pages = (total + limit - 1) // limit if limit > 0 else 1
+        return {"items": items, "total": total, "page": page, "limit": limit, "total_pages": total_pages}

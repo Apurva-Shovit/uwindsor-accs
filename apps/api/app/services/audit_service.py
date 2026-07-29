@@ -32,9 +32,14 @@ class AuditService:
         # 2. Fetch logs from Repository
         logs = await AuditRepository.get_logs_with_pagination(query, skip, page_size)
 
-        # 3. Extract all unique Actor IDs for bulk resolution
+        # 3. Extract all unique Actor IDs and Non-User Entity IDs for bulk resolution
         actor_ids = list(set([str(log.actor_id) for log in logs if log.actor_id]))
-        actor_map = await EntityResolver.resolve_users_by_ids(actor_ids)
+        user_entity_ids = list(set([str(log.entity_id) for log in logs if log.entity_type == "user" and log.entity_id]))
+        all_user_ids = list(set(actor_ids + user_entity_ids))
+        actor_map = await EntityResolver.resolve_users_by_ids(all_user_ids)
+
+        non_user_refs = [(log.entity_type, str(log.entity_id)) for log in logs if log.entity_type != "user" and log.entity_id]
+        entity_display_map = await AuditRepository.get_entity_display_names_bulk(non_user_refs)
 
         from bson import ObjectId
 
@@ -60,10 +65,9 @@ class AuditService:
 
             display_id = str(log.entity_id) if log.entity_id else ""
             if log.entity_type != "user":
-                display_id = await AuditRepository.get_entity_display_name(log.entity_type, str(log.entity_id))
+                display_id = entity_display_map.get((log.entity_type, str(log.entity_id))) or f"Unknown {log.entity_type.replace('_', ' ').title()}"
             else:
-                user_display = await EntityResolver.resolve_users_by_ids([str(log.entity_id)])
-                resolved_id = user_display.get(str(log.entity_id))
+                resolved_id = actor_map.get(str(log.entity_id))
                 if not resolved_id or resolved_id == "Unknown User" or (isinstance(resolved_id, str) and ObjectId.is_valid(resolved_id)):
                     snapshot_name = _extract_user_from_snapshot(log.after) or _extract_user_from_snapshot(log.before)
                     display_id = snapshot_name or "Unknown User"

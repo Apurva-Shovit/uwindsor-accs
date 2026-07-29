@@ -1,7 +1,8 @@
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, timedelta, date
-from fastapi import HTTPException
-from ..models.user import User, RoleEnum, AuditLog
+from fastapi import HTTPException, status
+from ..models.user import User, RoleEnum
+from ..models.audit_log import AuditLog
 from ..models.facility import Facility, Room, Tank
 from ..models.tank_assignment import TankAssignment
 from ..models.project import Project
@@ -109,23 +110,24 @@ class FacilityService:
             after=t.model_dump(mode="json")
         ))
 
-        # Emit explicit quarantine CensusEvent for report timelines
+        # Emit explicit quarantine CensusEvent for report timelines ONLY if tank has an active project assignment
         ta = await TankAssignment.find_one({"tank_id": tank_id, "current_count": {"$gt": 0}})
         if not ta:
             ta = await TankAssignment.find_one({"tank_id": tank_id})
         
-        q_ev = CensusEvent(
-            project_id=ta.project_id if ta else "",
-            tank_assignment_id=str(ta.id) if ta else "",
-            tank_id=tank_id,
-            date=date.today(),
-            event_type="quarantine_placed" if is_quarantined else "quarantine_lifted",
-            change=0,
-            reason="Manual Biosecurity Quarantine Initiated" if is_quarantined else "Manually Lifted Prior to Expiration",
-            notes=f"Quarantine {'manually initiated' if is_quarantined else 'manually lifted'} by {current_user.first_name} {current_user.last_name}",
-            created_by=str(current_user.id),
-        )
-        await q_ev.insert()
+        if ta and ta.project_id:
+            q_ev = CensusEvent(
+                project_id=ta.project_id,
+                tank_assignment_id=str(ta.id),
+                tank_id=tank_id,
+                date=date.today(),
+                event_type="quarantine_placed" if is_quarantined else "quarantine_lifted",
+                change=0,
+                reason="Manual Biosecurity Quarantine Initiated" if is_quarantined else "Manually Lifted Prior to Expiration",
+                notes=f"Quarantine {'manually initiated' if is_quarantined else 'manually lifted'} by {current_user.first_name} {current_user.last_name}",
+                created_by=str(current_user.id),
+            )
+            await q_ev.insert()
         
         return t
 
@@ -146,11 +148,11 @@ class FacilityService:
         assignment_map = {str(a.tank_id): a for a in assignments}
         
         # Bulk query for projects
-        project_ids = [str(a.project_id) for a in assignments]
-        projects = await Project.find({"_id": {"$in": [p for p in project_ids]}}).to_list() # Simplified for ObjectIds
-        # Actually Project.find_many is safer but we'll use a direct fetch
-        projects = await BaseRepository(Project).find({})
-        project_map = {str(p.id): p for p in projects if str(p.id) in project_ids}
+        from bson import ObjectId
+        project_ids = [a.project_id for a in assignments if a.project_id]
+        valid_oids = [ObjectId(pid) for pid in project_ids if ObjectId.is_valid(pid)]
+        projects = await Project.find({"_id": {"$in": valid_oids}}).to_list() if valid_oids else []
+        project_map = {str(p.id): p for p in projects}
 
         res = []
         for t in tanks:

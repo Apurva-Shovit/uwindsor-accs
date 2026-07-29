@@ -1,5 +1,6 @@
 from fastapi import HTTPException
-from ..models.user import User, RoleEnum, StatusEnum, AuditLog
+from ..models.user import User, RoleEnum, StatusEnum
+from ..models.audit_log import AuditLog
 from ..schemas.auth import SignupRequest, LoginRequest
 from ..core.security import hash_password, verify_password, create_access_token
 from ..repositories.user_repository import UserRepository

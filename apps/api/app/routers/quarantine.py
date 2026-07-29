@@ -16,9 +16,11 @@ async def create_exemption_request(
 @router.get("/exemptions")
 async def list_exemptions(
     status_filter: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
     current: User = Depends(get_current_user),
 ):
-    return await QuarantineService.list_exemptions(status_filter, current)
+    return await QuarantineService.list_exemptions(status_filter, current, page=page, limit=limit)
 
 @router.patch("/exemption/{id}/decide")
 async def decide_exemption(

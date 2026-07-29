@@ -2,7 +2,8 @@ import uuid
 from typing import Dict, Any
 from datetime import date, datetime, timezone
 from fastapi import HTTPException, status
-from ..models.user import User, AuditLog, RoleEnum
+from ..models.user import User, RoleEnum
+from ..models.audit_log import AuditLog
 from ..models.project import Project
 from ..models.facility import Tank
 from ..models.tank_assignment import TankAssignment

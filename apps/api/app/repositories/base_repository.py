@@ -19,6 +19,20 @@ class BaseRepository(Generic[T]):
     async def find(self, query: Dict[str, Any]) -> List[T]:
         return await self.model.find(query).to_list()
 
+    async def find_paginated(
+        self,
+        query: Dict[str, Any],
+        skip: int = 0,
+        limit: int = 20,
+        sort: Optional[str] = None
+    ) -> tuple[List[T], int]:
+        total = await self.model.find(query).count()
+        req = self.model.find(query)
+        if sort:
+            req = req.sort(sort)
+        items = await req.skip(skip).limit(limit).to_list()
+        return items, total
+
     async def insert(self, document: T) -> T:
         await document.insert()
         return document

@@ -3,6 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Clock, ShieldAlert, CheckCircle2, XCircle } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
+import {
+  getTanksSummary,
+  getQuarantineExemptions,
+  postExemptionRequest,
+  toggleTankQuarantine,
+  decideExemption,
+} from '../../lib/api';
+import { Paginator } from '../../components/ui/Paginator';
 
 export const QuarantinePage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -12,6 +20,7 @@ export const QuarantinePage: React.FC = () => {
   const [reason, setReason] = useState('');
   const [urgency, setUrgency] = useState('normal');
   const [submitting, setSubmitting] = useState(false);
+  const [page, setPage] = useState(1);
 
   const { user } = useAuth();
   const isManagerPlus = ['super_admin', 'admin', 'chair', 'manager'].includes(user?.role || '');
@@ -23,27 +32,23 @@ export const QuarantinePage: React.FC = () => {
   const { data: tanks, refetch: refetchTanks } = useQuery({
     queryKey: ['tanksList'],
     queryFn: async () => {
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:8000/facilities-structure/tanks/summary', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch tanks');
-      return res.json();
+      const res = await getTanksSummary();
+      return res.data;
     }
   });
 
   // Fetch exemptions history
-  const { data: exemptions, refetch: refetchExemptions } = useQuery({
-    queryKey: ['quarantineExemptions'],
+  const { data: exemptionsResponse, refetch: refetchExemptions } = useQuery({
+    queryKey: ['quarantineExemptions', page],
     queryFn: async () => {
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:8000/quarantine/exemptions', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch exemptions');
-      return res.json();
+      const res = await getQuarantineExemptions({ page, limit: 20 });
+      return res.data;
     }
   });
+
+  const exemptions = Array.isArray(exemptionsResponse) ? exemptionsResponse : (exemptionsResponse?.items || []);
+  const totalExemptions = Array.isArray(exemptionsResponse) ? exemptions.length : (exemptionsResponse?.total || 0);
+  const totalPages = Array.isArray(exemptionsResponse) ? 1 : (exemptionsResponse?.total_pages || 1);
 
   const handleRequestExemption = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,28 +56,18 @@ export const QuarantinePage: React.FC = () => {
 
     setSubmitting(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:8000/quarantine/exemption-request', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          tank_id: selectedSourceTank,
-          target_tank_id: targetTankId,
-          count: Number(transferCount),
-          reason,
-          urgency
-        })
+      await postExemptionRequest({
+        tank_id: selectedSourceTank,
+        target_tank_id: targetTankId,
+        fish_count: Number(transferCount),
+        reason,
+        urgency,
       });
-
-      if (!res.ok) throw new Error('Failed to submit exemption request');
       setIsModalOpen(false);
       setReason('');
       refetchExemptions();
     } catch (err: any) {
-      alert(err.message || 'Error requesting exemption');
+      alert(err.response?.data?.detail || err.message || 'Error requesting exemption');
     } finally {
       setSubmitting(false);
     }
@@ -86,42 +81,21 @@ export const QuarantinePage: React.FC = () => {
     }
 
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:8000/facilities-structure/tanks/${liftModalTank.id || liftModalTank._id}/quarantine`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ is_quarantined: false })
-      });
-      if (!res.ok) throw new Error('Failed to lift quarantine');
+      await toggleTankQuarantine(liftModalTank.id || liftModalTank._id, false);
       refetchTanks();
       setLiftModalTank(null);
     } catch (err: any) {
-      alert(err.message || 'Error lifting quarantine');
+      alert(err.response?.data?.detail || err.message || 'Error lifting quarantine');
     }
   };
 
   const handleDecideExemption = async (exemptionId: string, approved: boolean) => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:8000/quarantine/exemption/${exemptionId}/decide`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ approved })
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || 'Failed to process exemption decision');
-      }
+      await decideExemption(exemptionId, { approved });
       refetchExemptions();
       refetchTanks();
     } catch (err: any) {
-      alert(err.message || 'Error processing exemption decision');
+      alert(err.response?.data?.detail || err.message || 'Error deciding exemption');
     }
   };
 
@@ -309,6 +283,13 @@ export const QuarantinePage: React.FC = () => {
                 )}
               </tbody>
             </table>
+            <Paginator
+              page={page}
+              totalPages={totalPages}
+              total={totalExemptions}
+              limit={20}
+              onPageChange={(p) => setPage(p)}
+            />
           </div>
         )}
       </div>

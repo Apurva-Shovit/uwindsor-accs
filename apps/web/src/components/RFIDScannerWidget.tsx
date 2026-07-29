@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Radio, Search, Tag, AlertCircle } from 'lucide-react';
-
+import api from '../lib/api';
 
 export const RFIDScannerWidget: React.FC = () => {
   const [scanTag, setScanTag] = useState('');
@@ -11,12 +11,8 @@ export const RFIDScannerWidget: React.FC = () => {
   const { data: config } = useQuery({
     queryKey: ['rfidConfig'],
     queryFn: async () => {
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:8000/individual-fish/config', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch RFID config');
-      return res.json();
+      const res = await api.get('/individual-fish/config');
+      return res.data;
     }
   });
 
@@ -30,17 +26,10 @@ export const RFIDScannerWidget: React.FC = () => {
     setScanResult(null);
 
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:8000/individual-fish/scan/${encodeURIComponent(scanTag.trim())}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) {
-        throw new Error('No fish record found matching RFID tag');
-      }
-      const data = await res.json();
-      setScanResult(data);
+      const res = await api.get(`/individual-fish/scan/${encodeURIComponent(scanTag.trim())}`);
+      setScanResult(res.data);
     } catch (err: any) {
-      setScanError(err.message);
+      setScanError(err.response?.data?.detail || err.message || 'No fish record found matching RFID tag');
     }
   };
 

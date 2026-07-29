@@ -23,8 +23,13 @@ async def get_projects_overview(current: User = Depends(get_current_user)):
 
 
 @router.get("")
-async def list_projects(current: User = Depends(get_current_user)):
-    return await Project.find_all().to_list()
+async def list_projects(
+    status_filter: Optional[str] = None,
+    page: int = 1,
+    limit: int = 50,
+    current: User = Depends(get_current_user),
+):
+    return await ProjectService.list_projects(status_filter, page=page, limit=limit, current_user=current)
 
 
 

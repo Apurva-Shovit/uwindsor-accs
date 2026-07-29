@@ -1,11 +1,18 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from .security import decode_access_token
-from ..models.user import User, RoleEnum, StatusEnum
+from fastapi import Depends, HTTPException, status, Cookie, Request
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+async def get_current_user(
+    request: Request,
+    access_token: str | None = Cookie(default=None)
+) -> User:
+    token = access_token
+    if not token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1]
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
+    if not token:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
+
     try:
         payload = decode_access_token(token)
     except Exception:

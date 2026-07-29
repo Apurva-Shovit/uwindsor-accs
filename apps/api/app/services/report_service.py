@@ -20,8 +20,10 @@ class ReportService:
         facility_id: Optional[str],
         project_id: Optional[str],
         tank_id: Optional[str],
-        current_user: User
-    ) -> List[Dict[str, Any]]:
+        current_user: User,
+        page: int = 1,
+        limit: int = 20,
+    ) -> Dict[str, Any]:
         tanks_list = await Tank.find_all().to_list()
         rooms_list = await Room.find_all().to_list()
         facs_list = await Facility.find_all().to_list()
@@ -160,7 +162,7 @@ class ReportService:
             })
 
         # AuditLog Quarantine Toggles (for unassigned tanks or direct audit records)
-        from ..models.user import AuditLog
+        from ..models.audit_log import AuditLog
         aud_query: dict = {"action": {"$in": ["placed_in_quarantine", "lifted_quarantine", "tank_quarantine_toggle"]}}
         if tank_id: aud_query["entity_id"] = tank_id
         q_audits = await AuditLog.find(aud_query).to_list()
@@ -204,7 +206,12 @@ class ReportService:
             if uid:
                 r["performed_by"] = user_map.get(uid, uid)
 
-        return results
+        total = len(results)
+        skip = (page - 1) * limit
+        items = results[skip:skip + limit]
+        total_pages = (total + limit - 1) // limit if limit > 0 else 1
+
+        return {"items": items, "total": total, "page": page, "limit": limit, "total_pages": total_pages}
 
     @staticmethod
     async def get_executive_facility_summary(

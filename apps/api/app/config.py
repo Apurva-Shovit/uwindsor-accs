@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_HOURS: int = 12
     ENABLE_INDIVIDUAL_FISH_TRACKING: bool = False
 
+    RATE_LIMIT_LOGIN: str = "5/minute"
+    RATE_LIMIT_DATA_ENTRY: str = "60/minute"
+    RATE_LIMIT_ADMIN: str = "30/minute"
+
     model_config = ConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()

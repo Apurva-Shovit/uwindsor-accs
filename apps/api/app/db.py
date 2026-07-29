@@ -1,7 +1,8 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie
 from .config import settings
-from .models.user import User, AuditLog
+from .models.user import User
+from .models.audit_log import AuditLog
 from .models.species import Species
 from .models.facility import Facility, Room, Tank
 from .models.water_quality_log import WaterQualityLog
@@ -44,10 +45,15 @@ async def init_db():
         )
         await su.insert()
     else:
-        su.password_hash = hash_password("ChangeMe123!")
-        su.status = StatusEnum.active
-        su.role = RoleEnum.super_admin
-        await su.save()
+        changed = False
+        if su.role != RoleEnum.super_admin:
+            su.role = RoleEnum.super_admin
+            changed = True
+        if su.status != StatusEnum.active:
+            su.status = StatusEnum.active
+            changed = True
+        if changed:
+            await su.save()
 
     # Ensure baseline facility, room, and 14 tanks exist
     fac = await Facility.find_one({"name": "LaSalle Freshwater Restoration Ecology Centre"})

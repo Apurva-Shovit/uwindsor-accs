@@ -3,7 +3,8 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, date
 from fastapi import HTTPException
 from pydantic import BaseModel
-from ..models.user import User, RoleEnum, AuditLog
+from ..models.user import User, RoleEnum
+from ..models.audit_log import AuditLog
 from ..models.facility import Tank
 from ..models.quarantine import QuarantineExemption
 from ..models.tank_assignment import TankAssignment
@@ -58,7 +59,12 @@ class QuarantineService:
         return exemption
 
     @staticmethod
-    async def list_exemptions(status_filter: Optional[str], current_user: User) -> List[Dict[str, Any]]:
+    async def list_exemptions(
+        status_filter: Optional[str],
+        current_user: User,
+        page: int = 1,
+        limit: int = 20,
+    ) -> Dict[str, Any]:
         query: dict = {}
         if status_filter:
             query["status"] = status_filter
@@ -66,8 +72,9 @@ class QuarantineService:
         if current_user.role == RoleEnum.staff:
             query["requested_by"] = str(current_user.id)
 
-        exemptions = await QuarantineExemption.find(query).to_list()
-        exemptions.sort(key=lambda x: x.requested_at, reverse=True)
+        skip = (page - 1) * limit
+        total = await QuarantineExemption.find(query).count()
+        exemptions = await QuarantineExemption.find(query).sort("-requested_at").skip(skip).limit(limit).to_list()
 
         from ..utils.entity_resolver import EntityResolver
         user_ids = []
@@ -79,14 +86,16 @@ class QuarantineService:
 
         user_names_map = await EntityResolver.resolve_users_by_ids(user_ids)
 
-        result = []
+        items = []
         for ex in exemptions:
             d = ex.model_dump(mode="json")
             d["id"] = str(ex.id)
             d["requested_by_name"] = user_names_map.get(ex.requested_by) or ex.requested_by
             d["decided_by_name"] = user_names_map.get(ex.decided_by) if ex.decided_by else None
-            result.append(d)
-        return result
+            items.append(d)
+
+        total_pages = (total + limit - 1) // limit if limit > 0 else 1
+        return {"items": items, "total": total, "page": page, "limit": limit, "total_pages": total_pages}
 
     @staticmethod
     async def decide_exemption(exemption_id: str, body: ExemptionDecision, current_user: User) -> QuarantineExemption:

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BookOpen, AlertTriangle, Search, Calendar, Users, Activity, Plus, X } from 'lucide-react';
 import SpeciesDropdown from '../../components/SpeciesDropdown';
-import { closeProject } from '../../lib/api';
+import { createProject, closeProject, getProjectsOverview } from '../../lib/api';
 
 export const ProjectOverviewPage: React.FC = () => {
   const navigate = useNavigate();
@@ -59,24 +59,12 @@ export const ProjectOverviewPage: React.FC = () => {
 
   const createProjectMutation = useMutation({
     mutationFn: async (payload: typeof newProject) => {
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:8000/projects', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          ...payload,
-          dob: payload.dob || undefined,
-          aupp_expiry_date: payload.aupp_expiry_date ? new Date(payload.aupp_expiry_date).toISOString() : undefined,
-        })
+      const res = await createProject({
+        ...payload,
+        dob: payload.dob || undefined,
+        aupp_expiry_date: payload.aupp_expiry_date ? new Date(payload.aupp_expiry_date).toISOString() : undefined,
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || 'Failed to create project');
-      }
-      return res.json();
+      return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projectsOverview'] });
@@ -97,7 +85,7 @@ export const ProjectOverviewPage: React.FC = () => {
       });
     },
     onError: (err: any) => {
-      setFormError(err.message || 'Error creating project');
+      setFormError(err.response?.data?.detail || err.message || 'Error creating project');
     }
   });
 
@@ -127,12 +115,8 @@ export const ProjectOverviewPage: React.FC = () => {
   const { data, isLoading } = useQuery({
     queryKey: ['projectsOverview'],
     queryFn: async () => {
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:8000/projects/overview', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch projects overview');
-      return res.json();
+      const res = await getProjectsOverview();
+      return res.data;
     }
   });
 

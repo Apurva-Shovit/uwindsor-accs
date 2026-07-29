@@ -33,15 +33,9 @@ class User(Document, MutableBaseFields):
 
     class Settings:
         name = "users"
+        indexes = [
+            "status",
+            "role",
+            [("status", 1), ("role", 1)],
+        ]
 
-class AuditLog(Document, MutableBaseFields):
-    actor_id: str
-    actor_role: str
-    action: str            # e.g. "user_signup", "user_approve", "user_reject", "login"
-    entity_type: str       # "user"
-    entity_id: str
-    before: dict | None = None
-    after: dict | None = None
-
-    class Settings:
-        name = "audit_logs"

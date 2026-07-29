@@ -2,6 +2,16 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Users, UserCheck, UserX, Shield, Database, Search, AlertCircle, X } from 'lucide-react';
 import { formatDate } from '../../utils/formatters';
+import {
+  getUsers,
+  getTanksSummary,
+  getTanks,
+  updateUserRole,
+  updateUserStatus,
+  updateTankAssignments,
+  approveUser,
+} from '../../lib/api';
+import { Paginator } from '../../components/ui/Paginator';
 import { useAuth } from '../../context/AuthContext';
 
 export const UserManagement: React.FC = () => {
@@ -9,7 +19,8 @@ export const UserManagement: React.FC = () => {
   const isAdminOrChair = ['super_admin', 'chair', 'admin'].includes(user?.role || '');
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [page, setPage] = useState(1);
 
   // Modals state
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
@@ -21,127 +32,85 @@ export const UserManagement: React.FC = () => {
   const [actionError, setActionError] = useState('');
 
   // 1. Fetch Users List
-  const { data: usersList = [], isLoading: loadingUsers } = useQuery({
-    queryKey: ['adminUsersList', statusFilter],
+  const { data: usersResponse, isLoading: loadingUsers } = useQuery({
+    queryKey: ['adminUsersList', statusFilter, page],
     queryFn: async () => {
-      const token = localStorage.getItem('token');
-      const url = statusFilter && statusFilter !== 'all'
-        ? `http://localhost:8000/users?status_filter=${statusFilter}`
-        : 'http://localhost:8000/users';
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch users list');
-      return res.json();
+      const params: Record<string, any> = { page, limit: 20 };
+      if (statusFilter && statusFilter !== 'all') {
+        params.status_filter = statusFilter;
+      }
+      const res = await getUsers(params);
+      return res.data;
     }
   });
+
+  const usersList = Array.isArray(usersResponse) ? usersResponse : (usersResponse?.items || []);
+  const totalPages = Array.isArray(usersResponse) ? 1 : (usersResponse?.total_pages || 1);
 
   // 2. Fetch Facility Tanks List for Assignment
   const { data: tanksList = [] } = useQuery({
     queryKey: ['facilityTanksForUserMgmt'],
     queryFn: async () => {
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:8000/facilities-structure/tanks/summary', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) {
-        // Fallback to /facilities-structure/tanks
-        const fallback = await fetch('http://localhost:8000/facilities-structure/tanks', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (!fallback.ok) return [];
-        return fallback.json();
+      try {
+        const res = await getTanksSummary();
+        return res.data;
+      } catch {
+        const fallback = await getTanks();
+        return fallback.data;
       }
-      return res.json();
     }
   });
 
   // Role Update Mutation
   const roleMutation = useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:8000/users/${userId}/role`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ role })
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || 'Failed to update role');
-      }
-      return res.json();
+      const res = await updateUserRole(userId, role);
+      return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminUsersList'] });
       closeModal();
     },
-    onError: (err: any) => setActionError(err.message)
+    onError: (err: any) => setActionError(err.response?.data?.detail || err.message)
   });
 
   // Status Update Mutation (Suspend/Reinstate)
   const statusMutation = useMutation({
     mutationFn: async ({ userId, status, reason }: { userId: string; status: string; reason?: string }) => {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:8000/users/${userId}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ status, reason })
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || 'Failed to update status');
-      }
-      return res.json();
+      const res = await updateUserStatus(userId, status);
+      return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminUsersList'] });
       closeModal();
     },
-    onError: (err: any) => setActionError(err.message)
+    onError: (err: any) => setActionError(err.response?.data?.detail || err.message)
   });
 
   // Tank Assignments Mutation
   const tanksMutation = useMutation({
     mutationFn: async ({ userId, tankIds }: { userId: string; tankIds: string[] }) => {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:8000/users/${userId}/tank-assignments`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ assigned_tank_ids: tankIds })
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || 'Failed to update tank assignments');
-      }
-      return res.json();
+      const res = await updateTankAssignments(userId, tankIds);
+      return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminUsersList'] });
       closeModal();
     },
-    onError: (err: any) => setActionError(err.message)
+    onError: (err: any) => setActionError(err.response?.data?.detail || err.message)
   });
 
   // Approve User Mutation
   const approveMutation = useMutation({
     mutationFn: async ({ userId, role, tankIds }: { userId: string; role: string; tankIds: string[] }) => {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:8000/users/${userId}/approve`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ role, assigned_tank_ids: tankIds })
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || 'Failed to approve user');
-      }
-      return res.json();
+      const res = await approveUser(userId, { role, assigned_tank_ids: tankIds });
+      return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminUsersList'] });
       closeModal();
     },
-    onError: (err: any) => setActionError(err.message)
+    onError: (err: any) => setActionError(err.response?.data?.detail || err.message)
   });
 
   const closeModal = () => {
@@ -370,6 +339,13 @@ export const UserManagement: React.FC = () => {
                 ))}
               </tbody>
             </table>
+            <Paginator
+              page={page}
+              totalPages={totalPages}
+              total={filteredUsers.length}
+              limit={20}
+              onPageChange={(p) => setPage(p)}
+            />
           </div>
         )}
       </div>

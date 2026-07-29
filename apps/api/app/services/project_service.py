@@ -2,7 +2,8 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException, status
 from beanie.operators import In, Or
-from ..models.user import User, AuditLog, RoleEnum
+from ..models.user import User, RoleEnum
+from ..models.audit_log import AuditLog
 from ..models.project import Project
 from ..models.tank_assignment import TankAssignment
 from ..models.census_event import CensusEvent
@@ -143,13 +144,13 @@ class ProjectService:
         if start_date:
             try:
                 start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-            except Exception:
-                pass
+            except (ValueError, TypeError):
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid start_date format, expected YYYY-MM-DD")
         if end_date:
             try:
                 end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
-            except Exception:
-                pass
+            except (ValueError, TypeError):
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid end_date format, expected YYYY-MM-DD")
 
         def get_dt(obj):
             dt = getattr(obj, "created_at", None)
@@ -431,15 +432,37 @@ class ProjectService:
         }
 
     @staticmethod
+    async def list_projects(
+        status_filter: Optional[str],
+        page: int = 1,
+        limit: int = 50,
+        current_user: User = None
+    ) -> Dict[str, Any]:
+        query: dict = {}
+        if status_filter:
+            query["status"] = status_filter
+
+        skip = (page - 1) * limit
+        total = await Project.find(query).count()
+        projects = await Project.find(query).sort("-created_at").skip(skip).limit(limit).to_list()
+        total_pages = (total + limit - 1) // limit if limit > 0 else 1
+        return {"items": projects, "total": total, "page": page, "limit": limit, "total_pages": total_pages}
+
+    @staticmethod
     async def get_projects_overview(current_user: User) -> Dict[str, Any]:
         projects = await Project.find_all().to_list()
-        assignments = await TankAssignment.find({"current_count": {"$gt": 0}}).to_list()
-        incidents = await IncidentReport.find_all().to_list()
-        census_events = await CensusEvent.find_all().to_list()
+        project_ids = [str(p.id) for p in projects]
 
-        from ..models.facility import Tank
-        all_tanks = await Tank.find_all().to_list()
-        tank_map = {str(t.id): t for t in all_tanks}
+        assignments = await TankAssignment.find({"current_count": {"$gt": 0}}).to_list()
+        assigned_tank_ids = list(set([a.tank_id for a in assignments if a.tank_id]))
+        from bson import ObjectId
+        valid_tank_oids = [ObjectId(tid) for tid in assigned_tank_ids if ObjectId.is_valid(tid)]
+        tanks = await Tank.find({"_id": {"$in": valid_tank_oids}}).to_list() if valid_tank_oids else []
+        tank_map = {str(t.id): t for t in tanks}
+
+        # Fetch mortality events specifically
+        death_events = await CensusEvent.find({"event_type": "death"}).to_list()
+        incidents = await IncidentReport.find({"project_id": {"$in": project_ids}}).to_list() if project_ids else []
 
         now = datetime.now(timezone.utc)
         summaries = []
@@ -449,10 +472,10 @@ class ProjectService:
             p_id = str(p.id)
             p_assignments = [a for a in assignments if a.project_id == p_id]
             p_incidents = [inc for inc in incidents if inc.project_id == p_id]
-            p_census = [c for c in census_events if c.project_id == p_id]
+            p_deaths = [c for c in death_events if c.project_id == p_id]
 
             current_fish = sum(a.current_count for a in p_assignments)
-            mortality = sum(abs(c.change) for c in p_census if c.event_type == "death")
+            mortality = sum(abs(c.change) for c in p_deaths)
 
             occupied_tanks = []
             for a in p_assignments:
@@ -497,6 +520,21 @@ class ProjectService:
                 "total_mortality": mortality,
                 "room_number": p.room_number or "-",
                 "rfid_tracking_enabled": p.rfid_tracking_enabled,
+                "occupied_tanks": occupied_tanks
+            })
+
+        active_projects_count = sum(1 for p in projects if p.status == "active")
+        closed_projects_count = sum(1 for p in projects if p.status == "closed")
+
+        return {
+            "projects": summaries,
+            "meta": {
+                "total_projects": len(projects),
+                "active_projects": active_projects_count,
+                "closed_projects": closed_projects_count,
+                "expiring_soon_count": expiring_count
+            }
+        }
                 "occupied_tanks": occupied_tanks,
                 "created_at": p.created_at.isoformat() if p.created_at else None,
             })

@@ -18,3 +18,8 @@ class TankAssignment(Document):
 
     class Settings:
         name = "tank_assignments"
+        indexes = [
+            [("tank_id", 1), ("current_count", -1)],
+            [("project_id", 1)],
+            [("tank_id", 1), ("project_id", 1)],
+        ]

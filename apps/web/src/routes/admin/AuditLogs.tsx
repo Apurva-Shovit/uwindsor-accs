@@ -2,33 +2,29 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { formatDate } from '../../utils/formatters';
 import { ModificationCard } from '../../components/audit/ModificationCard';
+import { getAuditLogs } from '../../lib/api';
+import { Paginator } from '../../components/ui/Paginator';
 
 export const AuditLogs: React.FC = () => {
   const [dateFrom, setDateFrom] = React.useState('');
   const [dateTo, setDateTo] = React.useState('');
+  const [page, setPage] = React.useState(1);
   const [selectedLog, setSelectedLog] = React.useState<any | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['auditLogs', dateFrom, dateTo],
+    queryKey: ['auditLogs', dateFrom, dateTo, page],
     queryFn: async () => {
-      const token = localStorage.getItem('token');
-      let url = 'http://localhost:8000/audit-logs';
-      const params = new URLSearchParams();
-      if (dateFrom) params.append('date_from', new Date(dateFrom).toISOString());
-      if (dateTo) params.append('date_to', new Date(dateTo).toISOString());
-      
-      const queryString = params.toString();
-      if (queryString) {
-        url += `?${queryString}`;
-      }
-
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch audit logs');
-      return res.json();
+      const params: Record<string, any> = { page, page_size: 20 };
+      if (dateFrom) params.date_from = new Date(dateFrom).toISOString();
+      if (dateTo) params.date_to = new Date(dateTo).toISOString();
+      const res = await getAuditLogs(params);
+      return res.data;
     }
   });
+
+  const logsList = Array.isArray(data) ? data : (data?.items || []);
+  const total = Array.isArray(data) ? logsList.length : (data?.total || 0);
+  const totalPages = Array.isArray(data) ? 1 : (data?.total_pages || 1);
 
 
 
@@ -88,7 +84,7 @@ export const AuditLogs: React.FC = () => {
               </svg>
               Fetching audit history...
             </div>
-          ) : !data || data.length === 0 ? (
+          ) : !logsList || logsList.length === 0 ? (
             <div className="p-12 text-center text-slate-500">No audit events matched filters.</div>
           ) : (
             <div className="overflow-hidden">
@@ -103,9 +99,9 @@ export const AuditLogs: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {data.map((row: any, i: number) => (
+                    {logsList.map((row: any, i: number) => (
                       <tr
-                        key={i}
+                        key={row.id || i}
                         onClick={() => setSelectedLog(row)}
                         className={`hover:bg-slate-50 transition-colors cursor-pointer ${
                           selectedLog === row ? 'bg-slate-50 font-medium' : ''
@@ -143,9 +139,9 @@ export const AuditLogs: React.FC = () => {
               </table>
               </div>
               <div className="block lg:hidden flex flex-col divide-y divide-slate-100">
-                {data.map((row: any, i: number) => (
+                {logsList.map((row: any, i: number) => (
                   <div 
-                    key={i} 
+                    key={row.id || i} 
                     onClick={() => setSelectedLog(row)} 
                     className={`p-4 hover:bg-slate-50 cursor-pointer flex flex-col gap-2 transition-colors ${
                       selectedLog === row ? 'bg-slate-50 ring-1 ring-inset ring-[#005596]' : ''
@@ -172,6 +168,13 @@ export const AuditLogs: React.FC = () => {
                   </div>
                 ))}
               </div>
+              <Paginator
+                page={page}
+                totalPages={totalPages}
+                total={total}
+                limit={20}
+                onPageChange={(p) => setPage(p)}
+              />
             </div>
           )}
         </div>

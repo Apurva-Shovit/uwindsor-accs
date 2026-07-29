@@ -1,7 +1,8 @@
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 from fastapi import HTTPException
-from ..models.user import User, RoleEnum, StatusEnum, AuditLog
+from ..models.user import User, RoleEnum, StatusEnum
+from ..models.audit_log import AuditLog
 from ..models.facility import Tank
 from ..schemas.user import ApproveRequest, RejectRequest, PendingUserResponse
 from ..repositories.user_repository import UserRepository
@@ -101,27 +102,37 @@ class UserService:
         ))
 
     @staticmethod
-    async def list_all_users(status_filter: Optional[str], current_user: User) -> List[Dict[str, Any]]:
+    @staticmethod
+    async def list_all_users(
+        status_filter: Optional[str],
+        current_user: User,
+        page: int = 1,
+        limit: int = 20,
+    ) -> Dict[str, Any]:
         query: dict = {}
         if status_filter:
             query["status"] = status_filter
 
-        users = await UserRepository.find(query)
+        if current_user.role == RoleEnum.manager:
+            query["$or"] = [
+                {"role": RoleEnum.staff.value},
+                {"requested_role": RoleEnum.staff.value}
+            ]
+
+        skip = (page - 1) * limit
+        total = await User.find(query).count()
+        users = await User.find(query).sort("-created_at").skip(skip).limit(limit).to_list()
+
         all_tanks = await Tank.find({"deleted": False}).to_list()
         all_tank_ids = [str(t.id) for t in all_tanks]
 
-        result = []
-        for u in sorted(users, key=lambda x: x.created_at, reverse=True):
-            # If Manager, only include Staff accounts
-            if current_user.role == RoleEnum.manager:
-                if u.role != RoleEnum.staff and u.requested_role != RoleEnum.staff:
-                    continue
-
+        items = []
+        for u in users:
             assigned_ids = u.assigned_tank_ids or []
             if u.role in (RoleEnum.manager, RoleEnum.admin, RoleEnum.chair, RoleEnum.super_admin) and not assigned_ids:
                 assigned_ids = all_tank_ids
 
-            result.append({
+            items.append({
                 "id": str(u.id),
                 "email": u.email,
                 "first_name": u.first_name,
@@ -134,7 +145,9 @@ class UserService:
                 "approved_at": u.approved_at,
                 "created_at": u.created_at.isoformat() if u.created_at else None,
             })
-        return result
+
+        total_pages = (total + limit - 1) // limit if limit > 0 else 1
+        return {"items": items, "total": total, "page": page, "limit": limit, "total_pages": total_pages}
 
     @staticmethod
     async def update_user_role(user_id: str, new_role: RoleEnum, current_user: User) -> Dict[str, Any]:

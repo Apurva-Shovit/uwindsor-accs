@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { formatDate } from '../../utils/formatters';
 import { Database, Search, Filter } from 'lucide-react';
-
+import { getTanks, searchTankHistory } from '../../lib/api';
 
 export const TankHistoryPage: React.FC = () => {
   const [selectedTankId, setSelectedTankId] = useState('');
@@ -15,12 +15,8 @@ export const TankHistoryPage: React.FC = () => {
   const { data: tanks } = useQuery({
     queryKey: ['tanksList'],
     queryFn: async () => {
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:8000/facilities-structure/tanks', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch tanks');
-      return res.json();
+      const res = await getTanks();
+      return res.data;
     }
   });
 
@@ -28,19 +24,15 @@ export const TankHistoryPage: React.FC = () => {
   const { data: history, isLoading } = useQuery({
     queryKey: ['tankHistorySearch', selectedTankId, eventType, dateFrom, dateTo, keyword],
     queryFn: async () => {
-      const token = localStorage.getItem('token');
-      const params = new URLSearchParams();
-      if (selectedTankId) params.append('tank_id', selectedTankId);
-      if (eventType) params.append('event_type', eventType);
-      if (dateFrom) params.append('date_from', dateFrom);
-      if (dateTo) params.append('date_to', dateTo);
-      if (keyword) params.append('keyword', keyword);
+      const params: Record<string, any> = {};
+      if (selectedTankId) params.tank_id = selectedTankId;
+      if (eventType) params.event_type = eventType;
+      if (dateFrom) params.date_from = dateFrom;
+      if (dateTo) params.date_to = dateTo;
+      if (keyword) params.keyword = keyword;
 
-      const res = await fetch(`http://localhost:8000/facilities-structure/tanks/history/search?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch tank history');
-      return res.json();
+      const res = await searchTankHistory(params);
+      return res.data;
     }
   });
 

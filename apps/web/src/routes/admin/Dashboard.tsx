@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Activity, Filter } from 'lucide-react';
+import { getDashboardSummary, getWaterQualityAnalytics } from '../../lib/api';
 
 export const Dashboard: React.FC = () => {
   const [selectedTank, setSelectedTank] = useState<string>('all');
@@ -9,29 +10,20 @@ export const Dashboard: React.FC = () => {
   const { data: summary, isLoading: loadingSummary } = useQuery({
     queryKey: ['dashboardSummary'],
     queryFn: async () => {
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:8000/dashboard/summary', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch summary');
-      return res.json();
+      const res = await getDashboardSummary();
+      return res.data;
     }
   });
 
   const { data: analyticsData, isLoading: loadingAnalytics } = useQuery({
     queryKey: ['waterQualityAnalytics', selectedTank, timeRangeDays],
     queryFn: async () => {
-      const token = localStorage.getItem('token');
-      const params = new URLSearchParams();
-      params.append('days', String(timeRangeDays));
+      const params: Record<string, any> = { days: timeRangeDays };
       if (selectedTank && selectedTank !== 'all') {
-        params.append('tank_id', selectedTank);
+        params.tank_id = selectedTank;
       }
-      const res = await fetch(`http://localhost:8000/dashboard/water-quality-analytics?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch water quality analytics');
-      return res.json();
+      const res = await getWaterQualityAnalytics(params);
+      return res.data;
     }
   });
 

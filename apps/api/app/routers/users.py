@@ -13,9 +13,11 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.get("")
 async def list_all_users(
     status_filter: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
     current: User = Depends(require_manager_plus),
 ):
-    return await UserService.list_all_users(status_filter, current)
+    return await UserService.list_all_users(status_filter, current, page=page, limit=limit)
 
 @router.get("/pending", response_model=list[PendingUserResponse])
 async def list_pending(current: User = Depends(require_manager_plus)):

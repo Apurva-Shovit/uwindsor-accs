@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, Query
 from datetime import datetime
 from typing import Optional
 
-from ..models.user import User, RoleEnum, AuditLog
+from ..models.user import User, RoleEnum
+from ..models.audit_log import AuditLog
 from ..core.permissions import require_manager_plus
 
 router = APIRouter(prefix="/audit-logs", tags=["audit-logs"])

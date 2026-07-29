@@ -2,7 +2,8 @@ from typing import Dict, Any, Optional
 from datetime import date, datetime, timedelta, timezone
 from fastapi import HTTPException, status
 from pydantic import BaseModel
-from ..models.user import User, AuditLog, RoleEnum
+from ..models.user import User, RoleEnum
+from ..models.audit_log import AuditLog
 from ..models.project import Project
 from ..models.facility import Tank
 from ..models.tank_assignment import TankAssignment
@@ -85,40 +86,20 @@ class IntakeService:
         await ev.insert()
 
         # Auto-activate mandatory 14-day quarantine mode on destination tank ONLY for arrival events (hatch events do NOT quarantine)
+        actor_role = str(current_user.role.value if current_user.role else "none")
         if body.event_type == "arrival":
             dest_tank = await Tank.get(body.tank_id)
             if dest_tank:
-                now = datetime.now(timezone.utc)
-                before_tank = dest_tank.model_dump(mode="json")
-                dest_tank.is_quarantined = True
-                dest_tank.quarantine_start_date = now
-                dest_tank.quarantine_end_date = now + timedelta(days=14)
-                await dest_tank.save()
-
-                actor_role = str(current_user.role.value if current_user.role else "none")
-                await AuditRepository.insert(AuditLog(
-                    actor_id=str(current_user.id),
-                    actor_role=actor_role,
-                    action="placed_in_quarantine",
-                    entity_type="tank",
-                    entity_id=str(dest_tank.id),
-                    before=before_tank,
-                    after=dest_tank.model_dump(mode="json"),
-                ))
-
-                # Emit explicit quarantine_placed CensusEvent for reports timeline
-                q_ev = CensusEvent(
+                from ..utils.quarantine_utils import place_quarantine
+                await place_quarantine(
+                    tank=dest_tank,
                     project_id=body.project_id,
                     tank_assignment_id=str(ta.id),
-                    tank_id=body.tank_id,
-                    date=date.today(),
-                    event_type="quarantine_placed",
-                    change=0,
-                    reason="Mandatory 14-day Biosecurity Quarantine Initiated",
-                    notes=body.notes or "Placed under 14-day quarantine upon intake arrival",
-                    created_by=str(current_user.id),
+                    actor_id=str(current_user.id),
+                    actor_role=actor_role,
+                    event_date=date.today(),
+                    notes=body.notes,
                 )
-                await q_ev.insert()
 
         actor_role = str(current_user.role.value if current_user.role else "none")
 

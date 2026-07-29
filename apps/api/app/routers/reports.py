@@ -14,9 +14,13 @@ async def get_reports_summary(
     facility_id: Optional[str] = Query(None),
     project_id: Optional[str] = Query(None),
     tank_id: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
     current: User = Depends(require_manager_plus),
 ):
-    return await ReportService.get_reports_summary(date_from, date_to, facility_id, project_id, tank_id, current)
+    return await ReportService.get_reports_summary(
+        date_from, date_to, facility_id, project_id, tank_id, current, page=page, limit=limit
+    )
 
 @router.get("/executive-facility-summary")
 async def get_executive_facility_summary(

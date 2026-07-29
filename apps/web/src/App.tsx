@@ -6,12 +6,14 @@ import { Signup } from './routes/Signup';
 import { PendingApproval } from './routes/PendingApproval';
 import { StaffLayout } from './routes/staff/StaffLayout';
 import { AdminLayout } from './routes/admin/AdminLayout';
+import { ErrorToast } from './components/ui/ErrorToast';
 
 import { SidebarProvider } from './context/SidebarContext';
 
 export function App() {
   return (
     <AuthProvider>
+      <ErrorToast />
       <SidebarProvider>
         <Router>
           <Routes>

@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Optional
 from fastapi import HTTPException, status
-from ..models.user import User, AuditLog, RoleEnum
+from ..models.user import User, RoleEnum
+from ..models.audit_log import AuditLog
 from ..models.water_quality_log import WaterQualityLog
 from ..models.tank_assignment import TankAssignment
 from ..schemas.water_quality import WaterQualityCreate, WaterQualityBatchCreate
@@ -92,7 +93,12 @@ class WaterQualityService:
         return {"created": len(created_logs), "logs": created_logs, "validation": validation}
 
     @staticmethod
-    async def list_logs(tank_id: Optional[str], current_user: User) -> List[WaterQualityLog]:
+    async def list_logs(
+        tank_id: Optional[str],
+        current_user: User,
+        page: int = 1,
+        limit: int = 20,
+    ) -> Dict[str, Any]:
         query: dict = {}
         if tank_id:
             query["tank_id"] = tank_id
@@ -100,5 +106,9 @@ class WaterQualityService:
         if current_user.role == RoleEnum.staff:
             if tank_id and tank_id not in (current_user.assigned_tank_ids or []):
                 raise HTTPException(status.HTTP_403_FORBIDDEN, "Not authorised")
-                
-        return await WaterQualityLog.find(query).sort("-created_at").to_list()
+
+        skip = (page - 1) * limit
+        total = await WaterQualityLog.find(query).count()
+        items = await WaterQualityLog.find(query).sort("-created_at").skip(skip).limit(limit).to_list()
+        total_pages = (total + limit - 1) // limit if limit > 0 else 1
+        return {"items": items, "total": total, "page": page, "limit": limit, "total_pages": total_pages}

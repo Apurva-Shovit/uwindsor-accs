@@ -1,6 +1,8 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { formatDate } from '../../utils/formatters';
+import { getExecutiveSummary, getReportsSummary, getProjects, getProjectReport } from '../../lib/api';
+import { Paginator } from '../../components/ui/Paginator';
 
 export const Reports: React.FC = () => {
   const [dateFrom, setDateFrom] = React.useState('');
@@ -8,47 +10,36 @@ export const Reports: React.FC = () => {
   const [granularity, _setGranularity] = React.useState('monthly');
   const [eventFilter, setEventFilter] = React.useState('');
   const [auppFilter, setAuppFilter] = React.useState('');
+  const [page, setPage] = React.useState(1);
 
   // Executive summary query
   const { data: execSummary } = useQuery({
     queryKey: ['execFacilitySummary', dateFrom, dateTo, granularity],
     queryFn: async () => {
-      const token = localStorage.getItem('token');
-      let url = 'http://localhost:8000/reports/executive-facility-summary';
-      const params = new URLSearchParams();
-      if (dateFrom) params.append('date_from', new Date(dateFrom + 'T00:00:00').toISOString());
-      if (dateTo) params.append('date_to', new Date(dateTo + 'T23:59:59').toISOString());
-      params.append('granularity', granularity);
+      const params: Record<string, any> = { granularity };
+      if (dateFrom) params.date_from = new Date(dateFrom + 'T00:00:00').toISOString();
+      if (dateTo) params.date_to = new Date(dateTo + 'T23:59:59').toISOString();
 
-      const res = await fetch(`${url}?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch executive summary');
-      return res.json();
+      const res = await getExecutiveSummary(params);
+      return res.data;
     }
   });
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['reportsSummary', dateFrom, dateTo],
+  const { data: reportsResponse, isLoading } = useQuery({
+    queryKey: ['reportsSummary', dateFrom, dateTo, page],
     queryFn: async () => {
-      const token = localStorage.getItem('token');
-      let url = 'http://localhost:8000/reports/summary';
-      const params = new URLSearchParams();
-      if (dateFrom) params.append('date_from', new Date(dateFrom + 'T00:00:00').toISOString());
-      if (dateTo) params.append('date_to', new Date(dateTo + 'T23:59:59').toISOString());
-      
-      const queryString = params.toString();
-      if (queryString) {
-        url += `?${queryString}`;
-      }
+      const params: Record<string, any> = { page, limit: 20 };
+      if (dateFrom) params.date_from = new Date(dateFrom + 'T00:00:00').toISOString();
+      if (dateTo) params.date_to = new Date(dateTo + 'T23:59:59').toISOString();
 
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch reports');
-      return res.json();
+      const res = await getReportsSummary(params);
+      return res.data;
     }
   });
+
+  const data = Array.isArray(reportsResponse) ? reportsResponse : (reportsResponse?.items || []);
+  const totalReports = Array.isArray(reportsResponse) ? data.length : (reportsResponse?.total || 0);
+  const totalPages = Array.isArray(reportsResponse) ? 1 : (reportsResponse?.total_pages || 1);
 
   const formatSummary = (summaryStr: string) => {
     if (!summaryStr) return '-';
@@ -88,17 +79,15 @@ export const Reports: React.FC = () => {
   const [selectedProjectId, setSelectedProjectId] = React.useState('');
 
   // Projects list for official report
-  const { data: projectsList } = useQuery({
+  const { data: projectsResponse } = useQuery({
     queryKey: ['projectsListForReports'],
     queryFn: async () => {
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:8000/projects', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) return [];
-      return res.json();
+      const res = await getProjects();
+      return res.data;
     }
   });
+
+  const projectsList = Array.isArray(projectsResponse) ? projectsResponse : (projectsResponse?.items || []);
 
   React.useEffect(() => {
     if (projectsList && projectsList.length > 0 && !selectedProjectId) {
@@ -112,19 +101,15 @@ export const Reports: React.FC = () => {
     queryKey: ['sopReportData', selectedProjectId, timePeriodParam, dateFrom, dateTo],
     queryFn: async () => {
       if (!selectedProjectId) return null;
-      const token = localStorage.getItem('token');
-      const params = new URLSearchParams();
-      params.append('time_period', timePeriodParam);
-      if (dateFrom) params.append('start_date', dateFrom);
-      if (dateTo) params.append('end_date', dateTo);
-      params.append('page', '1');
-      params.append('limit', '1000');
-
-      const res = await fetch(`http://localhost:8000/projects/${selectedProjectId}/report?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) return null;
-      return res.json();
+      const res = await getProjectReport(
+        selectedProjectId,
+        timePeriodParam,
+        1,
+        1000,
+        dateFrom || undefined,
+        dateTo || undefined
+      );
+      return res.data;
     },
     enabled: !!selectedProjectId && showOfficialModal
   });
@@ -400,6 +385,13 @@ export const Reports: React.FC = () => {
                   </div>
                 </div>
               ))}
+              <Paginator
+                page={page}
+                totalPages={totalPages}
+                total={totalReports}
+                limit={20}
+                onPageChange={(p) => setPage(p)}
+              />
             </div>
           </div>
           );
