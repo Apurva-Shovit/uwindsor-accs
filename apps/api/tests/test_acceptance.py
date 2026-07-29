@@ -1,7 +1,8 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
 from app.main import app
-from app.models.user import User, AuditLog
+from app.models.user import User
+from app.models.audit_log import AuditLog
 from app.core.security import create_access_token, hash_password
 
 from app.db import init_db

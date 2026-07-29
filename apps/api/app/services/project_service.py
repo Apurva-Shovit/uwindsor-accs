@@ -8,6 +8,7 @@ from ..models.project import Project
 from ..models.tank_assignment import TankAssignment
 from ..models.census_event import CensusEvent
 from ..models.incident_report import IncidentReport
+from ..models.facility import Tank
 from ..schemas.project import ProjectCreate, ProjectClose
 from ..repositories.base_repository import BaseRepository
 from ..repositories.audit_repository import AuditRepository

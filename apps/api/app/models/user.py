@@ -2,6 +2,7 @@ from enum import Enum
 from beanie import Document, Indexed
 from pydantic import EmailStr
 from .base import MutableBaseFields
+from .audit_log import AuditLog
 
 class RoleEnum(str, Enum):
     super_admin = "super_admin"
