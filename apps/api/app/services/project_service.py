@@ -535,19 +535,6 @@ class ProjectService:
                 "expiring_soon_count": expiring_count
             }
         }
-                "occupied_tanks": occupied_tanks,
-                "created_at": p.created_at.isoformat() if p.created_at else None,
-            })
-
-        active_count = sum(1 for p in projects if p.status == "active")
-
-        return {
-            "total_projects": len(projects),
-            "active_projects": active_count,
-            "closed_projects": len(projects) - active_count,
-            "expiring_soon": expiring_count,
-            "projects": summaries
-        }
 
     @staticmethod
     async def close_project(project_id: str, body: ProjectClose, current_user: User) -> Project:
