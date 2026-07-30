@@ -450,7 +450,7 @@ class ProjectService:
         return {"items": projects, "total": total, "page": page, "limit": limit, "total_pages": total_pages}
 
     @staticmethod
-    async def get_projects_overview(current_user: User) -> Dict[str, Any]:
+    async def get_projects_overview(current_user: User, search: Optional[str] = None, status: Optional[str] = None) -> Dict[str, Any]:
         projects = await Project.find_all().to_list()
         project_ids = [str(p.id) for p in projects]
 
@@ -466,8 +466,10 @@ class ProjectService:
         incidents = await IncidentReport.find({"project_id": {"$in": project_ids}}).to_list() if project_ids else []
 
         now = datetime.now(timezone.utc)
-        summaries = []
+        all_summaries = []
         expiring_count = 0
+        total_allocated_fish = 0
+        total_project_incidents = len(incidents)
 
         for p in projects:
             p_id = str(p.id)
@@ -476,6 +478,7 @@ class ProjectService:
             p_deaths = [c for c in death_events if c.project_id == p_id]
 
             current_fish = sum(a.current_count for a in p_assignments)
+            total_allocated_fish += current_fish
             mortality = sum(abs(c.change) for c in p_deaths)
 
             occupied_tanks = []
@@ -501,7 +504,7 @@ class ProjectService:
                     is_expiring = True
                     expiring_count += 1
 
-            summaries.append({
+            all_summaries.append({
                 "id": p_id,
                 "title": p.title,
                 "pi_name": p.pi_name,
@@ -524,18 +527,46 @@ class ProjectService:
                 "occupied_tanks": occupied_tanks
             })
 
+        filtered = all_summaries
+        if search and search.strip():
+            s_lower = search.strip().lower()
+            filtered = [
+                item for item in filtered
+                if s_lower in item["title"].lower()
+                or s_lower in item["pi_name"].lower()
+                or s_lower in item["aupp_number"].lower()
+                or s_lower in item["species"].lower()
+            ]
+
+        if status and status != "all":
+            if status == "active":
+                filtered = [item for item in filtered if item["status"] == "active"]
+            elif status == "closed":
+                filtered = [item for item in filtered if item["status"] == "closed"]
+            elif status == "expiring":
+                filtered = [item for item in filtered if item["is_expiring"]]
+
         active_projects_count = sum(1 for p in projects if p.status == "active")
         closed_projects_count = sum(1 for p in projects if p.status == "closed")
 
         return {
-            "projects": summaries,
+            "projects": filtered,
+            "total_projects": len(projects),
+            "active_projects": active_projects_count,
+            "closed_projects": closed_projects_count,
+            "expiring_soon": expiring_count,
+            "total_allocated_fish": total_allocated_fish,
+            "total_incidents": total_project_incidents,
             "meta": {
                 "total_projects": len(projects),
                 "active_projects": active_projects_count,
                 "closed_projects": closed_projects_count,
-                "expiring_soon_count": expiring_count
+                "expiring_soon_count": expiring_count,
+                "total_allocated_fish": total_allocated_fish,
+                "total_incidents": total_project_incidents
             }
         }
+
 
     @staticmethod
     async def close_project(project_id: str, body: ProjectClose, current_user: User) -> Project:

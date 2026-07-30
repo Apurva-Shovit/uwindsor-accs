@@ -4,11 +4,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BookOpen, AlertTriangle, Search, Calendar, Users, Activity, Plus, X } from 'lucide-react';
 import SpeciesDropdown from '../../components/SpeciesDropdown';
 import { createProject, closeProject, getProjectsOverview } from '../../lib/api';
+import { formatDate } from '../../utils/formatters';
+import { useDebounce } from '../../hooks/useDebounce';
 
 export const ProjectOverviewPage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 350);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'closed' | 'expiring'>('all');
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -113,40 +116,18 @@ export const ProjectOverviewPage: React.FC = () => {
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ['projectsOverview'],
+    queryKey: ['projectsOverview', debouncedSearchTerm, statusFilter],
     queryFn: async () => {
-      const res = await getProjectsOverview();
+      const params: Record<string, any> = {};
+      if (debouncedSearchTerm) params.search = debouncedSearchTerm;
+      if (statusFilter && statusFilter !== 'all') params.status = statusFilter;
+      const res = await getProjectsOverview(params);
       return res.data;
     }
   });
 
   const projects = data?.projects || [];
 
-  const filteredProjects = projects.filter((p: any) => {
-    const matchesSearch =
-      p.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.pi_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.aupp_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.species.toLowerCase().includes(searchTerm.toLowerCase());
-
-    if (statusFilter === 'active') return matchesSearch && p.status === 'active';
-    if (statusFilter === 'closed') return matchesSearch && p.status === 'closed';
-    if (statusFilter === 'expiring') return matchesSearch && p.is_expiring;
-    return matchesSearch;
-  });
-
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return 'N/A';
-    try {
-      return new Date(dateStr).toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-    } catch {
-      return dateStr;
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -203,7 +184,7 @@ export const ProjectOverviewPage: React.FC = () => {
             </div>
           </div>
           <p className="text-3xl font-extrabold text-slate-900 mt-2">
-            {projects.reduce((sum: number, p: any) => sum + (p.total_animals || 0), 0)}
+            {data?.total_allocated_fish ?? data?.meta?.total_allocated_fish ?? 0}
           </p>
           <span className="text-xs text-slate-500 mt-1 block">Across active tank assignments</span>
         </div>
@@ -216,7 +197,7 @@ export const ProjectOverviewPage: React.FC = () => {
             </div>
           </div>
           <p className="text-3xl font-extrabold text-slate-900 mt-2">
-            {projects.reduce((sum: number, p: any) => sum + (p.total_incidents || 0), 0)}
+            {data?.total_incidents ?? data?.meta?.total_incidents ?? 0}
           </p>
           <span className="text-xs text-slate-500 mt-1 block">Total flags logged</span>
         </div>
@@ -242,7 +223,7 @@ export const ProjectOverviewPage: React.FC = () => {
               statusFilter === 'all' ? 'bg-[#005596] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            All Projects ({projects.length})
+            All Projects ({data?.total_projects || projects.length})
           </button>
           <button
             onClick={() => setStatusFilter('active')}
@@ -278,7 +259,7 @@ export const ProjectOverviewPage: React.FC = () => {
             <div className="animate-spin h-8 w-8 border-4 border-[#005596] border-t-transparent rounded-full mx-auto mb-3" />
             Loading project data...
           </div>
-        ) : filteredProjects.length === 0 ? (
+        ) : projects.length === 0 ? (
           <div className="p-12 text-center text-slate-500">No projects match the selected filter.</div>
         ) : (
           <div className="overflow-x-auto">
@@ -296,7 +277,8 @@ export const ProjectOverviewPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
-                {filteredProjects.map((p: any) => (
+                {projects.map((p: any) => (
+
                   <tr key={p.id} className="hover:bg-slate-50 transition-colors">
                     <td className="p-4">
                       <div className="font-bold text-slate-900">{p.title}</div>

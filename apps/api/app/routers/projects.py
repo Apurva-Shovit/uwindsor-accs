@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from ..models.user import User
 from ..models.project import Project
 from ..core.permissions import get_current_user, require_manager_plus
@@ -7,6 +7,7 @@ from ..schemas.project import ProjectCreate, ProjectClose
 from ..services.project_service import ProjectService
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
 
 
 @router.post("", status_code=201)
@@ -18,8 +19,13 @@ async def create_project(
 
 
 @router.get("/overview")
-async def get_projects_overview(current: User = Depends(get_current_user)):
-    return await ProjectService.get_projects_overview(current)
+async def get_projects_overview(
+    search: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    current: User = Depends(get_current_user)
+):
+    return await ProjectService.get_projects_overview(current, search=search, status=status)
+
 
 
 @router.get("")

@@ -69,7 +69,9 @@ export const getSpecies = () => api.get('/species/');
 export const createSpecies = (data: any) => api.post('/species', data);
 export const getProjects = (params?: { status_filter?: string; page?: number; limit?: number }) =>
   api.get('/projects', { params });
-export const getProjectsOverview = () => api.get('/projects/overview');
+export const getProjectsOverview = (params?: { search?: string; status?: string }) =>
+  api.get('/projects/overview', { params });
+
 export const getProject = (id: string) => api.get(`/projects/${id}`);
 export const getProjectDetails = (id: string) => api.get(`/projects/${id}/details`);
 export const getProjectReport = (
