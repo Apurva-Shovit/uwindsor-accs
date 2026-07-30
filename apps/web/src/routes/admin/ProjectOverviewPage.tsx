@@ -155,12 +155,10 @@ export const ProjectOverviewPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-[#005596] flex items-center gap-2">
             <BookOpen className="w-7 h-7 text-[#005596]" />
-            Research Projects & Protocol Overview
+            Research Projects &amp; Protocol Overview
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            High-level monitoring of active Animal Use Protocol Numbers (AUPP#), allocated animal census, and compliance status.
-          </p>
         </div>
+
 
         <button
           onClick={() => setShowCreateModal(true)}

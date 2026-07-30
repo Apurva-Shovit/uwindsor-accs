@@ -33,10 +33,8 @@ export const AuditLogs: React.FC = () => {
       {/* Header */}
       <div className="border-b border-slate-200 pb-4">
         <h1 className="text-2xl font-bold text-[#005596]">System Audit Logs</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Traceable history of all login attempts, system updates, and user modifications.
-        </p>
       </div>
+
 
       {/* Date Filters */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">

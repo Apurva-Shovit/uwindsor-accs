@@ -146,10 +146,8 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-textPrimary">Room 301 — Top-View Grid</h1>
-          <p className="text-sm text-textSecondary">
-            {isAdminMode ? 'Manage tank status and configurations.' : 'View assigned tanks and health states.'}
-          </p>
         </div>
+
         <div className="flex space-x-2">
           {isAdminMode && (
             <button

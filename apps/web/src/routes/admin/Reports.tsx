@@ -180,9 +180,9 @@ export const Reports: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-4 print:pb-2">
         <div>
-          <h1 className="text-2xl font-bold text-[#005596]">Facility & Audit Reports</h1>
-          <p className="text-sm text-slate-500 mt-1">Comprehensive population reconciliation, active protocols, and inspector-facing logs.</p>
+          <h1 className="text-2xl font-bold text-[#005596]">Facility &amp; Audit Reports</h1>
         </div>
+
         <button
           onClick={() => setShowOfficialModal(true)}
           className="bg-[#005596] hover:bg-[#002B51] text-white px-5 py-2.5 rounded-lg shadow-sm font-semibold transition-all duration-200 flex items-center gap-2 print:hidden"

@@ -65,10 +65,8 @@ export const TankHistoryPage: React.FC = () => {
           <Database className="w-7 h-7 text-[#005596]" />
           Dedicated Tank History Explorer
         </h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Full-page chronological log search across census adjustments, daily water quality parameters, test strips, and incident reports.
-        </p>
       </div>
+
 
       {/* Advanced Filter Panel */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">

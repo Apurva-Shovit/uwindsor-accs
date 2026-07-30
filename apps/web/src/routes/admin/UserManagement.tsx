@@ -176,12 +176,8 @@ export const UserManagement: React.FC = () => {
           <Users className="w-7 h-7 text-[#005596]" />
           User Account &amp; Access Control Management
         </h1>
-        <p className="text-sm text-slate-500 mt-1">
-          {isAdminOrChair
-            ? 'Approve pending signups, modify system roles, suspend/reinstate accounts, and grant tank access permissions.'
-            : 'Approve pending staff signups, suspend/reinstate staff accounts, and grant staff tank access permissions.'}
-        </p>
       </div>
+
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
