@@ -64,7 +64,7 @@ export const ProjectDetailsPage: React.FC = () => {
   const loadProjects = async () => {
     try {
       const res = await getProjects();
-      const list = Array.isArray(res.data) ? res.data : (res.data?.projects || []);
+      const list = Array.isArray(res.data) ? res.data : (res.data?.items || res.data?.projects || []);
       setProjects(list);
       if (selectedProj) {
         const updated = list.find((p: Project) => getId(p) === getId(selectedProj));
@@ -72,6 +72,7 @@ export const ProjectDetailsPage: React.FC = () => {
       }
     } catch (err) {}
   };
+
 
 
   useEffect(() => {

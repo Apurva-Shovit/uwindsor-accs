@@ -449,7 +449,8 @@ class ProjectService:
         total = await Project.find(query).count()
         projects = await Project.find(query).sort("-created_at").skip(skip).limit(limit).to_list()
         total_pages = (total + limit - 1) // limit if limit > 0 else 1
-        return {"items": projects, "total": total, "page": page, "limit": limit, "total_pages": total_pages}
+        return {"items": projects, "projects": projects, "total": total, "page": page, "limit": limit, "total_pages": total_pages}
+
 
     @staticmethod
     async def get_projects_overview(current_user: User, search: Optional[str] = None, status: Optional[str] = None) -> Dict[str, Any]:

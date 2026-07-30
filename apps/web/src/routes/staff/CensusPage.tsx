@@ -77,10 +77,11 @@ export const CensusPage: React.FC = () => {
   useEffect(() => {
     getTanks().then(r => setTanks(r.data)).catch(() => {});
     getProjects().then(r => {
-      const rawList = Array.isArray(r.data) ? r.data : (r.data?.projects || []);
+      const rawList = Array.isArray(r.data) ? r.data : (r.data?.items || r.data?.projects || []);
       const active = (rawList as Project[]).filter(p => p.status !== 'closed');
       setProjects(active);
     }).catch(() => {});
+
 
   }, []);
 
