@@ -1,5 +1,7 @@
+from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
+
 from ..models.user import User
 from ..core.permissions import get_current_user, require_chair_or_admin, require_manager_plus
 from ..services.facility_service import FacilityService
