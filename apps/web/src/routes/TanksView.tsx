@@ -23,6 +23,8 @@ interface TanksViewProps {
 export const TanksView: React.FC<TanksViewProps> = ({ isAdminMode = false }) => {
   const { user } = useAuth();
   const canDelete = ['super_admin', 'chair', 'admin'].includes(user?.role || '');
+  const historyExplorerPath = isAdminMode ? '/admin/tanks/history' : '/staff/tanks/history';
+
 
   const [tanks, setTanks] = useState<TankSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -360,7 +362,7 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
                           <span className="text-xs text-textSecondary italic block">No historical logs recorded in the past 7 days.</span>
                           <div className="pt-1 text-right">
                             <Link
-                              to={`/admin/tank-history?tank_id=${getId(selectedTank)}`}
+                              to={`${historyExplorerPath}?tank_id=${getId(selectedTank)}`}
                               className="inline-flex items-center text-xs font-bold text-[#005596] hover:underline"
                             >
                               View Full Tank History Explorer &rarr;
@@ -420,7 +422,7 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
                           </div>
                           <div className="pt-2 border-t border-slate-100 text-right">
                             <Link
-                              to={`/admin/tank-history?tank_id=${getId(selectedTank)}`}
+                              to={`${historyExplorerPath}?tank_id=${getId(selectedTank)}`}
                               className="inline-flex items-center text-xs font-bold text-[#005596] hover:underline"
                             >
                               View Full Tank History Explorer &rarr;
@@ -428,6 +430,7 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
                           </div>
                         </div>
                       )}
+
                     </div>
 
                   </div>
