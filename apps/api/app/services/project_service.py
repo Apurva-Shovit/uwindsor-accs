@@ -127,6 +127,8 @@ class ProjectService:
         p_data = p.model_dump(mode="json")
         p_data["id"] = str(p.id)
         p_data["pi_name"] = getattr(p, "pi_name", None) or await EntityResolver.resolve_user_name(getattr(p, "pi_id", None)) or "N/A"
+        p_data["sex"] = getattr(p, "sex", None) or "both"
+
 
         # Calculate time period cutoff or custom start_date/end_date range
         now = datetime.now(timezone.utc)

@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getProjectReport } from '../lib/api';
 import { ModificationCard } from '../components/audit/ModificationCard';
-import { BookOpen, ArrowLeft, Printer, AlertTriangle } from 'lucide-react';
+import { BookOpen, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { formatDate } from '../utils/formatters';
+import { Paginator } from '../components/ui/Paginator';
 
 export const ProjectReportPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -15,7 +17,7 @@ export const ProjectReportPage: React.FC = () => {
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [page, setPage] = useState<number>(1);
-  const limit = 10;
+  const [limit, setLimit] = useState<number>(10);
 
   useEffect(() => {
     if (id) {
@@ -30,7 +32,7 @@ export const ProjectReportPage: React.FC = () => {
           setLoading(false);
         });
     }
-  }, [id, timePeriod, startDate, endDate, page]);
+  }, [id, timePeriod, startDate, endDate, page, limit]);
 
   if (loading && !data) {
     return (
@@ -59,32 +61,6 @@ export const ProjectReportPage: React.FC = () => {
 
   const { project, summary, occupied_tanks, deaths, deaths_meta, incidents, incidents_meta, census_events, census_meta, quarantine_events = [], quarantine_meta, water_quality_logs, water_quality_meta, audit_logs, audit_meta } = data;
 
-  const PaginationControls = ({ meta }: { meta: any }) => {
-    if (!meta || meta.total_pages <= 1) return null;
-    return (
-      <div className="flex flex-col sm:flex-row items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500 gap-2">
-        <div>
-          Showing page <strong className="text-slate-800">{meta.page}</strong> of <strong className="text-slate-800">{meta.total_pages}</strong> ({meta.total_items} total records)
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            disabled={meta.page <= 1}
-            onClick={() => setPage(meta.page - 1)}
-            className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded disabled:opacity-40 transition-colors"
-          >
-            Previous
-          </button>
-          <button
-            disabled={meta.page >= meta.total_pages}
-            onClick={() => setPage(meta.page + 1)}
-            className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded disabled:opacity-40 transition-colors"
-          >
-            Next
-          </button>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12 print:p-0">
@@ -157,13 +133,6 @@ export const ProjectReportPage: React.FC = () => {
               Clear Range
             </button>
           )}
-
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-2 px-4 py-2.5 bg-[#005596] text-white font-bold text-xs rounded-xl shadow hover:bg-blue-800 transition-colors mt-3 sm:mt-0"
-          >
-            <Printer className="w-4 h-4" /> Print Full Audit Report
-          </button>
         </div>
       </div>
 
@@ -219,7 +188,7 @@ export const ProjectReportPage: React.FC = () => {
           </div>
           <div>
             <span className="block text-[10px] font-bold text-slate-400 uppercase">Sex</span>
-            <span className="font-semibold text-slate-800 text-sm capitalize">{project.sex || 'N/A'}</span>
+            <span className="font-semibold text-slate-800 text-sm capitalize">{project.sex || 'both'}</span>
           </div>
           <div>
             <span className="block text-[10px] font-bold text-slate-400 uppercase">Room Number</span>
@@ -238,7 +207,7 @@ export const ProjectReportPage: React.FC = () => {
           <div>
             <span className="block text-[10px] font-bold text-slate-400 uppercase">AUPP Expiry Date</span>
             <span className="font-semibold text-slate-800 text-sm">
-              {project.aupp_expiry_date ? new Date(project.aupp_expiry_date).toLocaleDateString() : 'N/A'}
+              {formatDate(project.aupp_expiry_date)}
             </span>
           </div>
         </div>
@@ -246,17 +215,18 @@ export const ProjectReportPage: React.FC = () => {
         {project.status === 'closed' && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-3.5 text-xs text-red-800 space-y-1">
             <span className="font-bold uppercase block text-red-900">Project Closed & Dispositioned</span>
-            <div><strong>Closed At:</strong> {project.closed_at ? new Date(project.closed_at).toLocaleString() : 'N/A'}</div>
+            <div><strong>Closed At:</strong> {formatDate(project.closed_at)}</div>
             <div><strong>Disposition:</strong> <span className="capitalize">{project.disposition_type}</span></div>
             {project.disposition_notes && <div><strong>Notes:</strong> {project.disposition_notes}</div>}
           </div>
         )}
       </div>
 
+
       {/* Navigation Tabs for Report Sections */}
       <div className="border-b border-slate-200 flex gap-2 overflow-x-auto print:hidden">
         <button
-          onClick={() => setActiveTab('tanks')}
+          onClick={() => { setActiveTab('tanks'); setPage(1); }}
           className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
             activeTab === 'tanks' ? 'bg-[#005596] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
@@ -264,52 +234,52 @@ export const ProjectReportPage: React.FC = () => {
           Occupied Tanks ({occupied_tanks.length})
         </button>
         <button
-          onClick={() => setActiveTab('deaths')}
+          onClick={() => { setActiveTab('deaths'); setPage(1); }}
           className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
             activeTab === 'deaths' ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
         >
-          Deaths & Mortality ({deaths.length})
+          Deaths &amp; Mortality ({deaths_meta?.total_items ?? deaths.length})
         </button>
         <button
-          onClick={() => setActiveTab('incidents')}
+          onClick={() => { setActiveTab('incidents'); setPage(1); }}
           className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
             activeTab === 'incidents' ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
         >
-          Incident Reports ({incidents.length})
+          Incident Reports ({incidents_meta?.total_items ?? incidents.length})
         </button>
         <button
-          onClick={() => setActiveTab('census')}
+          onClick={() => { setActiveTab('census'); setPage(1); }}
           className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
             activeTab === 'census' ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
         >
-          Census History ({census_events.length})
+          Census History ({census_meta?.total_items ?? census_events.length})
         </button>
         <button
-          onClick={() => setActiveTab('quarantine')}
+          onClick={() => { setActiveTab('quarantine'); setPage(1); }}
           className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
             activeTab === 'quarantine' ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
         >
-          Quarantine History ({quarantine_events.length})
+          Quarantine History ({quarantine_meta?.total_items ?? quarantine_events.length})
         </button>
         <button
-          onClick={() => setActiveTab('water_quality')}
+          onClick={() => { setActiveTab('water_quality'); setPage(1); }}
           className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
             activeTab === 'water_quality' ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
         >
-          Water Quality ({water_quality_logs.length})
+          Water Quality ({water_quality_meta?.total_items ?? water_quality_logs.length})
         </button>
         <button
-          onClick={() => setActiveTab('audits')}
+          onClick={() => { setActiveTab('audits'); setPage(1); }}
           className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
             activeTab === 'audits' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
         >
-          Audit Trail Logs ({audit_logs.length})
+          Audit Trail Logs ({audit_meta?.total_items ?? audit_logs.length})
         </button>
       </div>
 
@@ -342,11 +312,11 @@ export const ProjectReportPage: React.FC = () => {
                       <td className="p-3">
                         {t.is_quarantined ? (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                            Quarantined {t.quarantine_end_date ? `(until ${new Date(t.quarantine_end_date).toLocaleDateString()})` : ''}
+                            Quarantined {t.quarantine_end_date ? `(until ${formatDate(t.quarantine_end_date)})` : ''}
                           </span>
                         ) : (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                            Active & Healthy
+                            Active &amp; Healthy
                           </span>
                         )}
                       </td>
@@ -364,7 +334,7 @@ export const ProjectReportPage: React.FC = () => {
       {activeTab === 'deaths' && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-red-900">Project Mortality & Deaths Log</h3>
+            <h3 className="text-sm font-bold text-red-900">Project Mortality &amp; Deaths Log</h3>
             <span className="text-xs font-bold text-red-700 bg-red-50 px-3 py-1 rounded-full border border-red-200">
               Total Mortality: {summary.total_deaths} Fish
             </span>
@@ -388,7 +358,7 @@ export const ProjectReportPage: React.FC = () => {
                   <tbody className="divide-y divide-slate-100 font-medium">
                     {deaths.map((d: any) => (
                       <tr key={d.id} className="hover:bg-slate-50">
-                        <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">{d.date}</td>
+                        <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">{formatDate(d.date)}</td>
                         <td className="p-3 font-extrabold text-red-600">-{d.count} Fish</td>
                         <td className="p-3 font-bold text-slate-800">{d.tank_number}</td>
                         <td className="p-3 text-slate-800">{d.reason}</td>
@@ -399,7 +369,15 @@ export const ProjectReportPage: React.FC = () => {
                   </tbody>
                 </table>
               </div>
-              <PaginationControls meta={deaths_meta} />
+              <Paginator
+                page={page}
+                totalPages={deaths_meta?.total_pages || 1}
+                total={deaths_meta?.total_items || 0}
+                limit={limit}
+                onPageChange={(p) => setPage(p)}
+                onLimitChange={(l) => { setLimit(l); setPage(1); }}
+                limitOptions={[10, 20, 50]}
+              />
             </div>
           )}
         </div>
@@ -422,7 +400,7 @@ export const ProjectReportPage: React.FC = () => {
                         Severity: {inc.severity}
                       </span>
                     </div>
-                    <span className="text-slate-500 font-semibold">{inc.date}</span>
+                    <span className="text-slate-500 font-semibold">{formatDate(inc.date)}</span>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-slate-700">
                     <div><strong>Tank:</strong> {inc.tank_number}</div>
@@ -440,7 +418,15 @@ export const ProjectReportPage: React.FC = () => {
                   )}
                 </div>
               ))}
-              <PaginationControls meta={incidents_meta} />
+              <Paginator
+                page={page}
+                totalPages={incidents_meta?.total_pages || 1}
+                total={incidents_meta?.total_items || 0}
+                limit={limit}
+                onPageChange={(p) => setPage(p)}
+                onLimitChange={(l) => { setLimit(l); setPage(1); }}
+                limitOptions={[10, 20, 50]}
+              />
             </div>
           )}
         </div>
@@ -469,7 +455,7 @@ export const ProjectReportPage: React.FC = () => {
                   <tbody className="divide-y divide-slate-100 font-medium">
                     {census_events.map((c: any) => (
                       <tr key={c.id} className="hover:bg-slate-50">
-                        <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">{c.date}</td>
+                        <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">{formatDate(c.date)}</td>
                         <td className="p-3 capitalize font-bold text-purple-900">{c.event_type}</td>
                         <td className="p-3">
                           <span className={`font-extrabold ${c.change > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
@@ -484,7 +470,15 @@ export const ProjectReportPage: React.FC = () => {
                   </tbody>
                 </table>
               </div>
-              <PaginationControls meta={census_meta} />
+              <Paginator
+                page={page}
+                totalPages={census_meta?.total_pages || 1}
+                total={census_meta?.total_items || 0}
+                limit={limit}
+                onPageChange={(p) => setPage(p)}
+                onLimitChange={(l) => { setLimit(l); setPage(1); }}
+                limitOptions={[10, 20, 50]}
+              />
             </div>
           )}
         </div>
@@ -494,9 +488,9 @@ export const ProjectReportPage: React.FC = () => {
       {activeTab === 'quarantine' && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-amber-900">Quarantine & Biosecurity History Logs</h3>
+            <h3 className="text-sm font-bold text-amber-900">Quarantine &amp; Biosecurity History Logs</h3>
             <span className="text-xs font-bold text-amber-800 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
-              Total Quarantine Events: {quarantine_events.length}
+              Total Quarantine Events: {quarantine_meta?.total_items ?? quarantine_events.length}
             </span>
           </div>
           {quarantine_events.length === 0 ? (
@@ -518,7 +512,7 @@ export const ProjectReportPage: React.FC = () => {
                   <tbody className="divide-y divide-slate-100 font-medium">
                     {quarantine_events.map((q: any) => (
                       <tr key={q.id} className="hover:bg-slate-50">
-                        <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">{q.date}</td>
+                        <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">{formatDate(q.date)}</td>
                         <td className="p-3 font-bold text-slate-800">Tank {q.tank_number}</td>
                         <td className="p-3 whitespace-nowrap">
                           {q.event_type === 'quarantine_placed' ? (
@@ -539,7 +533,15 @@ export const ProjectReportPage: React.FC = () => {
                   </tbody>
                 </table>
               </div>
-              <PaginationControls meta={quarantine_meta} />
+              <Paginator
+                page={page}
+                totalPages={quarantine_meta?.total_pages || 1}
+                total={quarantine_meta?.total_items || 0}
+                limit={limit}
+                onPageChange={(p) => setPage(p)}
+                onLimitChange={(l) => { setLimit(l); setPage(1); }}
+                limitOptions={[10, 20, 50]}
+              />
             </div>
           )}
         </div>
@@ -549,7 +551,7 @@ export const ProjectReportPage: React.FC = () => {
       {activeTab === 'water_quality' && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
           <h3 className="text-sm font-bold text-teal-900">Water Quality Logged Parameters (Daily Logs)</h3>
-          {water_quality_logs.filter((wq: any) => wq.type === 'daily').length === 0 ? (
+          {water_quality_logs.length === 0 ? (
             <p className="text-xs text-slate-500 italic p-4 text-center">No daily water quality logs recorded for assigned tanks.</p>
           ) : (
             <div className="space-y-3">
@@ -567,9 +569,9 @@ export const ProjectReportPage: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium">
-                    {water_quality_logs.filter((wq: any) => wq.type === 'daily').map((wq: any) => (
+                    {water_quality_logs.map((wq: any) => (
                       <tr key={wq.id} className="hover:bg-slate-50">
-                        <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">{wq.date}</td>
+                        <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">{formatDate(wq.date)}</td>
                         <td className="p-3 font-bold text-slate-800">Tank {wq.tank_number}</td>
                         <td className="p-3 font-bold text-teal-700">{wq.pH ?? 'N/A'}</td>
                         <td className="p-3 font-bold text-teal-700">{wq.temperature_celsius ? `${wq.temperature_celsius}°C` : 'N/A'}</td>
@@ -583,7 +585,15 @@ export const ProjectReportPage: React.FC = () => {
                   </tbody>
                 </table>
               </div>
-              <PaginationControls meta={water_quality_meta} />
+              <Paginator
+                page={page}
+                totalPages={water_quality_meta?.total_pages || 1}
+                total={water_quality_meta?.total_items || 0}
+                limit={limit}
+                onPageChange={(p) => setPage(p)}
+                onLimitChange={(l) => { setLimit(l); setPage(1); }}
+                limitOptions={[10, 20, 50]}
+              />
             </div>
           )}
         </div>
@@ -596,28 +606,37 @@ export const ProjectReportPage: React.FC = () => {
           {audit_logs.length === 0 ? (
             <p className="text-xs text-slate-500 italic p-4 text-center">No operational audit logs recorded for this project.</p>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {audit_logs.map((a: any) => (
-                <div key={a.id} className="border border-slate-200 rounded-xl p-4 space-y-2 text-xs bg-slate-50/50">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-200 pb-2">
+                <div key={a.id} className="border border-slate-200 rounded-lg p-3 space-y-1.5 text-xs bg-slate-50/50">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/60 pb-1.5">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-800 uppercase">{a.action}</span>
-                      <span className="bg-blue-100 text-[#005596] font-bold px-2 py-0.5 rounded text-[10px] uppercase">
+                      <span className="font-bold text-slate-900 uppercase text-[11px]">{a.action?.replace(/_/g, ' ')}</span>
+                      <span className="bg-blue-50 text-[#005596] border border-blue-200 font-bold px-2 py-0.5 rounded text-[10px] uppercase">
                         {a.entity_type}
                       </span>
                     </div>
-                    <div className="text-slate-500 font-medium">
-                      By <strong className="text-slate-800">{a.actor_name}</strong> ({a.actor_role}) on {a.timestamp}
-                    </div>
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      By <strong className="text-slate-800">{a.actor_name}</strong> ({a.actor_role}) • {formatDate(a.timestamp)}
+                    </span>
                   </div>
                   <ModificationCard before={a.before} after={a.after} />
                 </div>
               ))}
-              <PaginationControls meta={audit_meta} />
+              <Paginator
+                page={page}
+                totalPages={audit_meta?.total_pages || 1}
+                total={audit_meta?.total_items || 0}
+                limit={limit}
+                onPageChange={(p) => setPage(p)}
+                onLimitChange={(l) => { setLimit(l); setPage(1); }}
+                limitOptions={[10, 20, 50]}
+              />
             </div>
           )}
         </div>
       )}
+
     </div>
   );
 };
