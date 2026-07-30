@@ -16,13 +16,52 @@ export const ProjectReportPage: React.FC = () => {
   const [timePeriod, setTimePeriod] = useState<string>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
-  const [page, setPage] = useState<number>(1);
-  const [limit, setLimit] = useState<number>(10);
+
+  const [tabPages, setTabPages] = useState<Record<string, number>>({
+    deaths: 1,
+    incidents: 1,
+    census: 1,
+    quarantine: 1,
+    water_quality: 1,
+    audits: 1,
+  });
+
+  const [tabLimits, setTabLimits] = useState<Record<string, number>>({
+    deaths: 10,
+    incidents: 10,
+    census: 10,
+    quarantine: 10,
+    water_quality: 10,
+    audits: 10,
+  });
+
+  const currentPage = tabPages[activeTab] || 1;
+  const currentLimit = tabLimits[activeTab] || 10;
+
+  const setPageForTab = (tab: string, p: number) => {
+    setTabPages(prev => ({ ...prev, [tab]: p }));
+  };
+
+  const setLimitForTab = (tab: string, l: number) => {
+    setTabLimits(prev => ({ ...prev, [tab]: l }));
+    setTabPages(prev => ({ ...prev, [tab]: 1 }));
+  };
+
+  const resetAllTabPages = () => {
+    setTabPages({
+      deaths: 1,
+      incidents: 1,
+      census: 1,
+      quarantine: 1,
+      water_quality: 1,
+      audits: 1,
+    });
+  };
 
   useEffect(() => {
     if (id) {
       setLoading(true);
-      getProjectReport(id, timePeriod, page, limit, startDate, endDate)
+      getProjectReport(id, timePeriod, currentPage, currentLimit, startDate, endDate)
         .then(r => {
           setData(r.data);
           setLoading(false);
@@ -32,7 +71,7 @@ export const ProjectReportPage: React.FC = () => {
           setLoading(false);
         });
     }
-  }, [id, timePeriod, startDate, endDate, page, limit]);
+  }, [id, timePeriod, startDate, endDate, activeTab, currentPage, currentLimit]);
 
   if (loading && !data) {
     return (
@@ -60,7 +99,6 @@ export const ProjectReportPage: React.FC = () => {
   }
 
   const { project, summary, occupied_tanks, deaths, deaths_meta, incidents, incidents_meta, census_events, census_meta, quarantine_events = [], quarantine_meta, water_quality_logs, water_quality_meta, audit_logs, audit_meta } = data;
-
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12 print:p-0">
@@ -94,7 +132,7 @@ export const ProjectReportPage: React.FC = () => {
             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Preset Period</label>
             <select
               value={timePeriod}
-              onChange={e => { setTimePeriod(e.target.value); setStartDate(''); setEndDate(''); setPage(1); }}
+              onChange={e => { setTimePeriod(e.target.value); setStartDate(''); setEndDate(''); resetAllTabPages(); }}
               className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#005596]"
             >
               <option value="all">All Time</option>
@@ -110,7 +148,7 @@ export const ProjectReportPage: React.FC = () => {
             <input
               type="date"
               value={startDate}
-              onChange={e => { setStartDate(e.target.value); setPage(1); }}
+              onChange={e => { setStartDate(e.target.value); resetAllTabPages(); }}
               className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#005596]"
             />
           </div>
@@ -120,14 +158,14 @@ export const ProjectReportPage: React.FC = () => {
             <input
               type="date"
               value={endDate}
-              onChange={e => { setEndDate(e.target.value); setPage(1); }}
+              onChange={e => { setEndDate(e.target.value); resetAllTabPages(); }}
               className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#005596]"
             />
           </div>
 
           {(startDate || endDate) && (
             <button
-              onClick={() => { setStartDate(''); setEndDate(''); setPage(1); }}
+              onClick={() => { setStartDate(''); setEndDate(''); resetAllTabPages(); }}
               className="text-xs font-bold text-red-600 hover:underline mt-3"
             >
               Clear Range
@@ -222,11 +260,10 @@ export const ProjectReportPage: React.FC = () => {
         )}
       </div>
 
-
       {/* Navigation Tabs for Report Sections */}
       <div className="border-b border-slate-200 flex gap-2 overflow-x-auto print:hidden">
         <button
-          onClick={() => { setActiveTab('tanks'); setPage(1); }}
+          onClick={() => setActiveTab('tanks')}
           className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
             activeTab === 'tanks' ? 'bg-[#005596] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
@@ -234,7 +271,7 @@ export const ProjectReportPage: React.FC = () => {
           Occupied Tanks ({occupied_tanks.length})
         </button>
         <button
-          onClick={() => { setActiveTab('deaths'); setPage(1); }}
+          onClick={() => setActiveTab('deaths')}
           className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
             activeTab === 'deaths' ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
@@ -242,7 +279,7 @@ export const ProjectReportPage: React.FC = () => {
           Deaths &amp; Mortality ({deaths_meta?.total_items ?? deaths.length})
         </button>
         <button
-          onClick={() => { setActiveTab('incidents'); setPage(1); }}
+          onClick={() => setActiveTab('incidents')}
           className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
             activeTab === 'incidents' ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
@@ -250,7 +287,7 @@ export const ProjectReportPage: React.FC = () => {
           Incident Reports ({incidents_meta?.total_items ?? incidents.length})
         </button>
         <button
-          onClick={() => { setActiveTab('census'); setPage(1); }}
+          onClick={() => setActiveTab('census')}
           className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
             activeTab === 'census' ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
@@ -258,7 +295,7 @@ export const ProjectReportPage: React.FC = () => {
           Census History ({census_meta?.total_items ?? census_events.length})
         </button>
         <button
-          onClick={() => { setActiveTab('quarantine'); setPage(1); }}
+          onClick={() => setActiveTab('quarantine')}
           className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
             activeTab === 'quarantine' ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
@@ -266,7 +303,7 @@ export const ProjectReportPage: React.FC = () => {
           Quarantine History ({quarantine_meta?.total_items ?? quarantine_events.length})
         </button>
         <button
-          onClick={() => { setActiveTab('water_quality'); setPage(1); }}
+          onClick={() => setActiveTab('water_quality')}
           className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
             activeTab === 'water_quality' ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
@@ -274,7 +311,7 @@ export const ProjectReportPage: React.FC = () => {
           Water Quality ({water_quality_meta?.total_items ?? water_quality_logs.length})
         </button>
         <button
-          onClick={() => { setActiveTab('audits'); setPage(1); }}
+          onClick={() => setActiveTab('audits')}
           className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
             activeTab === 'audits' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
@@ -282,6 +319,7 @@ export const ProjectReportPage: React.FC = () => {
           Audit Trail Logs ({audit_meta?.total_items ?? audit_logs.length})
         </button>
       </div>
+
 
       {/* Tab 1: Occupied Tanks */}
       {activeTab === 'tanks' && (
@@ -370,12 +408,12 @@ export const ProjectReportPage: React.FC = () => {
                 </table>
               </div>
               <Paginator
-                page={page}
+                page={tabPages.deaths || 1}
                 totalPages={deaths_meta?.total_pages || 1}
                 total={deaths_meta?.total_items || 0}
-                limit={limit}
-                onPageChange={(p) => setPage(p)}
-                onLimitChange={(l) => { setLimit(l); setPage(1); }}
+                limit={tabLimits.deaths || 10}
+                onPageChange={(p) => setPageForTab('deaths', p)}
+                onLimitChange={(l) => setLimitForTab('deaths', l)}
                 limitOptions={[10, 20, 50]}
               />
             </div>
@@ -419,12 +457,12 @@ export const ProjectReportPage: React.FC = () => {
                 </div>
               ))}
               <Paginator
-                page={page}
+                page={tabPages.incidents || 1}
                 totalPages={incidents_meta?.total_pages || 1}
                 total={incidents_meta?.total_items || 0}
-                limit={limit}
-                onPageChange={(p) => setPage(p)}
-                onLimitChange={(l) => { setLimit(l); setPage(1); }}
+                limit={tabLimits.incidents || 10}
+                onPageChange={(p) => setPageForTab('incidents', p)}
+                onLimitChange={(l) => setLimitForTab('incidents', l)}
                 limitOptions={[10, 20, 50]}
               />
             </div>
@@ -471,12 +509,12 @@ export const ProjectReportPage: React.FC = () => {
                 </table>
               </div>
               <Paginator
-                page={page}
+                page={tabPages.census || 1}
                 totalPages={census_meta?.total_pages || 1}
                 total={census_meta?.total_items || 0}
-                limit={limit}
-                onPageChange={(p) => setPage(p)}
-                onLimitChange={(l) => { setLimit(l); setPage(1); }}
+                limit={tabLimits.census || 10}
+                onPageChange={(p) => setPageForTab('census', p)}
+                onLimitChange={(l) => setLimitForTab('census', l)}
                 limitOptions={[10, 20, 50]}
               />
             </div>
@@ -534,12 +572,12 @@ export const ProjectReportPage: React.FC = () => {
                 </table>
               </div>
               <Paginator
-                page={page}
+                page={tabPages.quarantine || 1}
                 totalPages={quarantine_meta?.total_pages || 1}
                 total={quarantine_meta?.total_items || 0}
-                limit={limit}
-                onPageChange={(p) => setPage(p)}
-                onLimitChange={(l) => { setLimit(l); setPage(1); }}
+                limit={tabLimits.quarantine || 10}
+                onPageChange={(p) => setPageForTab('quarantine', p)}
+                onLimitChange={(l) => setLimitForTab('quarantine', l)}
                 limitOptions={[10, 20, 50]}
               />
             </div>
@@ -586,18 +624,19 @@ export const ProjectReportPage: React.FC = () => {
                 </table>
               </div>
               <Paginator
-                page={page}
+                page={tabPages.water_quality || 1}
                 totalPages={water_quality_meta?.total_pages || 1}
                 total={water_quality_meta?.total_items || 0}
-                limit={limit}
-                onPageChange={(p) => setPage(p)}
-                onLimitChange={(l) => { setLimit(l); setPage(1); }}
+                limit={tabLimits.water_quality || 10}
+                onPageChange={(p) => setPageForTab('water_quality', p)}
+                onLimitChange={(l) => setLimitForTab('water_quality', l)}
                 limitOptions={[10, 20, 50]}
               />
             </div>
           )}
         </div>
       )}
+
 
       {/* Tab 6: Audit Trail Logs */}
       {activeTab === 'audits' && (
@@ -624,14 +663,15 @@ export const ProjectReportPage: React.FC = () => {
                 </div>
               ))}
               <Paginator
-                page={page}
+                page={tabPages.audits || 1}
                 totalPages={audit_meta?.total_pages || 1}
                 total={audit_meta?.total_items || 0}
-                limit={limit}
-                onPageChange={(p) => setPage(p)}
-                onLimitChange={(l) => { setLimit(l); setPage(1); }}
+                limit={tabLimits.audits || 10}
+                onPageChange={(p) => setPageForTab('audits', p)}
+                onLimitChange={(l) => setLimitForTab('audits', l)}
                 limitOptions={[10, 20, 50]}
               />
+
             </div>
           )}
         </div>
