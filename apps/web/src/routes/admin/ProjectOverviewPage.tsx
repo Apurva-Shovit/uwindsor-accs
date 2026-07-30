@@ -343,7 +343,8 @@ export const ProjectOverviewPage: React.FC = () => {
       {/* Project Detail Modal */}
       {selectedProject && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+
             <div className="flex justify-between items-start border-b border-slate-100 pb-3">
               <div>
                 <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase mb-1 ${
