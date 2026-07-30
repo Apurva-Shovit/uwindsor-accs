@@ -92,6 +92,11 @@ async def search_tank_history(
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
     keyword: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
     current: User = Depends(get_current_user),
 ):
-    return await FacilityService.search_tank_history(tank_id, event_type, date_from, date_to, keyword, current)
+    return await FacilityService.search_tank_history(
+        tank_id, event_type, date_from, date_to, keyword, current, page=page, limit=limit
+    )
+

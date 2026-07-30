@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { formatDate } from '../../utils/formatters';
 import { Database, Search, Filter } from 'lucide-react';
 import { getTanks, searchTankHistory } from '../../lib/api';
+import { Paginator } from '../../components/ui/Paginator';
 
 export const TankHistoryPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -13,14 +14,15 @@ export const TankHistoryPage: React.FC = () => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [keyword, setKeyword] = useState('');
+  const [historyPage, setHistoryPage] = useState(1);
 
   useEffect(() => {
     const paramId = searchParams.get('tank_id');
     if (paramId) {
       setSelectedTankId(paramId);
+      setHistoryPage(1);
     }
   }, [searchParams]);
-
 
   // Fetch available tanks
   const { data: tanks } = useQuery({
@@ -32,10 +34,10 @@ export const TankHistoryPage: React.FC = () => {
   });
 
   // Fetch history search results
-  const { data: history, isLoading } = useQuery({
-    queryKey: ['tankHistorySearch', selectedTankId, eventType, dateFrom, dateTo, keyword],
+  const { data: historyData, isLoading } = useQuery({
+    queryKey: ['tankHistorySearch', selectedTankId, eventType, dateFrom, dateTo, keyword, historyPage],
     queryFn: async () => {
-      const params: Record<string, any> = {};
+      const params: Record<string, any> = { page: historyPage, limit: 20 };
       if (selectedTankId) params.tank_id = selectedTankId;
       if (eventType) params.event_type = eventType;
       if (dateFrom) params.date_from = dateFrom;
@@ -47,7 +49,9 @@ export const TankHistoryPage: React.FC = () => {
     }
   });
 
-
+  const history = Array.isArray(historyData) ? historyData : (historyData?.items || []);
+  const totalPages = Array.isArray(historyData) ? 1 : (historyData?.total_pages || 1);
+  const totalCount = Array.isArray(historyData) ? history.length : (historyData?.total || 0);
 
   return (
     <div className="space-y-6">
@@ -76,6 +80,7 @@ export const TankHistoryPage: React.FC = () => {
                 setDateFrom('');
                 setDateTo('');
                 setKeyword('');
+                setHistoryPage(1);
               }}
               className="text-xs font-semibold text-[#005596] hover:underline"
             >
@@ -90,7 +95,10 @@ export const TankHistoryPage: React.FC = () => {
             <label className="text-xs font-semibold text-slate-500 uppercase">Tank</label>
             <select
               value={selectedTankId}
-              onChange={(e) => setSelectedTankId(e.target.value)}
+              onChange={(e) => {
+                setSelectedTankId(e.target.value);
+                setHistoryPage(1);
+              }}
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#005596] focus:outline-none"
             >
               <option value="">All Tanks</option>
@@ -110,7 +118,10 @@ export const TankHistoryPage: React.FC = () => {
             <label className="text-xs font-semibold text-slate-500 uppercase">Category</label>
             <select
               value={eventType}
-              onChange={(e) => setEventType(e.target.value)}
+              onChange={(e) => {
+                setEventType(e.target.value);
+                setHistoryPage(1);
+              }}
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#005596] focus:outline-none"
             >
               <option value="">All Categories</option>
@@ -127,7 +138,10 @@ export const TankHistoryPage: React.FC = () => {
             <input
               type="date"
               value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
+              onChange={(e) => {
+                setDateFrom(e.target.value);
+                setHistoryPage(1);
+              }}
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#005596] focus:outline-none"
             />
           </div>
@@ -138,7 +152,10 @@ export const TankHistoryPage: React.FC = () => {
             <input
               type="date"
               value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
+              onChange={(e) => {
+                setDateTo(e.target.value);
+                setHistoryPage(1);
+              }}
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#005596] focus:outline-none"
             />
           </div>
@@ -152,7 +169,10 @@ export const TankHistoryPage: React.FC = () => {
                 type="text"
                 placeholder="Search details..."
                 value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
+                onChange={(e) => {
+                  setKeyword(e.target.value);
+                  setHistoryPage(1);
+                }}
                 className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-[#005596] focus:outline-none"
               />
             </div>
@@ -161,6 +181,7 @@ export const TankHistoryPage: React.FC = () => {
       </div>
 
       {/* History Timeline Table */}
+
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {isLoading ? (
           <div className="p-12 text-center text-slate-500">
@@ -261,7 +282,15 @@ export const TankHistoryPage: React.FC = () => {
                 </div>
               ))}
             </div>
+            <Paginator
+              page={historyPage}
+              totalPages={totalPages}
+              total={totalCount}
+              limit={20}
+              onPageChange={(p) => setHistoryPage(p)}
+            />
           </div>
+
         )}
       </div>
     </div>

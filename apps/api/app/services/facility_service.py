@@ -272,13 +272,16 @@ class FacilityService:
 
     @staticmethod
     async def search_tank_history(
+
         tank_id: Optional[str],
         event_type: Optional[str],
         date_from: Optional[str],
         date_to: Optional[str],
         keyword: Optional[str],
-        current_user: User
-    ) -> List[Dict[str, Any]]:
+        current_user: User,
+        page: int = 1,
+        limit: int = 20
+    ) -> Dict[str, Any]:
         tanks = await Tank.find({"deleted": False}).to_list()
         tank_map = {str(t.id): t.tank_number for t in tanks}
 
@@ -326,7 +329,7 @@ class FacilityService:
                     "notes": ev.notes or "",
                     "date": str(ev.date),
                     "created_by": ev.created_by,
-                    "created_at": ev.created_at.isoformat(),
+                    "created_at": ev.created_at.isoformat() if hasattr(ev.created_at, "isoformat") else str(ev.created_at),
                 }
                 if keyword and keyword.lower() not in str(item).lower():
                     continue
@@ -351,7 +354,7 @@ class FacilityService:
                     "notes": log.comments or "",
                     "date": str(log.date),
                     "created_by": log.created_by,
-                    "created_at": log.created_at.isoformat(),
+                    "created_at": log.created_at.isoformat() if hasattr(log.created_at, "isoformat") else str(log.created_at),
                 }
                 if keyword and keyword.lower() not in str(item).lower():
                     continue
@@ -375,7 +378,7 @@ class FacilityService:
                     "notes": inc.treatment or inc.comments or "",
                     "date": str(inc.date),
                     "created_by": inc.created_by,
-                    "created_at": inc.created_at.isoformat(),
+                    "created_at": inc.created_at.isoformat() if hasattr(inc.created_at, "isoformat") else str(inc.created_at),
                 }
                 if keyword and keyword.lower() not in str(item).lower():
                     continue
@@ -383,11 +386,23 @@ class FacilityService:
 
         combined.sort(key=lambda x: x["created_at"], reverse=True)
 
-        user_ids = {item["created_by"] for item in combined if item.get("created_by")}
+        total_items = len(combined)
+        total_pages = (total_items + limit - 1) // limit if limit > 0 else 1
+        skip = (page - 1) * limit
+        paginated_items = combined[skip:skip + limit]
+
+        user_ids = {item["created_by"] for item in paginated_items if item.get("created_by")}
         user_map = await EntityResolver.resolve_users_by_ids(list(user_ids))
 
-        for item in combined:
+        for item in paginated_items:
             uid = item["created_by"]
             item["created_by"] = user_map.get(uid, uid or "System")
 
-        return combined
+        return {
+            "items": paginated_items,
+            "total": total_items,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages
+        }
+
