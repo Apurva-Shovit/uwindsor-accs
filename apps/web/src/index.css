@@ -12,3 +12,22 @@ body {
   background-color: #F5F6F7;
   color: #1F1F22;
 }
+
+/* Controlled Print Safeguard */
+@media print {
+  body:not(.authorized-print) {
+    display: none !important;
+  }
+  body.authorized-print .print\:hidden {
+    display: none !important;
+  }
+}
+
+/* Global Anti-Selection for Protected Classes */
+.select-none {
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+}
+

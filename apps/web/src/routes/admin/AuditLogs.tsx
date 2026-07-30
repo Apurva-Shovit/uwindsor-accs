@@ -4,6 +4,7 @@ import { formatDate } from '../../utils/formatters';
 import { ModificationCard } from '../../components/audit/ModificationCard';
 import { getAuditLogs } from '../../lib/api';
 import { Paginator } from '../../components/ui/Paginator';
+import { ProtectedView } from '../../components/security/ProtectedView';
 
 export const AuditLogs: React.FC = () => {
   const [dateFrom, setDateFrom] = React.useState('');
@@ -26,10 +27,9 @@ export const AuditLogs: React.FC = () => {
   const total = Array.isArray(data) ? logsList.length : (data?.total || 0);
   const totalPages = Array.isArray(data) ? 1 : (data?.total_pages || 1);
 
-
-
   return (
-    <div className="space-y-6">
+    <ProtectedView allowPrint={false} className="space-y-6">
+
       {/* Header */}
       <div className="border-b border-slate-200 pb-4">
         <h1 className="text-2xl font-bold text-[#005596]">System Audit Logs</h1>
@@ -206,6 +206,7 @@ export const AuditLogs: React.FC = () => {
           )}
         </div>
       </div>
-    </div>
+    </ProtectedView>
   );
 };
+

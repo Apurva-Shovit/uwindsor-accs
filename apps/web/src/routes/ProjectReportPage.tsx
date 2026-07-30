@@ -2,9 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getProjectReport } from '../lib/api';
 import { ModificationCard } from '../components/audit/ModificationCard';
-import { BookOpen, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { BookOpen, ArrowLeft, AlertTriangle, Printer } from 'lucide-react';
 import { formatDate } from '../utils/formatters';
 import { Paginator } from '../components/ui/Paginator';
+import { ProtectedView, triggerAuthorizedPrint } from '../components/security/ProtectedView';
+
 
 const UWindsorBufferingLoader: React.FC<{ message?: string }> = ({ message = "Synchronizing ACARE Facility Data..." }) => (
   <div className="flex flex-col items-center justify-center py-12 px-6 bg-gradient-to-b from-blue-50/40 via-white to-amber-50/20 border border-blue-100 rounded-2xl shadow-sm text-center space-y-4 my-4">
@@ -114,7 +116,7 @@ export const ProjectReportPage: React.FC = () => {
   const { project, summary, occupied_tanks, deaths, deaths_meta, incidents, incidents_meta, census_events, census_meta, quarantine_events = [], quarantine_meta, water_quality_logs, water_quality_meta, audit_logs, audit_meta } = data;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-12 print:p-0">
+    <ProtectedView allowPrint={true} className="max-w-6xl mx-auto space-y-6 pb-12 print:p-0">
       {/* Header & Controls */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-200 pb-5 print:hidden">
         <div>
@@ -184,8 +186,16 @@ export const ProjectReportPage: React.FC = () => {
               Clear Range
             </button>
           )}
+
+          <button
+            onClick={() => triggerAuthorizedPrint()}
+            className="flex items-center gap-2 px-3.5 py-2 bg-[#005596] text-white font-bold text-xs rounded-xl shadow hover:bg-blue-800 transition-colors mt-3 sm:mt-0 print:hidden"
+          >
+            <Printer className="w-3.5 h-3.5" /> Print Report
+          </button>
         </div>
       </div>
+
 
       {/* Top Executive Summary KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-3">
@@ -700,8 +710,9 @@ export const ProjectReportPage: React.FC = () => {
         </div>
       )}
 
-    </div>
+    </ProtectedView>
   );
 };
+
 
 export default ProjectReportPage;

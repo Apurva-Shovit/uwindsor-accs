@@ -4,6 +4,8 @@ import { formatDate } from '../../utils/formatters';
 import { getExecutiveSummary, getReportsSummary, getProjects, getProjectReport } from '../../lib/api';
 import { Paginator } from '../../components/ui/Paginator';
 import { useDebounce } from '../../hooks/useDebounce';
+import { ProtectedView, triggerAuthorizedPrint } from '../../components/security/ProtectedView';
+
 
 export const Reports: React.FC = () => {
   const [dateFrom, setDateFrom] = React.useState('');
@@ -169,7 +171,7 @@ export const Reports: React.FC = () => {
     // 3. Give browser one frame to paint before printing
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        window.print();
+        triggerAuthorizedPrint();
         // 4. Cleanup after print dialog closes
         setTimeout(() => {
           const portal = document.getElementById('sop-print-portal');
@@ -182,7 +184,8 @@ export const Reports: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <ProtectedView allowPrint={true} className="space-y-6">
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-4 print:pb-2">
         <div>
@@ -964,6 +967,7 @@ export const Reports: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </ProtectedView>
   );
 };
+
