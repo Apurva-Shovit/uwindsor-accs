@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Users, UserCheck, UserX, Shield, Database, Search, AlertCircle, X } from 'lucide-react';
 import { formatDate } from '../../utils/formatters';
@@ -13,14 +13,21 @@ import {
 } from '../../lib/api';
 import { Paginator } from '../../components/ui/Paginator';
 import { useAuth } from '../../context/AuthContext';
+import { useDebounce } from '../../hooks/useDebounce';
 
 export const UserManagement: React.FC = () => {
   const { user } = useAuth();
   const isAdminOrChair = ['super_admin', 'chair', 'admin'].includes(user?.role || '');
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 350);
   const [statusFilter, setStatusFilter] = useState('all');
   const [userMgmtPage, setUserMgmtPage] = useState(1);
+
+  // Reset page to 1 whenever debounced search term changes
+  useEffect(() => {
+    setUserMgmtPage(1);
+  }, [debouncedSearchTerm]);
 
   // Modals state
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
@@ -31,21 +38,22 @@ export const UserManagement: React.FC = () => {
   const [assignedTanks, setAssignedTanks] = useState<string[]>([]);
   const [actionError, setActionError] = useState('');
 
-  // 1. Fetch Users List
+  // 1. Fetch Users List (Debounced search prevents excessive API calls)
   const { data: usersResponse, isLoading: loadingUsers } = useQuery({
-    queryKey: ['adminUsersList', statusFilter, searchTerm, userMgmtPage],
+    queryKey: ['adminUsersList', statusFilter, debouncedSearchTerm, userMgmtPage],
     queryFn: async () => {
       const params: Record<string, any> = { page: userMgmtPage, limit: 20 };
       if (statusFilter && statusFilter !== 'all') {
         params.status_filter = statusFilter;
       }
-      if (searchTerm && searchTerm.trim()) {
-        params.search = searchTerm.trim();
+      if (debouncedSearchTerm && debouncedSearchTerm.trim()) {
+        params.search = debouncedSearchTerm.trim();
       }
       const res = await getUsers(params);
       return res.data;
     }
   });
+
 
   const usersList = Array.isArray(usersResponse) ? usersResponse : (usersResponse?.items || []);
   const totalPages = Array.isArray(usersResponse) ? 1 : (usersResponse?.total_pages || 1);
@@ -152,8 +160,8 @@ export const UserManagement: React.FC = () => {
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
-    setUserMgmtPage(1);
   };
+
 
   const handleStatusFilterChange = (st: string) => {
     setStatusFilter(st);
