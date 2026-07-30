@@ -492,10 +492,11 @@ export const UserManagement: React.FC = () => {
                   <button
                     onClick={() =>
                       statusMutation.mutate({
-                        userId: selectedUser.id,
+                        userId: selectedUser.id || selectedUser._id,
                         status: selectedUser.status === 'suspended' ? 'active' : 'suspended'
                       })
                     }
+
                     disabled={statusMutation.isPending}
                     className={`px-4 py-2 text-white rounded-lg font-bold ${
                       selectedUser.status === 'suspended' ? 'bg-emerald-600' : 'bg-red-600'

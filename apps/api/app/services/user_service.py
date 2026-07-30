@@ -253,10 +253,12 @@ class UserService:
         return {"id": str(target.id), "role": target.role.value}
 
     @staticmethod
-    async def update_user_status(user_id: str, new_status: StatusEnum, current_user: User) -> Dict[str, Any]:
+    async def update_user_status(user_id: str, new_status: str | StatusEnum, current_user: User) -> Dict[str, Any]:
         target = await UserRepository.get_by_id(user_id)
         if not target:
             raise HTTPException(404, "User not found")
+
+        status_enum = StatusEnum(new_status) if isinstance(new_status, str) else new_status
 
         if current_user.role == RoleEnum.manager:
             if target.role != RoleEnum.staff:
@@ -266,7 +268,7 @@ class UserService:
             raise HTTPException(403, "Only Super Admin can suspend/reinstate Chair/Admin/Super Admin")
 
         before = target.model_dump()
-        target.status = new_status
+        target.status = status_enum
         await UserRepository.update(target)
 
         await AuditRepository.insert(AuditLog(
@@ -279,6 +281,7 @@ class UserService:
             after=target.model_dump()
         ))
         return {"id": str(target.id), "status": target.status.value}
+
 
     @staticmethod
     async def update_tank_assignments(user_id: str, assigned_tank_ids: List[str], current_user: User) -> Dict[str, Any]:

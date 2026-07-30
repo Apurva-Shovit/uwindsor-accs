@@ -47,11 +47,12 @@ class AuthService:
             raise HTTPException(401, "Invalid credentials")
             
         if user.status == StatusEnum.pending:
-            raise HTTPException(403, "Account pending approval")
+            raise HTTPException(403, "Your account is pending approval by an administrator.")
         if user.status == StatusEnum.rejected:
-            raise HTTPException(403, "Account was rejected. Contact your administrator.")
+            raise HTTPException(403, "Your account was rejected. Kindly contact your administrator.")
         if user.status == StatusEnum.suspended:
-            raise HTTPException(403, "Account suspended")
+            raise HTTPException(403, "Your account has been suspended. Kindly contact your superior to uplift the suspension.")
+
             
         token = create_access_token(str(user.id), user.role.value)
         
