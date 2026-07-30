@@ -307,10 +307,13 @@ export const UserManagement: React.FC = () => {
                           <Database className="w-3 h-3 mr-1" />
                           {u.assigned_tank_ids.length} Tanks Assigned
                         </span>
-                      ) : (
+                      ) : ['super_admin', 'chair', 'admin', 'manager'].includes(u.role) ? (
                         <span className="text-slate-400 italic text-[11px]">All / General</span>
+                      ) : (
+                        <span className="text-slate-400 italic text-[11px]">None</span>
                       )}
                     </td>
+
 
                     <td className="p-4 text-slate-500 font-mono text-[11px]">
                       {formatDate(u.created_at)}
