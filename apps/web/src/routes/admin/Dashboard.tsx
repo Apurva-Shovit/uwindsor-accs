@@ -196,7 +196,7 @@ export const Dashboard: React.FC = () => {
       {/* Header */}
       <div className="border-b border-slate-200 pb-4">
         <h1 className="text-2xl font-bold text-[#005596]">Administrator & Chair Dashboard</h1>
-        <p className="text-sm text-slate-500 mt-1">Real-time facility telemetry, water quality analytics, and active operational metrics.</p>
+
       </div>
 
       {/* Metric Cards */}
