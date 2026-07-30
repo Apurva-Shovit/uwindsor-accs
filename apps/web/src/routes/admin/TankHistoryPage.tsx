@@ -1,15 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { formatDate } from '../../utils/formatters';
 import { Database, Search, Filter } from 'lucide-react';
 import { getTanks, searchTankHistory } from '../../lib/api';
 
 export const TankHistoryPage: React.FC = () => {
-  const [selectedTankId, setSelectedTankId] = useState('');
+  const [searchParams] = useSearchParams();
+  const initialTankId = searchParams.get('tank_id') || '';
+  const [selectedTankId, setSelectedTankId] = useState(initialTankId);
   const [eventType, setEventType] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [keyword, setKeyword] = useState('');
+
+  useEffect(() => {
+    const paramId = searchParams.get('tank_id');
+    if (paramId) {
+      setSelectedTankId(paramId);
+    }
+  }, [searchParams]);
+
 
   // Fetch available tanks
   const { data: tanks } = useQuery({

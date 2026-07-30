@@ -190,7 +190,7 @@ class FacilityService:
         return res
 
     @staticmethod
-    async def get_tank_history(tank_id: str, current_user: User) -> List[Dict[str, Any]]:
+    async def get_tank_history(tank_id: str, current_user: User, days: Optional[int] = None) -> List[Dict[str, Any]]:
         t = await Tank.get(tank_id)
         if not t or t.deleted:
             raise HTTPException(404, "Tank not found")
@@ -199,10 +199,17 @@ class FacilityService:
             if tank_id not in (current_user.assigned_tank_ids or []):
                 raise HTTPException(403, "Not authorised to view this tank")
 
+        cutoff = None
+        if days is not None and days > 0:
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
         history = []
 
         # 1. Census Events
-        events = await CensusEvent.find({"tank_id": tank_id}).to_list()
+        census_query: dict = {"tank_id": tank_id}
+        if cutoff:
+            census_query["date"] = {"$gte": cutoff}
+        events = await CensusEvent.find(census_query).to_list()
         for ev in events:
             history.append({
                 "type": "census",
@@ -213,11 +220,14 @@ class FacilityService:
                 "transfer_group_id": ev.transfer_group_id,
                 "date": str(ev.date),
                 "created_by": ev.created_by,
-                "created_at": ev.created_at.isoformat(),
+                "created_at": ev.created_at.isoformat() if hasattr(ev.created_at, "isoformat") else str(ev.created_at),
             })
 
         # 2. Water Quality Logs
-        wq = await WaterQualityLog.find({"tank_id": tank_id}).to_list()
+        wq_query: dict = {"tank_id": tank_id}
+        if cutoff:
+            wq_query["date"] = {"$gte": cutoff}
+        wq = await WaterQualityLog.find(wq_query).to_list()
         for log in wq:
             history.append({
                 "type": "water_quality",
@@ -226,11 +236,14 @@ class FacilityService:
                 "comments": log.comments,
                 "date": str(log.date),
                 "created_by": log.created_by,
-                "created_at": log.created_at.isoformat(),
+                "created_at": log.created_at.isoformat() if hasattr(log.created_at, "isoformat") else str(log.created_at),
             })
 
         # 3. Incident Reports
-        incidents = await IncidentReport.find({"tank_id": tank_id}).to_list()
+        inc_query: dict = {"tank_id": tank_id}
+        if cutoff:
+            inc_query["date"] = {"$gte": cutoff}
+        incidents = await IncidentReport.find(inc_query).to_list()
         for inc in incidents:
             history.append({
                 "type": "incident",
@@ -240,10 +253,11 @@ class FacilityService:
                 "vet_contacted": inc.vet_contacted,
                 "date": str(inc.date),
                 "created_by": inc.created_by,
-                "created_at": inc.created_at.isoformat(),
+                "created_at": inc.created_at.isoformat() if hasattr(inc.created_at, "isoformat") else str(inc.created_at),
             })
 
         history.sort(key=lambda x: x["created_at"], reverse=True)
+
 
         # Bulk user resolution
         user_ids = {item["created_by"] for item in history if item.get("created_by")}

@@ -93,7 +93,9 @@ export const postFishIntake = (data: any) => api.post('/intake', data);
 export const postCensusEvent = (data: any) => api.post('/census-events', data);
 export const postTankTransfer = (data: any) => api.post('/tank-transfers', data);
 export const getTankAssignmentHistory = (id: string) => api.get(`/tank-assignments/${id}/history`);
-export const getTankHistory = (id: string) => api.get(`/facilities-structure/tanks/${id}/history`);
+export const getTankHistory = (id: string, days?: number) =>
+  api.get(`/facilities-structure/tanks/${id}/history`, { params: days ? { days } : {} });
+
 export const searchTankHistory = (params: Record<string, any>) =>
   api.get('/facilities-structure/tanks/history/search', { params });
 

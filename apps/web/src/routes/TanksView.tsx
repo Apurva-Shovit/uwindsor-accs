@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { getTanksSummary, createTank, deleteTank, getTankHistory, toggleTankQuarantine } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { Database, Plus } from 'lucide-react';
+
 
 interface TankSummary {
   id: string;
@@ -40,7 +42,8 @@ export const TanksView: React.FC<TanksViewProps> = ({ isAdminMode = false }) => 
     const loadHistory = async () => {
       setHistoryLoading(true);
       try {
-        const histRes = await getTankHistory(getId(selectedTank));
+        const histRes = await getTankHistory(getId(selectedTank), 7);
+
         setHistory(histRes.data);
       } catch (err) {
         setHistory([]);
@@ -346,66 +349,87 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
                     </div>
 
                     <div className="border-t border-border pt-4">
-                      <span className="block text-xs font-bold uppercase text-textSecondary mb-2">History</span>
+                      <span className="block text-xs font-bold uppercase text-textSecondary mb-2">History (Past 7 Days)</span>
                       {historyLoading ? (
                         <div className="text-xs text-textSecondary py-2 flex items-center gap-2">
                           <div className="h-3 w-3 animate-spin rounded-full border border-brandBlue border-t-transparent"></div>
                           Loading history...
                         </div>
                       ) : history.length === 0 ? (
-                        <span className="text-xs text-textSecondary italic">No historical logs available for this occupant.</span>
+                        <div className="space-y-2">
+                          <span className="text-xs text-textSecondary italic block">No historical logs recorded in the past 7 days.</span>
+                          <div className="pt-1 text-right">
+                            <Link
+                              to={`/admin/tank-history?tank_id=${getId(selectedTank)}`}
+                              className="inline-flex items-center text-xs font-bold text-[#005596] hover:underline"
+                            >
+                              View Full Tank History Explorer &rarr;
+                            </Link>
+                          </div>
+                        </div>
                       ) : (
-                        <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
-                          {history.map((h, index) => (
-                            <div key={index} className="text-xs border-b border-border pb-2 last:border-b-0">
-                              <div className="flex justify-between text-textSecondary font-semibold">
-                                <span className="uppercase text-[10px] tracking-wide">
-                                  {h.type === 'census' && `Census: ${h.event_type}`}
-                                  {h.type === 'water_quality' && `Water Quality: ${h.log_type}`}
-                                  {h.type === 'incident' && 'Incident'}
-                                </span>
-                                <span>{h.date}</span>
-                              </div>
-
-                              {/* Census display */}
-                              {h.type === 'census' && (
-                                <div className="mt-1">
-                                  <span className={`font-bold ${h.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {h.change >= 0 ? `+${h.change}` : h.change} fish
+                        <div className="space-y-3">
+                          <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
+                            {history.map((h, index) => (
+                              <div key={index} className="text-xs border-b border-border pb-2 last:border-b-0">
+                                <div className="flex justify-between text-textSecondary font-semibold">
+                                  <span className="uppercase text-[10px] tracking-wide">
+                                    {h.type === 'census' && `Census: ${h.event_type}`}
+                                    {h.type === 'water_quality' && `Water Quality: ${h.log_type}`}
+                                    {h.type === 'incident' && 'Incident'}
                                   </span>
-                                  {h.reason && <span className="text-textSecondary"> ({h.reason})</span>}
-                                  {h.transfer_group_id && (
-                                    <span className="block text-[10px] text-brandBlue">
-                                      🔗 Group ID: {h.transfer_group_id.slice(0, 8)}...
-                                    </span>
-                                  )}
+                                  <span>{h.date}</span>
                                 </div>
-                              )}
 
-                              {/* Water Quality display */}
-                              {h.type === 'water_quality' && (
-                                <div className="mt-1 text-textPrimary grid grid-cols-3 gap-1 bg-surface p-1 rounded">
-                                  {Object.entries(h.parameters).map(([k, val]) => (
-                                    <span key={k}>
-                                      <strong>{k}:</strong> {String(val)}
+                                {/* Census display */}
+                                {h.type === 'census' && (
+                                  <div className="mt-1">
+                                    <span className={`font-bold ${h.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                      {h.change >= 0 ? `+${h.change}` : h.change} fish
                                     </span>
-                                  ))}
-                                </div>
-                              )}
+                                    {h.reason && <span className="text-textSecondary"> ({h.reason})</span>}
+                                    {h.transfer_group_id && (
+                                      <span className="block text-[10px] text-brandBlue">
+                                        🔗 Group ID: {h.transfer_group_id.slice(0, 8)}...
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
 
-                              {/* Incident display */}
-                              {h.type === 'incident' && (
-                                <div className="mt-1 text-textPrimary bg-yellow-50 border border-yellow-100 p-1.5 rounded space-y-1">
-                                  <div className="font-semibold">⚠️ {h.problem}</div>
-                                  {h.treatment && <div><strong>Treatment:</strong> {h.treatment}</div>}
-                                  {h.vet_contacted && <div className="text-[10px] text-yellow-800 font-bold">🩺 Vet Contacted</div>}
-                                </div>
-                              )}
-                            </div>
-                          ))}
+                                {/* Water Quality display */}
+                                {h.type === 'water_quality' && (
+                                  <div className="mt-1 text-textPrimary grid grid-cols-3 gap-1 bg-surface p-1 rounded">
+                                    {Object.entries(h.parameters).map(([k, val]) => (
+                                      <span key={k}>
+                                        <strong>{k}:</strong> {String(val)}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Incident display */}
+                                {h.type === 'incident' && (
+                                  <div className="mt-1 text-textPrimary bg-yellow-50 border border-yellow-100 p-1.5 rounded space-y-1">
+                                    <div className="font-semibold">⚠️ {h.problem}</div>
+                                    {h.treatment && <div><strong>Treatment:</strong> {h.treatment}</div>}
+                                    {h.vet_contacted && <div className="text-[10px] text-yellow-800 font-bold">🩺 Vet Contacted</div>}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="pt-2 border-t border-slate-100 text-right">
+                            <Link
+                              to={`/admin/tank-history?tank_id=${getId(selectedTank)}`}
+                              className="inline-flex items-center text-xs font-bold text-[#005596] hover:underline"
+                            >
+                              View Full Tank History Explorer &rarr;
+                            </Link>
+                          </div>
                         </div>
                       )}
                     </div>
+
                   </div>
                 </div>
               </div>

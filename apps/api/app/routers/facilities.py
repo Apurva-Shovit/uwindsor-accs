@@ -75,8 +75,13 @@ async def tanks_summary(current: User = Depends(get_current_user)):
     return await FacilityService.get_tanks_summary(current)
 
 @router.get("/tanks/{id}/history")
-async def get_tank_history(id: str, current: User = Depends(get_current_user)):
-    return await FacilityService.get_tank_history(id, current)
+async def get_tank_history(
+    id: str,
+    days: Optional[int] = Query(None),
+    current: User = Depends(get_current_user)
+):
+    return await FacilityService.get_tank_history(id, current, days=days)
+
 
 @router.get("/tanks/history/search")
 async def search_tank_history(
