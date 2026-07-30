@@ -130,9 +130,40 @@ class DashboardService:
         all_tanks = await Tank.find({"deleted": False}).to_list()
         tank_options = [{"id": str(t.id), "tank_number": t.tank_number} for t in sorted(all_tanks, key=lambda x: int(x.tank_number) if str(x.tank_number).isdigit() else 999)]
 
+        # Compute summary stats for each parameter
+        def calc_param_stats(key: str, precision: int = 2):
+            vals = [s[key] for s in series if s[key] is not None]
+            if not vals:
+                return {"min": None, "max": None, "mid": None, "latest": None, "has_data": False}
+            min_val = round(min(vals), precision)
+            max_val = round(max(vals), precision)
+            mid_val = round((min_val + max_val) / 2, precision)
+            latest_val = round(vals[-1], precision)
+            return {
+                "min": min_val,
+                "max": max_val,
+                "mid": mid_val,
+                "latest": latest_val,
+                "has_data": True
+            }
+
+        summary_stats = {
+            "ph": calc_param_stats("ph", 2),
+            "temperature": calc_param_stats("temperature", 1),
+            "dissolved_oxygen": calc_param_stats("dissolved_oxygen", 1)
+        }
+
+        groups = [
+            {"id": "group_1_8", "label": "Tanks 1 - 8 (Group)"},
+            {"id": "group_9_14", "label": "Tanks 9 - 14 (Group)"}
+        ]
+
         return {
             "time_range_days": days,
             "selected_tank_id": tank_id or "all",
+            "groups": groups,
             "tank_options": tank_options,
+            "summary_stats": summary_stats,
             "series": series
         }
+

@@ -76,7 +76,7 @@ export const UserManagement: React.FC = () => {
 
   // Status Update Mutation (Suspend/Reinstate)
   const statusMutation = useMutation({
-    mutationFn: async ({ userId, status, reason }: { userId: string; status: string; reason?: string }) => {
+    mutationFn: async ({ userId, status }: { userId: string; status: string; _reason?: string }) => {
       const res = await updateUserStatus(userId, status);
       return res.data;
     },

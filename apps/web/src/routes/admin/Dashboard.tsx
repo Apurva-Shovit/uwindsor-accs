@@ -39,6 +39,11 @@ export const Dashboard: React.FC = () => {
 
   const series = analyticsData?.series || [];
   const tankOptions = analyticsData?.tank_options || [];
+  const tankGroups = analyticsData?.groups || [
+    { id: 'group_1_8', label: 'Tanks 1 - 8 (Group)' },
+    { id: 'group_9_14', label: 'Tanks 9 - 14 (Group)' },
+  ];
+  const summaryStats = analyticsData?.summary_stats;
 
   // Helper renderer for dynamic SVG line chart
   const renderLineChart = (
@@ -63,9 +68,18 @@ export const Dashboard: React.FC = () => {
     }
 
     const vals = validPoints.map((p: any) => p.val);
-    const minVal = Math.min(...vals) < defaultMin ? Math.floor(Math.min(...vals)) : defaultMin;
-    const maxVal = Math.max(...vals) > defaultMax ? Math.ceil(Math.max(...vals)) : defaultMax;
-    const midVal = +((maxVal + minVal) / 2).toFixed(1);
+    const paramStats = summaryStats?.[dataKey];
+    const latestVal = paramStats?.latest ?? validPoints[validPoints.length - 1]?.val;
+
+    const minVal = paramStats?.min !== null && paramStats?.min !== undefined
+      ? (paramStats.min < defaultMin ? Math.floor(paramStats.min) : defaultMin)
+      : (Math.min(...vals) < defaultMin ? Math.floor(Math.min(...vals)) : defaultMin);
+
+    const maxVal = paramStats?.max !== null && paramStats?.max !== undefined
+      ? (paramStats.max > defaultMax ? Math.ceil(paramStats.max) : defaultMax)
+      : (Math.max(...vals) > defaultMax ? Math.ceil(Math.max(...vals)) : defaultMax);
+
+    const midVal = paramStats?.mid ?? +((maxVal + minVal) / 2).toFixed(1);
 
     const width = 600;
     const height = 150;
@@ -94,7 +108,7 @@ export const Dashboard: React.FC = () => {
             {title} ({unit})
           </span>
           <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-            Latest: <strong>{validPoints[validPoints.length - 1]?.val}</strong> {unit}
+            Latest: <strong>{latestVal}</strong> {unit}
           </span>
         </div>
 
@@ -196,7 +210,6 @@ export const Dashboard: React.FC = () => {
       {/* Header */}
       <div className="border-b border-slate-200 pb-4">
         <h1 className="text-2xl font-bold text-[#005596]">Administrator & Chair Dashboard</h1>
-
       </div>
 
       {/* Metric Cards */}
@@ -261,8 +274,13 @@ export const Dashboard: React.FC = () => {
                 className="rounded-lg border border-slate-300 bg-white p-2 text-xs font-semibold text-slate-800 shadow-sm focus:ring-2 focus:ring-[#005596]"
               >
                 <option value="all">All Facility Tanks</option>
-                <option value="group_1_8">Tanks 1 - 8 (Group)</option>
-                <option value="group_9_14">Tanks 9 - 14 (Group)</option>
+                <optgroup label="Tank Groups">
+                  {tankGroups.map((g: any) => (
+                    <option key={g.id} value={g.id}>
+                      {g.label}
+                    </option>
+                  ))}
+                </optgroup>
                 <optgroup label="Individual Tanks">
                   {tankOptions.map((t: any) => (
                     <option key={t.id} value={t.id}>
@@ -272,6 +290,7 @@ export const Dashboard: React.FC = () => {
                 </optgroup>
               </select>
             </div>
+
 
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
               {[7, 14, 30].map((d) => (
