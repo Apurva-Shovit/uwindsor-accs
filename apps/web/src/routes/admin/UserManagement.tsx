@@ -20,7 +20,7 @@ export const UserManagement: React.FC = () => {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [page, setPage] = useState(1);
+  const [userMgmtPage, setUserMgmtPage] = useState(1);
 
   // Modals state
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
@@ -33,11 +33,14 @@ export const UserManagement: React.FC = () => {
 
   // 1. Fetch Users List
   const { data: usersResponse, isLoading: loadingUsers } = useQuery({
-    queryKey: ['adminUsersList', statusFilter, page],
+    queryKey: ['adminUsersList', statusFilter, searchTerm, userMgmtPage],
     queryFn: async () => {
-      const params: Record<string, any> = { page, limit: 20 };
+      const params: Record<string, any> = { page: userMgmtPage, limit: 20 };
       if (statusFilter && statusFilter !== 'all') {
         params.status_filter = statusFilter;
+      }
+      if (searchTerm && searchTerm.trim()) {
+        params.search = searchTerm.trim();
       }
       const res = await getUsers(params);
       return res.data;
@@ -46,6 +49,20 @@ export const UserManagement: React.FC = () => {
 
   const usersList = Array.isArray(usersResponse) ? usersResponse : (usersResponse?.items || []);
   const totalPages = Array.isArray(usersResponse) ? 1 : (usersResponse?.total_pages || 1);
+  const totalItems = Array.isArray(usersResponse) ? usersList.length : (usersResponse?.total || usersList.length);
+  const summary = usersResponse?.summary;
+  const allowedRoles = usersResponse?.allowed_assignable_roles || [
+    { value: 'staff', label: 'Staff / Technician' },
+    { value: 'manager', label: 'Facility Manager' },
+    { value: 'admin', label: 'Administrator' },
+    { value: 'chair', label: 'ACC Chair' },
+    { value: 'super_admin', label: 'Super Admin' }
+  ];
+
+  // Summary Metrics from Backend API Summary Object
+  const activeCount = summary?.active ?? usersList.filter((u: any) => u.status === 'active').length;
+  const pendingCount = summary?.pending ?? usersList.filter((u: any) => u.status === 'pending').length;
+  const suspendedCount = summary?.suspended ?? usersList.filter((u: any) => u.status === 'suspended').length;
 
   // 2. Fetch Facility Tanks List for Assignment
   const { data: tanksList = [] } = useQuery({
@@ -133,20 +150,15 @@ export const UserManagement: React.FC = () => {
     );
   };
 
-  const filteredUsers = usersList.filter((u: any) => {
-    const term = searchTerm.toLowerCase();
-    const fullName = `${u.first_name || ''} ${u.last_name || ''}`.toLowerCase();
-    const email = (u.email || '').toLowerCase();
-    const matches = fullName.includes(term) || email.includes(term);
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+    setUserMgmtPage(1);
+  };
 
-    if (statusFilter === 'all') return matches;
-    return matches && u.status === statusFilter;
-  });
-
-  // Summary Metrics
-  const activeCount = usersList.filter((u: any) => u.status === 'active').length;
-  const pendingCount = usersList.filter((u: any) => u.status === 'pending').length;
-  const suspendedCount = usersList.filter((u: any) => u.status === 'suspended').length;
+  const handleStatusFilterChange = (st: string) => {
+    setStatusFilter(st);
+    setUserMgmtPage(1);
+  };
 
   return (
     <div className="space-y-6">
@@ -204,7 +216,7 @@ export const UserManagement: React.FC = () => {
             type="text"
             placeholder="Search by user name or email..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={handleSearchChange}
             className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#005596]"
           />
         </div>
@@ -213,7 +225,7 @@ export const UserManagement: React.FC = () => {
           {['all', 'active', 'pending', 'suspended'].map((st) => (
             <button
               key={st}
-              onClick={() => setStatusFilter(st)}
+              onClick={() => handleStatusFilterChange(st)}
               className={`px-3 py-1.5 text-xs font-bold capitalize rounded-lg transition-colors ${
                 statusFilter === st ? 'bg-[#005596] text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
@@ -231,7 +243,7 @@ export const UserManagement: React.FC = () => {
             <div className="animate-spin h-8 w-8 border-4 border-[#005596] border-t-transparent rounded-full mx-auto mb-3" />
             Loading user directory...
           </div>
-        ) : filteredUsers.length === 0 ? (
+        ) : usersList.length === 0 ? (
           <div className="p-12 text-center text-slate-500">No user accounts found matching the filter.</div>
         ) : (
           <div className="overflow-x-auto">
@@ -247,7 +259,7 @@ export const UserManagement: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs font-medium">
-                {filteredUsers.map((u: any) => (
+                {usersList.map((u: any) => (
                   <tr key={u.id} className="hover:bg-slate-50">
                     <td className="p-4">
                       <div className="font-bold text-slate-900">{u.first_name} {u.last_name}</div>
@@ -340,11 +352,11 @@ export const UserManagement: React.FC = () => {
               </tbody>
             </table>
             <Paginator
-              page={page}
+              page={userMgmtPage}
               totalPages={totalPages}
-              total={filteredUsers.length}
+              total={totalItems}
               limit={20}
-              onPageChange={(p) => setPage(p)}
+              onPageChange={(p) => setUserMgmtPage(p)}
             />
           </div>
         )}
@@ -383,11 +395,9 @@ export const UserManagement: React.FC = () => {
                     onChange={(e) => setNewRole(e.target.value)}
                     className="w-full p-2.5 border border-slate-300 rounded-lg font-semibold text-slate-800 disabled:bg-slate-100 disabled:text-slate-500"
                   >
-                    <option value="staff">Staff / Technician</option>
-                    {isAdminOrChair && <option value="manager">Facility Manager</option>}
-                    {isAdminOrChair && <option value="admin">Administrator</option>}
-                    {isAdminOrChair && <option value="chair">ACC Chair</option>}
-                    {isAdminOrChair && <option value="super_admin">Super Admin</option>}
+                    {allowedRoles.map((r: any) => (
+                      <option key={r.value} value={r.value}>{r.label}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -438,11 +448,9 @@ export const UserManagement: React.FC = () => {
                     onChange={(e) => setNewRole(e.target.value)}
                     className="w-full p-2.5 border border-slate-300 rounded-lg font-semibold text-slate-800"
                   >
-                    <option value="staff">Staff / Technician</option>
-                    <option value="manager">Facility Manager</option>
-                    <option value="admin">Administrator</option>
-                    <option value="chair">ACC Chair</option>
-                    <option value="super_admin">Super Admin</option>
+                    {allowedRoles.map((r: any) => (
+                      <option key={r.value} value={r.value}>{r.label}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -458,6 +466,7 @@ export const UserManagement: React.FC = () => {
                 </div>
               </div>
             )}
+
 
             {/* Status Modal (Suspend / Reinstate) */}
             {modalType === 'status' && (

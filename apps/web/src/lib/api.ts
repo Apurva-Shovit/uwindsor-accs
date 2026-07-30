@@ -32,8 +32,9 @@ export const logout = () => api.post('/auth/logout');
 export const getMe = () => api.get('/auth/me');
 
 // User Management APIs
-export const getUsers = (params?: { status_filter?: string; page?: number; limit?: number }) =>
+export const getUsers = (params?: { status_filter?: string; search?: string; page?: number; limit?: number }) =>
   api.get('/users', { params });
+
 export const getPending = () => api.get('/users/pending');
 export const approveUser = (id: string, body: any) => api.patch(`/users/${id}/approve`, body);
 export const rejectUser = (id: string, reason: string) => api.patch(`/users/${id}/reject`, { reason });

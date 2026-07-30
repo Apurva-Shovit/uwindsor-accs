@@ -102,22 +102,65 @@ class UserService:
         ))
 
     @staticmethod
-    @staticmethod
     async def list_all_users(
         status_filter: Optional[str],
         current_user: User,
         page: int = 1,
         limit: int = 20,
+        search: Optional[str] = None,
     ) -> Dict[str, Any]:
-        query: dict = {}
-        if status_filter:
-            query["status"] = status_filter
-
+        # Base authorization scope
+        base_scope: dict = {}
         if current_user.role == RoleEnum.manager:
-            query["$or"] = [
+            base_scope["$or"] = [
                 {"role": RoleEnum.staff.value},
                 {"requested_role": RoleEnum.staff.value}
             ]
+
+        # Global Account Status Summary (unfiltered by search/status_filter, but scoped by role permissions)
+        all_scoped_users = await User.find(base_scope).to_list()
+        def get_status_str(u: User) -> str:
+            st = getattr(u, "status", None)
+            if hasattr(st, "value"):
+                return str(st.value)
+            return str(st) if st else "pending"
+
+        active_count = sum(1 for u in all_scoped_users if get_status_str(u) == "active")
+        pending_count = sum(1 for u in all_scoped_users if get_status_str(u) == "pending")
+        suspended_count = sum(1 for u in all_scoped_users if get_status_str(u) == "suspended")
+        total_count = len(all_scoped_users)
+
+        summary = {
+            "active": active_count,
+            "pending": pending_count,
+            "suspended": suspended_count,
+            "total": total_count,
+        }
+
+        # Build query for filtered result listing
+        and_clauses = []
+        if base_scope:
+            and_clauses.append(base_scope)
+
+        if status_filter and status_filter != "all":
+            and_clauses.append({"status": status_filter})
+
+        if search and search.strip():
+            term = search.strip()
+            regex_term = {"$regex": term, "$options": "i"}
+            and_clauses.append({
+                "$or": [
+                    {"first_name": regex_term},
+                    {"last_name": regex_term},
+                    {"email": regex_term}
+                ]
+            })
+
+        query: dict = {}
+        if len(and_clauses) == 1:
+            query = and_clauses[0]
+        elif len(and_clauses) > 1:
+            query = {"$and": and_clauses}
 
         skip = (page - 1) * limit
         total = await User.find(query).count()
@@ -146,8 +189,40 @@ class UserService:
                 "created_at": u.created_at.isoformat() if u.created_at else None,
             })
 
+        # Determine allowed assignable roles for current user
+        if current_user.role == RoleEnum.super_admin:
+            allowed_assignable_roles = [
+                {"value": "staff", "label": "Staff / Technician"},
+                {"value": "manager", "label": "Facility Manager"},
+                {"value": "admin", "label": "Administrator"},
+                {"value": "chair", "label": "ACC Chair"},
+                {"value": "super_admin", "label": "Super Admin"}
+            ]
+        elif current_user.role in (RoleEnum.chair, RoleEnum.admin):
+            allowed_assignable_roles = [
+                {"value": "staff", "label": "Staff / Technician"},
+                {"value": "manager", "label": "Facility Manager"},
+                {"value": "admin", "label": "Administrator"},
+                {"value": "chair", "label": "ACC Chair"}
+            ]
+        elif current_user.role == RoleEnum.manager:
+            allowed_assignable_roles = [
+                {"value": "staff", "label": "Staff / Technician"}
+            ]
+        else:
+            allowed_assignable_roles = []
+
         total_pages = (total + limit - 1) // limit if limit > 0 else 1
-        return {"items": items, "total": total, "page": page, "limit": limit, "total_pages": total_pages}
+        return {
+            "items": items,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "summary": summary,
+            "allowed_assignable_roles": allowed_assignable_roles
+        }
+
 
     @staticmethod
     async def update_user_role(user_id: str, new_role: RoleEnum, current_user: User) -> Dict[str, Any]:
