@@ -5,6 +5,7 @@ import { formatDate } from '../../utils/formatters';
 import { Database, Search, Filter } from 'lucide-react';
 import { getTanks, searchTankHistory } from '../../lib/api';
 import { Paginator } from '../../components/ui/Paginator';
+import { useDebounce } from '../../hooks/useDebounce';
 
 export const TankHistoryPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -14,7 +15,9 @@ export const TankHistoryPage: React.FC = () => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [keyword, setKeyword] = useState('');
+  const debouncedKeyword = useDebounce(keyword, 350);
   const [historyPage, setHistoryPage] = useState(1);
+  const [historyLimit, setHistoryLimit] = useState(20);
 
   useEffect(() => {
     const paramId = searchParams.get('tank_id');
@@ -35,14 +38,14 @@ export const TankHistoryPage: React.FC = () => {
 
   // Fetch history search results
   const { data: historyData, isLoading } = useQuery({
-    queryKey: ['tankHistorySearch', selectedTankId, eventType, dateFrom, dateTo, keyword, historyPage],
+    queryKey: ['tankHistorySearch', selectedTankId, eventType, dateFrom, dateTo, debouncedKeyword, historyPage, historyLimit],
     queryFn: async () => {
-      const params: Record<string, any> = { page: historyPage, limit: 20 };
+      const params: Record<string, any> = { page: historyPage, limit: historyLimit };
       if (selectedTankId) params.tank_id = selectedTankId;
       if (eventType) params.event_type = eventType;
       if (dateFrom) params.date_from = dateFrom;
       if (dateTo) params.date_to = dateTo;
-      if (keyword) params.keyword = keyword;
+      if (debouncedKeyword) params.keyword = debouncedKeyword;
 
       const res = await searchTankHistory(params);
       return res.data;
@@ -52,6 +55,7 @@ export const TankHistoryPage: React.FC = () => {
   const history = Array.isArray(historyData) ? historyData : (historyData?.items || []);
   const totalPages = Array.isArray(historyData) ? 1 : (historyData?.total_pages || 1);
   const totalCount = Array.isArray(historyData) ? history.length : (historyData?.total || 0);
+
 
   return (
     <div className="space-y-6">
@@ -227,13 +231,7 @@ export const TankHistoryPage: React.FC = () => {
                       </span>
                     </td>
                     <td className="p-4 font-medium text-slate-700 whitespace-nowrap">
-                      {row.event_type === 'quarantine_placed' ? (
-                        <span className="px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-800">Quarantine Placed</span>
-                      ) : row.event_type === 'quarantine_lifted' ? (
-                        <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-800">Quarantine Lifted</span>
-                      ) : (
-                        <span className="capitalize">{String(row.event_type).replace('_', ' ')}</span>
-                      )}
+                      <span className="capitalize">{row.display_event_type || String(row.event_type).replace('_', ' ')}</span>
                     </td>
                     <td className="p-4 text-slate-800 max-w-md font-mono text-xs">
                       {row.details}
@@ -267,7 +265,7 @@ export const TankHistoryPage: React.FC = () => {
                       {row.category}
                     </span>
                     <span className="text-[11px] font-medium text-slate-700 capitalize">
-                      {row.event_type}
+                      {row.display_event_type || row.event_type}
                     </span>
                     <span className="text-[11px] text-slate-600 ml-auto">By: <span className="font-semibold">{row.created_by}</span></span>
                   </div>
@@ -286,9 +284,15 @@ export const TankHistoryPage: React.FC = () => {
               page={historyPage}
               totalPages={totalPages}
               total={totalCount}
-              limit={20}
+              limit={historyLimit}
               onPageChange={(p) => setHistoryPage(p)}
+              onLimitChange={(l) => {
+                setHistoryLimit(l);
+                setHistoryPage(1);
+              }}
+              limitOptions={[20, 50, 100]}
             />
+
           </div>
 
         )}

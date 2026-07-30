@@ -6,6 +6,8 @@ interface PaginatorProps {
   total: number;
   limit: number;
   onPageChange: (newPage: number) => void;
+  onLimitChange?: (newLimit: number) => void;
+  limitOptions?: number[];
 }
 
 export const Paginator: React.FC<PaginatorProps> = ({
@@ -14,6 +16,8 @@ export const Paginator: React.FC<PaginatorProps> = ({
   total,
   limit,
   onPageChange,
+  onLimitChange,
+  limitOptions = [20, 50, 100],
 }) => {
   if (total <= 0) return null;
 
@@ -22,11 +26,31 @@ export const Paginator: React.FC<PaginatorProps> = ({
 
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 bg-slate-50 rounded-b-xl">
-      <div className="text-xs font-medium text-slate-500">
-        Showing <span className="font-semibold text-slate-700">{start}</span> to{' '}
-        <span className="font-semibold text-slate-700">{end}</span> of{' '}
-        <span className="font-semibold text-slate-700">{total}</span> items
+      <div className="flex items-center gap-3 text-xs font-medium text-slate-500">
+        <div>
+          Showing <span className="font-semibold text-slate-700">{start}</span> to{' '}
+          <span className="font-semibold text-slate-700">{end}</span> of{' '}
+          <span className="font-semibold text-slate-700">{total}</span> items
+        </div>
+
+        {onLimitChange && (
+          <div className="flex items-center gap-1.5 ml-2 border-l border-slate-200 pl-3">
+            <span>Per page:</span>
+            <select
+              value={limit}
+              onChange={(e) => onLimitChange(Number(e.target.value))}
+              className="border border-slate-200 rounded-md px-2 py-1 text-xs font-semibold bg-white text-slate-700 focus:ring-1 focus:ring-[#005596] focus:outline-none"
+            >
+              {limitOptions.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
+
 
       <div className="flex items-center gap-1.5">
         <button

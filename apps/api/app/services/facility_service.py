@@ -319,12 +319,14 @@ class FacilityService:
                 t_num = tank_map.get(ev.tank_id, "Unknown")
                 category_name = "Quarantine" if is_quarantine_ev else "Census"
                 details_str = f"Status: {ev.reason or 'Quarantine Action'}" if is_quarantine_ev else f"Change: {ev.change:+d} | Reason: {ev.reason or 'N/A'}"
+                display_ev = "Quarantine Placed" if ev.event_type == "quarantine_placed" else "Quarantine Lifted" if ev.event_type == "quarantine_lifted" else str(ev.event_type).replace('_', ' ').title()
                 item = {
                     "id": str(ev.id),
                     "tank_id": ev.tank_id,
                     "tank_number": t_num,
                     "category": category_name,
                     "event_type": ev.event_type,
+                    "display_event_type": display_ev,
                     "details": details_str,
                     "notes": ev.notes or "",
                     "date": str(ev.date),
@@ -350,6 +352,7 @@ class FacilityService:
                     "tank_number": t_num,
                     "category": "Water Quality",
                     "event_type": log.type,
+                    "display_event_type": str(log.type).replace('_', ' ').title(),
                     "details": params_str,
                     "notes": log.comments or "",
                     "date": str(log.date),
@@ -373,13 +376,15 @@ class FacilityService:
                     "tank_id": inc.tank_id,
                     "tank_number": t_num,
                     "category": "Incident",
-                    "event_type": "Incident Flag",
-                    "details": f"Problem: {inc.problem} | Vet Contacted: {inc.vet_contacted}",
+                    "event_type": "incident",
+                    "display_event_type": "Incident Flag",
+                    "details": f"Problem: {inc.problem} | Vet Contacted: {'Yes' if inc.vet_contacted else 'No'}",
                     "notes": inc.treatment or inc.comments or "",
                     "date": str(inc.date),
                     "created_by": inc.created_by,
                     "created_at": inc.created_at.isoformat() if hasattr(inc.created_at, "isoformat") else str(inc.created_at),
                 }
+
                 if keyword and keyword.lower() not in str(item).lower():
                     continue
                 combined.append(item)
