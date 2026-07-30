@@ -6,6 +6,20 @@ import { BookOpen, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { formatDate } from '../utils/formatters';
 import { Paginator } from '../components/ui/Paginator';
 
+const UWindsorBufferingLoader: React.FC<{ message?: string }> = ({ message = "Synchronizing ACARE Facility Data..." }) => (
+  <div className="flex flex-col items-center justify-center py-12 px-6 bg-gradient-to-b from-blue-50/40 via-white to-amber-50/20 border border-blue-100 rounded-2xl shadow-sm text-center space-y-4 my-4">
+    <div className="relative flex items-center justify-center w-14 h-14">
+      <div className="absolute inset-0 rounded-full border-4 border-[#FFCE00]/50 animate-ping" />
+      <div className="w-12 h-12 border-4 border-[#005596] border-t-[#FFCE00] border-r-[#005596] rounded-full animate-spin shadow-md" />
+      <div className="absolute w-2.5 h-2.5 bg-[#005596] rounded-full shadow" />
+    </div>
+    <div className="space-y-1">
+      <h4 className="text-xs font-extrabold text-[#005596] uppercase tracking-wider">University of Windsor ACARE System</h4>
+      <p className="text-xs font-bold text-slate-600 animate-pulse">{message}</p>
+    </div>
+  </div>
+);
+
 export const ProjectReportPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -75,9 +89,8 @@ export const ProjectReportPage: React.FC = () => {
 
   if (loading && !data) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-        <div className="animate-spin h-10 w-10 border-4 border-[#005596] border-t-transparent rounded-full" />
-        <p className="text-sm font-semibold text-slate-600">Generating Comprehensive Project Audit Report...</p>
+      <div className="max-w-xl mx-auto my-20 p-6">
+        <UWindsorBufferingLoader message="Generating Comprehensive Research Project Audit Report..." />
       </div>
     );
   }
@@ -319,13 +332,13 @@ export const ProjectReportPage: React.FC = () => {
           Audit Trail Logs ({audit_meta?.total_items ?? audit_logs.length})
         </button>
       </div>
-
-
       {/* Tab 1: Occupied Tanks */}
       {activeTab === 'tanks' && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
           <h3 className="text-sm font-bold text-slate-800">Currently Occupied Tanks</h3>
-          {occupied_tanks.length === 0 ? (
+          {loading ? (
+            <UWindsorBufferingLoader message="Loading occupied tanks..." />
+          ) : occupied_tanks.length === 0 ? (
             <p className="text-xs text-slate-500 italic p-4 text-center">No active tanks currently occupied by this project.</p>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-slate-200">
@@ -377,7 +390,9 @@ export const ProjectReportPage: React.FC = () => {
               Total Mortality: {summary.total_deaths} Fish
             </span>
           </div>
-          {deaths.length === 0 ? (
+          {loading ? (
+            <UWindsorBufferingLoader message="Fetching mortality and death logs..." />
+          ) : deaths.length === 0 ? (
             <p className="text-xs text-slate-500 italic p-4 text-center">No mortalities recorded for this project.</p>
           ) : (
             <div className="space-y-3">
@@ -425,7 +440,9 @@ export const ProjectReportPage: React.FC = () => {
       {activeTab === 'incidents' && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
           <h3 className="text-sm font-bold text-amber-900">Incident Reports Log</h3>
-          {incidents.length === 0 ? (
+          {loading ? (
+            <UWindsorBufferingLoader message="Fetching incident reports..." />
+          ) : incidents.length === 0 ? (
             <p className="text-xs text-slate-500 italic p-4 text-center">No incidents reported for this project.</p>
           ) : (
             <div className="space-y-3">
@@ -474,7 +491,9 @@ export const ProjectReportPage: React.FC = () => {
       {activeTab === 'census' && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
           <h3 className="text-sm font-bold text-purple-900">Population Census Activity History</h3>
-          {census_events.length === 0 ? (
+          {loading ? (
+            <UWindsorBufferingLoader message="Loading population census history..." />
+          ) : census_events.length === 0 ? (
             <p className="text-xs text-slate-500 italic p-4 text-center">No census events recorded.</p>
           ) : (
             <div className="space-y-3">
@@ -531,7 +550,9 @@ export const ProjectReportPage: React.FC = () => {
               Total Quarantine Events: {quarantine_meta?.total_items ?? quarantine_events.length}
             </span>
           </div>
-          {quarantine_events.length === 0 ? (
+          {loading ? (
+            <UWindsorBufferingLoader message="Fetching biosecurity and quarantine logs..." />
+          ) : quarantine_events.length === 0 ? (
             <p className="text-xs text-slate-500 italic p-4 text-center">No quarantine placement or lifting events recorded for this project.</p>
           ) : (
             <div className="space-y-3">
@@ -589,7 +610,9 @@ export const ProjectReportPage: React.FC = () => {
       {activeTab === 'water_quality' && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
           <h3 className="text-sm font-bold text-teal-900">Water Quality Logged Parameters (Daily Logs)</h3>
-          {water_quality_logs.length === 0 ? (
+          {loading ? (
+            <UWindsorBufferingLoader message="Loading daily water quality logs..." />
+          ) : water_quality_logs.length === 0 ? (
             <p className="text-xs text-slate-500 italic p-4 text-center">No daily water quality logs recorded for assigned tanks.</p>
           ) : (
             <div className="space-y-3">
@@ -637,12 +660,13 @@ export const ProjectReportPage: React.FC = () => {
         </div>
       )}
 
-
       {/* Tab 6: Audit Trail Logs */}
       {activeTab === 'audits' && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
           <h3 className="text-sm font-bold text-slate-900">Project Operational Audit Trail</h3>
-          {audit_logs.length === 0 ? (
+          {loading ? (
+            <UWindsorBufferingLoader message="Loading operational audit trail..." />
+          ) : audit_logs.length === 0 ? (
             <p className="text-xs text-slate-500 italic p-4 text-center">No operational audit logs recorded for this project.</p>
           ) : (
             <div className="space-y-3">
@@ -671,7 +695,6 @@ export const ProjectReportPage: React.FC = () => {
                 onLimitChange={(l) => setLimitForTab('audits', l)}
                 limitOptions={[10, 20, 50]}
               />
-
             </div>
           )}
         </div>
