@@ -23,7 +23,10 @@ class ReportService:
         current_user: User,
         page: int = 1,
         limit: int = 20,
+        event_type: Optional[str] = None,
+        aupp_number: Optional[str] = None,
     ) -> Dict[str, Any]:
+
         tanks_list = await Tank.find_all().to_list()
         rooms_list = await Room.find_all().to_list()
         facs_list = await Facility.find_all().to_list()
@@ -206,12 +209,22 @@ class ReportService:
             if uid:
                 r["performed_by"] = user_map.get(uid, uid)
 
+        if event_type and event_type.strip():
+            et_lower = event_type.strip().lower()
+            results = [r for r in results if et_lower in r.get("event_type", "").lower()]
+
+        if aupp_number and aupp_number.strip():
+            aupp_lower = aupp_number.strip().lower()
+            results = [r for r in results if aupp_lower in r.get("aupp_number", "").lower()]
+
+
         total = len(results)
         skip = (page - 1) * limit
         items = results[skip:skip + limit]
         total_pages = (total + limit - 1) // limit if limit > 0 else 1
 
         return {"items": items, "total": total, "page": page, "limit": limit, "total_pages": total_pages}
+
 
     @staticmethod
     async def get_executive_facility_summary(

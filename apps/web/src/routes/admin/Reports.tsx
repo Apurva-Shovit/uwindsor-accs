@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { formatDate } from '../../utils/formatters';
 import { getExecutiveSummary, getReportsSummary, getProjects, getProjectReport } from '../../lib/api';
 import { Paginator } from '../../components/ui/Paginator';
+import { useDebounce } from '../../hooks/useDebounce';
 
 export const Reports: React.FC = () => {
   const [dateFrom, setDateFrom] = React.useState('');
@@ -10,7 +11,9 @@ export const Reports: React.FC = () => {
   const [granularity, _setGranularity] = React.useState('monthly');
   const [eventFilter, setEventFilter] = React.useState('');
   const [auppFilter, setAuppFilter] = React.useState('');
+  const debouncedAupp = useDebounce(auppFilter, 350);
   const [page, setPage] = React.useState(1);
+  const [limit, setLimit] = React.useState(20);
 
   // Executive summary query
   const { data: execSummary } = useQuery({
@@ -26,11 +29,13 @@ export const Reports: React.FC = () => {
   });
 
   const { data: reportsResponse, isLoading } = useQuery({
-    queryKey: ['reportsSummary', dateFrom, dateTo, page],
+    queryKey: ['reportsSummary', dateFrom, dateTo, eventFilter, debouncedAupp, page, limit],
     queryFn: async () => {
-      const params: Record<string, any> = { page, limit: 20 };
+      const params: Record<string, any> = { page, limit };
       if (dateFrom) params.date_from = new Date(dateFrom + 'T00:00:00').toISOString();
       if (dateTo) params.date_to = new Date(dateTo + 'T23:59:59').toISOString();
+      if (eventFilter) params.event_type = eventFilter;
+      if (debouncedAupp) params.aupp_number = debouncedAupp;
 
       const res = await getReportsSummary(params);
       return res.data;
@@ -40,6 +45,7 @@ export const Reports: React.FC = () => {
   const data = Array.isArray(reportsResponse) ? reportsResponse : (reportsResponse?.items || []);
   const totalReports = Array.isArray(reportsResponse) ? data.length : (reportsResponse?.total || 0);
   const totalPages = Array.isArray(reportsResponse) ? 1 : (reportsResponse?.total_pages || 1);
+
 
   const formatSummary = (summaryStr: string) => {
     if (!summaryStr) return '-';
@@ -293,18 +299,9 @@ export const Reports: React.FC = () => {
             </svg>
             Generating operational report...
           </div>
-        ) : (() => {
-          const filteredData = data.filter((row: any) => {
-            if (eventFilter && row.event_type !== eventFilter) return false;
-            if (auppFilter && !row.aupp_number?.toLowerCase().includes(auppFilter.toLowerCase())) return false;
-            return true;
-          });
-          
-          if (filteredData.length === 0) {
-            return <div className="p-12 text-center text-slate-500">No records found matching filters.</div>;
-          }
-
-          return (
+        ) : data.length === 0 ? (
+          <div className="p-12 text-center text-slate-500">No records found matching filters.</div>
+        ) : (
           <div className="overflow-hidden">
             <div className="hidden lg:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -319,7 +316,7 @@ export const Reports: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredData.map((row: any, i: number) => (
+                {data.map((row: any, i: number) => (
                   <tr key={i} className="hover:bg-slate-50 transition-colors">
                     <td className="p-4 text-sm font-medium text-slate-900 whitespace-nowrap">
                       {formatDate(row.created_at || row.date)}
@@ -351,12 +348,11 @@ export const Reports: React.FC = () => {
                     </td>
                   </tr>
                 ))}
-
               </tbody>
             </table>
             </div>
             <div className="block lg:hidden flex flex-col divide-y divide-slate-100">
-              {filteredData.map((row: any, i: number) => (
+              {data.map((row: any, i: number) => (
                 <div key={i} className="p-4 flex flex-col gap-3">
                   <div className="flex justify-between items-start gap-2">
                     <div>
@@ -385,17 +381,21 @@ export const Reports: React.FC = () => {
                   </div>
                 </div>
               ))}
-              <Paginator
-                page={page}
-                totalPages={totalPages}
-                total={totalReports}
-                limit={20}
-                onPageChange={(p) => setPage(p)}
-              />
             </div>
+            <Paginator
+              page={page}
+              totalPages={totalPages}
+              total={totalReports}
+              limit={limit}
+              onPageChange={(p) => setPage(p)}
+              onLimitChange={(l) => {
+                setLimit(l);
+                setPage(1);
+              }}
+              limitOptions={[20, 50, 100]}
+            />
           </div>
-          );
-        })()}
+        )}
       </div>
 
       {/* Official Computerized SOP Forms Modal / Print Overlay */}
