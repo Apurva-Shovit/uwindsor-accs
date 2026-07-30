@@ -683,7 +683,7 @@ export const ProjectReportPage: React.FC = () => {
                       By <strong className="text-slate-800">{a.actor_name}</strong> ({a.actor_role}) • {formatDate(a.timestamp)}
                     </span>
                   </div>
-                  <ModificationCard before={a.before} after={a.after} />
+                  <ModificationCard before={a.before} after={a.after} compact />
                 </div>
               ))}
               <Paginator

@@ -4,14 +4,15 @@ import { formatKeyForProfessor, formatValueForProfessor } from '../../utils/form
 interface ModificationCardProps {
   before: any;
   after: any;
+  compact?: boolean;
 }
 
-export const ModificationCard: React.FC<ModificationCardProps> = ({ before, after }) => {
+export const ModificationCard: React.FC<ModificationCardProps> = ({ before, after, compact }) => {
   if (!before && !after) return <span className="text-xs text-slate-400 italic">No detailed changes recorded.</span>;
   
   // If only one exists or they aren't objects, fall back to stringify
   if (typeof before !== 'object' && typeof after !== 'object') {
-     return <pre className="whitespace-pre-wrap text-sm text-slate-600">{JSON.stringify(after || before, null, 2)}</pre>;
+     return <pre className="whitespace-pre-wrap text-xs text-slate-600">{JSON.stringify(after || before, null, 2)}</pre>;
   }
 
   const allKeys = Array.from(new Set([...Object.keys(before || {}), ...Object.keys(after || {})]));
@@ -34,6 +35,29 @@ export const ModificationCard: React.FC<ModificationCardProps> = ({ before, afte
   }).filter(Boolean);
 
   if (changes.length === 0) return <span className="text-xs text-slate-400 italic">No operational changes.</span>;
+
+  if (compact) {
+    return (
+      <div className="space-y-1 mt-1 text-[11px]">
+        {changes.map((change: any) => (
+          <div key={change.key} className="flex flex-wrap items-center gap-1.5 bg-white border border-slate-200/80 rounded px-2.5 py-1">
+            <span className="font-bold text-slate-500 uppercase text-[10px]">{formatKeyForProfessor(change.key)}:</span>
+            {change.oldVal === undefined || change.oldVal === null ? (
+              <span className="font-bold text-[#005596]">{formatValueForProfessor(change.newVal)}</span>
+            ) : change.newVal === undefined || change.newVal === null ? (
+              <span className="text-red-600 line-through opacity-75">{formatValueForProfessor(change.oldVal)}</span>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-500 line-through">{formatValueForProfessor(change.oldVal)}</span>
+                <span className="text-slate-400 font-bold">→</span>
+                <span className="font-bold text-[#005596]">{formatValueForProfessor(change.newVal)}</span>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3 mt-2">
@@ -66,3 +90,4 @@ export const ModificationCard: React.FC<ModificationCardProps> = ({ before, afte
     </div>
   );
 };
+
