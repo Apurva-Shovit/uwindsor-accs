@@ -105,14 +105,25 @@ class TransferService:
         )
         await ev_in.insert()
 
+        actor_role = str(current_user.role.value if current_user.role else "none")
+
         if source_tank_obj and source_tank_obj.is_quarantined and dest_tank_obj:
             if not dest_tank_obj.is_quarantined:
+                before_dest_tank = dest_tank_obj.model_dump(mode="json")
                 dest_tank_obj.is_quarantined = True
                 dest_tank_obj.quarantine_start_date = source_tank_obj.quarantine_start_date
                 dest_tank_obj.quarantine_end_date = source_tank_obj.quarantine_end_date
                 await dest_tank_obj.save()
 
-        actor_role = str(current_user.role.value if current_user.role else "none")
+                await AuditRepository.insert(AuditLog(
+                    actor_id=str(current_user.id),
+                    actor_role=actor_role,
+                    action="placed_in_quarantine",
+                    entity_type="tank",
+                    entity_id=str(dest_tank_obj.id),
+                    before=before_dest_tank,
+                    after=dest_tank_obj.model_dump(mode="json")
+                ))
 
         await AuditRepository.insert(AuditLog(
             actor_id=str(current_user.id), actor_role=actor_role, action="update",

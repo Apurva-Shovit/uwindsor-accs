@@ -141,19 +141,54 @@ class QuarantineService:
                 )
                 await dest_ta.insert()
 
+            actor_role = current_user.role.value if current_user.role else "none"
+
+            before_source = source_ta.model_dump(mode="json")
             source_ta.current_count -= ex.fish_count
             await source_ta.save()
 
+            await AuditRepository.insert(AuditLog(
+                actor_id=str(current_user.id),
+                actor_role=actor_role,
+                action="update",
+                entity_type="tank_assignment",
+                entity_id=str(source_ta.id),
+                before=before_source,
+                after=source_ta.model_dump(mode="json"),
+            ))
+
+            before_dest = dest_ta.model_dump(mode="json") if not dest_is_new else None
             dest_ta.current_count += ex.fish_count
             await dest_ta.save()
+
+            await AuditRepository.insert(AuditLog(
+                actor_id=str(current_user.id),
+                actor_role=actor_role,
+                action="create" if dest_is_new else "update",
+                entity_type="tank_assignment",
+                entity_id=str(dest_ta.id),
+                before=before_dest,
+                after=dest_ta.model_dump(mode="json"),
+            ))
 
             # Ensure destination tank is NOT placed in quarantine status
             target_tank_obj = await Tank.get(ex.target_tank_id)
             if target_tank_obj and target_tank_obj.is_quarantined:
+                before_target_tank = target_tank_obj.model_dump(mode="json")
                 target_tank_obj.is_quarantined = False
                 target_tank_obj.quarantine_start_date = None
                 target_tank_obj.quarantine_end_date = None
                 await target_tank_obj.save()
+
+                await AuditRepository.insert(AuditLog(
+                    actor_id=str(current_user.id),
+                    actor_role=actor_role,
+                    action="lifted_quarantine",
+                    entity_type="tank",
+                    entity_id=str(target_tank_obj.id),
+                    before=before_target_tank,
+                    after=target_tank_obj.model_dump(mode="json"),
+                ))
 
                 q_ev = CensusEvent(
                     project_id=source_ta.project_id,
@@ -167,6 +202,16 @@ class QuarantineService:
                     created_by=str(current_user.id),
                 )
                 await q_ev.insert()
+
+                await AuditRepository.insert(AuditLog(
+                    actor_id=str(current_user.id),
+                    actor_role=actor_role,
+                    action="create",
+                    entity_type="census_event",
+                    entity_id=str(q_ev.id),
+                    before=None,
+                    after=q_ev.model_dump(mode="json"),
+                ))
 
             # Generate Census Events for transfer audit
             transfer_group_id = str(uuid.uuid4())
@@ -187,6 +232,16 @@ class QuarantineService:
             )
             await ev_out.insert()
 
+            await AuditRepository.insert(AuditLog(
+                actor_id=str(current_user.id),
+                actor_role=actor_role,
+                action="create",
+                entity_type="census_event",
+                entity_id=str(ev_out.id),
+                before=None,
+                after=ev_out.model_dump(mode="json"),
+            ))
+
             ev_in = CensusEvent(
                 project_id=source_ta.project_id,
                 tank_assignment_id=str(dest_ta.id),
@@ -199,6 +254,16 @@ class QuarantineService:
                 created_by=str(current_user.id),
             )
             await ev_in.insert()
+
+            await AuditRepository.insert(AuditLog(
+                actor_id=str(current_user.id),
+                actor_role=actor_role,
+                action="create",
+                entity_type="census_event",
+                entity_id=str(ev_in.id),
+                before=None,
+                after=ev_in.model_dump(mode="json"),
+            ))
 
             ex.status = "approved"
         else:

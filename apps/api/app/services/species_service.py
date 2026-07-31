@@ -2,7 +2,9 @@ from typing import List
 from fastapi import HTTPException
 from ..models.user import User, RoleEnum
 from ..models.species import Species
+from ..models.audit_log import AuditLog
 from ..schemas.species import SpeciesCreate
+from ..repositories.audit_repository import AuditRepository
 
 MANAGER_PLUS = {RoleEnum.manager, RoleEnum.chair, RoleEnum.admin, RoleEnum.super_admin}
 
@@ -24,4 +26,15 @@ class SpeciesService:
 
         new_species = Species(name=body.name, created_by=current_user.id)
         await new_species.insert()
+
+        await AuditRepository.insert(AuditLog(
+            actor_id=str(current_user.id),
+            actor_role=current_user.role.value if current_user.role else "none",
+            action="create",
+            entity_type="species",
+            entity_id=str(new_species.id),
+            before=None,
+            after=new_species.model_dump(mode="json")
+        ))
+
         return new_species

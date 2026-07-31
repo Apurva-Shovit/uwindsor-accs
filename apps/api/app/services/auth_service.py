@@ -44,13 +44,46 @@ class AuthService:
         """Returns access_token, role, status"""
         user = await UserRepository.get_by_email(body.email)
         if not user or not verify_password(body.password, user.password_hash):
+            if user:
+                await AuditRepository.insert(AuditLog(
+                    actor_id=str(user.id),
+                    actor_role=user.role.value if user.role else "none",
+                    action="login_failed",
+                    entity_type="user",
+                    entity_id=str(user.id),
+                    before={"email": body.email, "reason": "Invalid credentials"}
+                ))
             raise HTTPException(401, "Invalid credentials")
             
         if user.status == StatusEnum.pending:
+            await AuditRepository.insert(AuditLog(
+                actor_id=str(user.id),
+                actor_role=user.role.value if user.role else "none",
+                action="login_blocked",
+                entity_type="user",
+                entity_id=str(user.id),
+                before={"email": body.email, "status": "pending"}
+            ))
             raise HTTPException(403, "Your account is pending approval by an administrator.")
         if user.status == StatusEnum.rejected:
+            await AuditRepository.insert(AuditLog(
+                actor_id=str(user.id),
+                actor_role=user.role.value if user.role else "none",
+                action="login_blocked",
+                entity_type="user",
+                entity_id=str(user.id),
+                before={"email": body.email, "status": "rejected"}
+            ))
             raise HTTPException(403, "Your account was rejected. Kindly contact your administrator.")
         if user.status == StatusEnum.suspended:
+            await AuditRepository.insert(AuditLog(
+                actor_id=str(user.id),
+                actor_role=user.role.value if user.role else "none",
+                action="login_blocked",
+                entity_type="user",
+                entity_id=str(user.id),
+                before={"email": body.email, "status": "suspended"}
+            ))
             raise HTTPException(403, "Your account has been suspended. Kindly contact your superior to uplift the suspension.")
 
             
@@ -65,3 +98,13 @@ class AuthService:
         ))
         
         return token, user.role.value, user.status.value
+
+    @staticmethod
+    async def logout(current_user: User) -> None:
+        await AuditRepository.insert(AuditLog(
+            actor_id=str(current_user.id),
+            actor_role=current_user.role.value if current_user.role else "none",
+            action="logout",
+            entity_type="user",
+            entity_id=str(current_user.id)
+        ))

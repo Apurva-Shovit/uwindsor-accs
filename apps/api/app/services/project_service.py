@@ -617,9 +617,30 @@ class ProjectService:
                     created_by=str(current_user.id)
                 )
                 await ev.insert()
+
+                await AuditRepository.insert(AuditLog(
+                    actor_id=str(current_user.id),
+                    actor_role=str(current_user.role.value if current_user.role else "none"),
+                    action="create",
+                    entity_type="census_event",
+                    entity_id=str(ev.id),
+                    before=None,
+                    after=ev.model_dump(mode="json")
+                ))
                 
+                before_ta = ta.model_dump(mode="json")
                 ta.current_count = 0
                 await ta.save()
+
+                await AuditRepository.insert(AuditLog(
+                    actor_id=str(current_user.id),
+                    actor_role=str(current_user.role.value if current_user.role else "none"),
+                    action="update",
+                    entity_type="tank_assignment",
+                    entity_id=str(ta.id),
+                    before=before_ta,
+                    after=ta.model_dump(mode="json")
+                ))
 
                 from ..models.facility import Tank
                 remaining = await TankAssignment.find({
@@ -629,8 +650,19 @@ class ProjectService:
                 if not remaining:
                     tank_obj = await Tank.get(ta.tank_id)
                     if tank_obj and tank_obj.status != "empty":
+                        before_tank = tank_obj.model_dump(mode="json")
                         tank_obj.status = "empty"
                         await tank_obj.save()
+
+                        await AuditRepository.insert(AuditLog(
+                            actor_id=str(current_user.id),
+                            actor_role=str(current_user.role.value if current_user.role else "none"),
+                            action="update",
+                            entity_type="tank",
+                            entity_id=str(tank_obj.id),
+                            before=before_tank,
+                            after=tank_obj.model_dump(mode="json")
+                        ))
 
         after = p.model_dump(mode="json")
         await AuditRepository.insert(AuditLog(

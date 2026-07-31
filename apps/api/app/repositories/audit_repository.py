@@ -69,6 +69,18 @@ class AuditRepository:
                     t = await Tank.get(qe.tank_id)
                     return f"Exemption for Tank {t.tank_number if t else 'Unknown'}"
                 return "Unknown Quarantine Exemption"
+            elif entity_type == "facility":
+                from ..models.facility import Facility
+                fac = await Facility.get(entity_id)
+                return f"Facility '{fac.name}'" if fac else "Unknown Facility"
+            elif entity_type == "room":
+                from ..models.facility import Room
+                rm = await Room.get(entity_id)
+                return f"Room {rm.room_number}" if rm else "Unknown Room"
+            elif entity_type == "species":
+                from ..models.species import Species
+                sp = await Species.get(entity_id)
+                return f"Species '{sp.name}'" if sp else "Unknown Species"
             elif entity_type == "user":
                 from ..models.user import User
                 u = await User.get(entity_id)
@@ -92,6 +104,27 @@ class AuditRepository:
                 grouped[etype].append(eid)
 
         result: Dict[tuple[str, str], str] = {}
+
+        if "facility" in grouped and grouped["facility"]:
+            from ..models.facility import Facility
+            facs = await Facility.find({"_id": {"$in": [ObjectId(i) for i in grouped["facility"]]}}).to_list()
+            f_map = {str(f.id): f"Facility '{f.name}'" for f in facs}
+            for eid in grouped["facility"]:
+                result[("facility", eid)] = f_map.get(eid, "Unknown Facility")
+
+        if "room" in grouped and grouped["room"]:
+            from ..models.facility import Room
+            rooms = await Room.find({"_id": {"$in": [ObjectId(i) for i in grouped["room"]]}}).to_list()
+            r_map = {str(r.id): f"Room {r.room_number}" for r in rooms}
+            for eid in grouped["room"]:
+                result[("room", eid)] = r_map.get(eid, "Unknown Room")
+
+        if "species" in grouped and grouped["species"]:
+            from ..models.species import Species
+            species_list = await Species.find({"_id": {"$in": [ObjectId(i) for i in grouped["species"]]}}).to_list()
+            sp_map = {str(s.id): f"Species '{s.name}'" for s in species_list}
+            for eid in grouped["species"]:
+                result[("species", eid)] = sp_map.get(eid, "Unknown Species")
 
         if "tank" in grouped and grouped["tank"]:
             tanks = await Tank.find({"_id": {"$in": [ObjectId(i) for i in grouped["tank"]]}}).to_list()

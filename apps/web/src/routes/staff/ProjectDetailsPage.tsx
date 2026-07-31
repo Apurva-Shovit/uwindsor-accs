@@ -70,7 +70,7 @@ export const ProjectDetailsPage: React.FC = () => {
         const updated = list.find((p: Project) => getId(p) === getId(selectedProj));
         if (updated) setSelectedProj(updated);
       }
-    } catch (err) {}
+    } catch (err) { }
   };
 
 
@@ -159,13 +159,12 @@ export const ProjectDetailsPage: React.FC = () => {
           <h1 className="text-xl font-bold text-textPrimary">Research Projects</h1>
           <p className="text-xs text-textSecondary mt-1">Manage active scientific protocols and AUPPs.</p>
         </div>
-        
+
         {isManagerPlus && (
-          <button 
+          <button
             onClick={() => setSelectedProj(null)}
-            className={`w-full py-2 px-4 rounded-lg text-sm font-bold transition-colors ${
-              !selectedProj ? 'bg-brandBlue text-white' : 'bg-brandBlueTint text-brandBlueDark hover:bg-blue-100'
-            }`}
+            className={`w-full py-2 px-4 rounded-lg text-sm font-bold transition-colors ${!selectedProj ? 'bg-brandBlue text-white' : 'bg-brandBlueTint text-brandBlueDark hover:bg-blue-100'
+              }`}
           >
             + Create New Protocol
           </button>
@@ -250,14 +249,14 @@ export const ProjectDetailsPage: React.FC = () => {
                   <input type="text" value={roomNumber} onChange={e => setRoomNumber(e.target.value)} required
                     className="w-full rounded border border-border px-3 py-2 text-sm focus:outline-none focus:border-brandBlue" />
                 </div>
-                
+
                 <div className="col-span-2 pt-2 border-t border-slate-100">
                   <label className="flex items-center gap-2 cursor-pointer p-3 bg-slate-50 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors">
-                    <input 
-                      type="checkbox" 
-                      checked={rfidTrackingEnabled} 
+                    <input
+                      type="checkbox"
+                      checked={rfidTrackingEnabled}
                       onChange={e => setRfidTrackingEnabled(e.target.checked)}
-                      className="w-4 h-4 text-brandBlue rounded border-slate-300 focus:ring-brandBlue" 
+                      className="w-4 h-4 text-brandBlue rounded border-slate-300 focus:ring-brandBlue"
                     />
                     <div>
                       <span className="block text-sm font-bold text-slate-800">Enable RFID / Individual Tracking</span>
@@ -449,7 +448,7 @@ export const ProjectDetailsPage: React.FC = () => {
       {/* Close project Modal */}
       {showCloseModal && selectedProj && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <form 
+          <form
             onSubmit={(e) => { e.preventDefault(); handleCloseProject(); }}
             className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl space-y-4"
           >

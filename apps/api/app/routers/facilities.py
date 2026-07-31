@@ -38,7 +38,7 @@ async def list_facilities(current: User = Depends(get_current_user)):
 
 @router.post("/facilities", status_code=201)
 async def create_facility(body: FacilityCreate, current: User = Depends(require_manager_plus)):
-    return await FacilityService.create_facility(body.name, body.address, body.description)
+    return await FacilityService.create_facility(body.name, body.address, body.description, current_user=current)
 
 # Rooms
 @router.get("/rooms")
@@ -47,7 +47,7 @@ async def list_rooms(facility_id: str | None = None, current: User = Depends(get
 
 @router.post("/rooms", status_code=201)
 async def create_room(body: RoomCreate, current: User = Depends(require_manager_plus)):
-    return await FacilityService.create_room(body.facility_id, body.room_number, body.description)
+    return await FacilityService.create_room(body.facility_id, body.room_number, body.description, current_user=current)
 
 # Tanks
 @router.get("/tanks")
@@ -56,15 +56,15 @@ async def list_tanks(room_id: str | None = None, current: User = Depends(get_cur
 
 @router.post("/tanks", status_code=201)
 async def create_tank(body: TankCreate, current: User = Depends(require_manager_plus)):
-    return await FacilityService.create_tank(body.room_id, body.tank_number, body.notes)
+    return await FacilityService.create_tank(body.room_id, body.tank_number, body.notes, current_user=current)
 
 @router.patch("/tanks/{id}")
 async def patch_tank(id: str, body: TankStatusUpdate, current: User = Depends(require_manager_plus)):
-    return await FacilityService.patch_tank(id, body.status)
+    return await FacilityService.patch_tank(id, body.status, current_user=current)
 
 @router.delete("/tanks/{id}")
 async def delete_tank(id: str, current: User = Depends(require_chair_or_admin)):
-    await FacilityService.delete_tank(id)
+    await FacilityService.delete_tank(id, current_user=current)
     return {"message": "Tank deleted"}
 
 @router.post("/tanks/{id}/quarantine")

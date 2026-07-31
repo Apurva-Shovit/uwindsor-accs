@@ -27,7 +27,8 @@ async def login(request: Request, response: Response, body: LoginRequest):
     return TokenResponse(access_token=token, role=role, status=user_status)
 
 @router.post("/logout")
-async def logout(response: Response):
+async def logout(response: Response, current: User = Depends(get_current_user)):
+    await AuthService.logout(current)
     response.delete_cookie("access_token")
     return {"message": "Logged out"}
 

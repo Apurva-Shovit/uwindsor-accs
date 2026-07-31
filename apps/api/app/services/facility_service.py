@@ -21,9 +21,19 @@ class FacilityService:
         return await Facility.find({"deleted": False}).to_list()
 
     @staticmethod
-    async def create_facility(name: str, address: Optional[str], description: Optional[str]) -> Facility:
+    async def create_facility(name: str, address: Optional[str], description: Optional[str], current_user: Optional[User] = None) -> Facility:
         fac = Facility(name=name, address=address, description=description)
         await fac.insert()
+        if current_user:
+            await AuditRepository.insert(AuditLog(
+                actor_id=str(current_user.id),
+                actor_role=str(current_user.role.value if current_user.role else "none"),
+                action="create",
+                entity_type="facility",
+                entity_id=str(fac.id),
+                before=None,
+                after=fac.model_dump(mode="json"),
+            ))
         return fac
 
     @staticmethod
@@ -34,9 +44,19 @@ class FacilityService:
         return await Room.find(query).to_list()
 
     @staticmethod
-    async def create_room(facility_id: str, room_number: str, description: Optional[str]) -> Room:
+    async def create_room(facility_id: str, room_number: str, description: Optional[str], current_user: Optional[User] = None) -> Room:
         r = Room(facility_id=facility_id, room_number=room_number, description=description)
         await r.insert()
+        if current_user:
+            await AuditRepository.insert(AuditLog(
+                actor_id=str(current_user.id),
+                actor_role=str(current_user.role.value if current_user.role else "none"),
+                action="create",
+                entity_type="room",
+                entity_id=str(r.id),
+                before=None,
+                after=r.model_dump(mode="json"),
+            ))
         return r
 
     @staticmethod
@@ -51,30 +71,62 @@ class FacilityService:
         return tanks
 
     @staticmethod
-    async def create_tank(room_id: str, tank_number: str, notes: Optional[str]) -> Tank:
+    async def create_tank(room_id: str, tank_number: str, notes: Optional[str], current_user: Optional[User] = None) -> Tank:
         existing = await Tank.find_one({"room_id": room_id, "tank_number": tank_number, "deleted": False})
         if existing:
             raise HTTPException(status.HTTP_409_CONFLICT, f"Tank {tank_number} already exists in this room")
         t = Tank(room_id=room_id, tank_number=tank_number, notes=notes)
         await t.insert()
+        if current_user:
+            await AuditRepository.insert(AuditLog(
+                actor_id=str(current_user.id),
+                actor_role=str(current_user.role.value if current_user.role else "none"),
+                action="create",
+                entity_type="tank",
+                entity_id=str(t.id),
+                before=None,
+                after=t.model_dump(mode="json"),
+            ))
         return t
 
     @staticmethod
-    async def patch_tank(tank_id: str, status: str) -> Tank:
+    async def patch_tank(tank_id: str, status: str, current_user: Optional[User] = None) -> Tank:
         t = await Tank.get(tank_id)
         if not t or t.deleted:
             raise HTTPException(404, "Tank not found")
+        before = t.model_dump(mode="json")
         t.status = status
         await t.save()
+        if current_user:
+            await AuditRepository.insert(AuditLog(
+                actor_id=str(current_user.id),
+                actor_role=str(current_user.role.value if current_user.role else "none"),
+                action="update",
+                entity_type="tank",
+                entity_id=str(t.id),
+                before=before,
+                after=t.model_dump(mode="json"),
+            ))
         return t
 
     @staticmethod
-    async def delete_tank(tank_id: str) -> None:
+    async def delete_tank(tank_id: str, current_user: Optional[User] = None) -> None:
         t = await Tank.get(tank_id)
         if not t or t.deleted:
             raise HTTPException(404, "Tank not found")
+        before = t.model_dump(mode="json")
         t.deleted = True
         await t.save()
+        if current_user:
+            await AuditRepository.insert(AuditLog(
+                actor_id=str(current_user.id),
+                actor_role=str(current_user.role.value if current_user.role else "none"),
+                action="delete",
+                entity_type="tank",
+                entity_id=str(t.id),
+                before=before,
+                after=t.model_dump(mode="json"),
+            ))
 
     @staticmethod
     async def toggle_tank_quarantine(

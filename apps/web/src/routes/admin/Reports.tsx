@@ -852,7 +852,7 @@ export const Reports: React.FC = () => {
                   };
                   const dateEst = fmtDMY(sopProject.date_established || sopProject.created_at);
 
-                  // Dynamic chunking based on text length weight (target max weight 6 per page)
+                  // Dynamic chunking based on text length weight (target max weight 12 per page)
                   const getRowWeight = (inc: any) => {
                     const totalChars = (inc.description || '').length + (inc.comments || '').length + (inc.notes || '').length;
                     return Math.max(1, Math.ceil(totalChars / 90));
@@ -866,7 +866,7 @@ export const Reports: React.FC = () => {
                     let currentWeight = 0;
                     for (const inc of sopIncidents) {
                       const w = getRowWeight(inc);
-                      if (currentChunk.length > 0 && currentWeight + w > 6) {
+                      if (currentChunk.length > 0 && currentWeight + w > 12) {
                         pages.push(currentChunk);
                         currentChunk = [inc];
                         currentWeight = w;
