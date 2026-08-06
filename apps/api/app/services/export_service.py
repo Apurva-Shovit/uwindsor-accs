@@ -49,6 +49,10 @@ _TANK_REF_FIELDS = {"tank_id", "target_tank_id"}
 _ROOM_REF_FIELDS = {"room_id"}
 _FACILITY_REF_FIELDS = {"facility_id"}
 _PROJECT_REF_FIELDS = {"project_id"}
+_TANK_ASSIGNMENT_REF_FIELDS = {"tank_assignment_id"}
+_TANK_LIST_REF_FIELDS = {"assigned_tank_ids"}
+_ROOM_LIST_REF_FIELDS = {"room_ids"}
+_FACILITY_LIST_REF_FIELDS = {"facility_ids"}
 
 
 def _json_safe(value: Any) -> Any:
@@ -132,12 +136,22 @@ class ExportService:
             return f"{column}_name"
         if column in _TANK_REF_FIELDS:
             return column.replace("_id", "_number")
+        if column in _TANK_ASSIGNMENT_REF_FIELDS:
+            return "tank_assignment_label"
         if column in _ROOM_REF_FIELDS:
             return "room_number"
         if column in _FACILITY_REF_FIELDS:
             return "facility_name"
         if column in _PROJECT_REF_FIELDS:
             return "project_title"
+        if column in _TANK_LIST_REF_FIELDS:
+            return "assigned_tank_numbers"
+        if column in _ROOM_LIST_REF_FIELDS:
+            return "room_numbers"
+        if column in _FACILITY_LIST_REF_FIELDS:
+            return "facility_names"
+        if column == "entity_id":
+            return "entity_name"
         return None
 
     @staticmethod
@@ -166,7 +180,7 @@ class ExportService:
         for row in rows:
             line = [ExportService._flatten_value(row.get(c)) for c in base_columns]
             for col, _ in extra_columns:
-                line.append(resolve(col, row.get(col)) or "")
+                line.append(resolve(col, row.get(col), row) or "")
             writer.writerow(line)
         zf.writestr(f"{name}.csv", buf.getvalue())
 
@@ -198,14 +212,48 @@ class ExportService:
         room_map = {r["id"]: f"Room {r.get('room_number')}" for r in bundle.get("rooms", [])}
         facility_map = {f["id"]: f.get("name", "Unknown Facility") for f in bundle.get("facilities", [])}
         project_map = {p["id"]: p.get("title", "Unknown Project") for p in bundle.get("projects", [])}
+        species_map = {s["id"]: s.get("name", "Unknown Species") for s in bundle.get("species", [])}
+        tank_assignment_map = {
+            ta["id"]: f"{tank_map.get(ta.get('tank_id'), 'Unknown Tank')} / {project_map.get(ta.get('project_id'), 'Unknown Project')}"
+            for ta in bundle.get("tank_assignments", [])
+        }
+        # entity_id on audit_logs is polymorphic - which map applies depends on
+        # the sibling entity_type column, so it's resolved separately below
+        # rather than through the flat field->map rules the other refs use.
+        entity_label_maps = {
+            "user": user_map,
+            "tank": tank_map,
+            "room": room_map,
+            "facility": facility_map,
+            "project": project_map,
+            "tank_assignment": tank_assignment_map,
+            "species": species_map,
+        }
 
-        def resolve(field: str, value: Any) -> Optional[str]:
+        def resolve(field: str, value: Any, row: dict) -> Optional[str]:
+            if field == "entity_id":
+                if not value or not isinstance(value, str):
+                    return None
+                label_map = entity_label_maps.get(row.get("entity_type"))
+                return label_map.get(value, "Unknown Reference") if label_map is not None else None
+            if isinstance(value, list):
+                if not value:
+                    return None
+                if field in _TANK_LIST_REF_FIELDS:
+                    return "; ".join(tank_map.get(v, "Unknown Tank") for v in value)
+                if field in _ROOM_LIST_REF_FIELDS:
+                    return "; ".join(room_map.get(v, "Unknown Room") for v in value)
+                if field in _FACILITY_LIST_REF_FIELDS:
+                    return "; ".join(facility_map.get(v, "Unknown Facility") for v in value)
+                return None
             if not value or not isinstance(value, str):
                 return None
             if field in _USER_REF_FIELDS:
                 return user_map.get(value, "Unknown User")
             if field in _TANK_REF_FIELDS:
                 return tank_map.get(value, "Unknown Tank")
+            if field in _TANK_ASSIGNMENT_REF_FIELDS:
+                return tank_assignment_map.get(value, "Unknown Tank Assignment")
             if field in _ROOM_REF_FIELDS:
                 return room_map.get(value, "Unknown Room")
             if field in _FACILITY_REF_FIELDS:
