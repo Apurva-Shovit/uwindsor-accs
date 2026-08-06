@@ -235,8 +235,8 @@ class ExportService:
             actor_id=str(actor.id),
             actor_role=actor.role.value if actor.role else "none",
             action="data_export",
-            entity_type="system",
-            entity_id="export",
+            entity_type="user",
+            entity_id=str(actor.id),
             after={
                 "format": export_format,
                 "start_date": start_date.isoformat() if start_date else None,
