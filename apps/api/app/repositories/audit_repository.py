@@ -29,9 +29,12 @@ class AuditRepository:
     @staticmethod
     async def get_entity_display_name(entity_type: str, entity_id: str) -> str:
         """Fetches the entity from the DB to construct its display name."""
+        if entity_type == "system":
+            return entity_id.replace("_", " ").title()
+
         if not ObjectId.is_valid(entity_id):
             return entity_id
-            
+
         try:
             if entity_type == "tank":
                 t = await Tank.get(entity_id)
@@ -104,6 +107,12 @@ class AuditRepository:
                 grouped[etype].append(eid)
 
         result: Dict[tuple[str, str], str] = {}
+
+        # "system" entities (e.g. a bulk data export) aren't real documents to look
+        # up - id is a fixed slug like "export", so just humanize it directly.
+        for etype, eid in entity_refs:
+            if etype == "system" and eid:
+                result[("system", eid)] = eid.replace("_", " ").title()
 
         if "facility" in grouped and grouped["facility"]:
             from ..models.facility import Facility
