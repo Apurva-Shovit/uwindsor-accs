@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .db import init_db
 from .routers import auth, users, facilities, dashboard, reports, audit
 from .routers import water_quality_logs, incident_reports
-from .routers import projects, census, transfers, intake, species, quarantine, individual_fish
+from .routers import projects, census, transfers, intake, species, quarantine, individual_fish, export
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from .core.limiter import limiter
@@ -60,5 +60,6 @@ app.include_router(reports.router)
 app.include_router(audit.router)
 app.include_router(quarantine.router)
 app.include_router(individual_fish.router)
+app.include_router(export.router)
 
 

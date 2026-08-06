@@ -115,3 +115,10 @@ export const getExecutiveSummary = (params?: Record<string, any>) => api.get('/r
 // Dashboard
 export const getDashboardSummary = () => api.get('/dashboard/summary');
 export const getWaterQualityAnalytics = (params?: Record<string, any>) => api.get('/dashboard/water-quality-analytics', { params });
+
+// Data Export & Backup
+export const getExportPreview = (params?: { start_date?: string; end_date?: string }) =>
+  api.get('/export/preview', { params });
+
+export const downloadExport = (params: { start_date?: string; end_date?: string; format: 'json' | 'csv' }) =>
+  api.get('/export/backup', { params, responseType: 'blob' });

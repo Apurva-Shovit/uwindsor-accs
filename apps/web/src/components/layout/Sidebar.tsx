@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Users, LayoutDashboard, Database, Activity, ClipboardList, TrendingUp, RefreshCw, BookOpen, FileText, ChevronDown, Fish } from 'lucide-react';
+import { Users, LayoutDashboard, Database, Activity, ClipboardList, TrendingUp, RefreshCw, BookOpen, FileText, ChevronDown, Fish, Download } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSidebar } from '../../context/SidebarContext';
 
@@ -223,6 +223,19 @@ export const Sidebar: React.FC = () => {
           >
             <Activity className={`h-5 w-5 text-slate-600 ${isSidebarOpen ? 'mr-3' : ''}`} />
             {isSidebarOpen && <span>Audit Logs</span>}
+          </NavLink>
+        )}
+
+        {/* 12. Data Export */}
+        {isManagerPlus && (
+          <NavLink
+            end
+            to="/admin/export"
+            title="Data Export"
+            className={({ isActive }) => linkClass(isActive)}
+          >
+            <Download className={`h-5 w-5 text-slate-600 ${isSidebarOpen ? 'mr-3' : ''}`} />
+            {isSidebarOpen && <span>Data Export</span>}
           </NavLink>
         )}
       </nav>
