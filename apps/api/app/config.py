@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     RATE_LIMIT_DATA_ENTRY: str = "60/minute"
     RATE_LIMIT_ADMIN: str = "30/minute"
 
+    CORS_ORIGINS: str = ""  # comma-separated extra allowed origins, e.g. "https://acare-mvp.vercel.app"
+
     model_config = ConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()

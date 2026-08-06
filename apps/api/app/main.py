@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from .config import settings
 from .db import init_db
 from .routers import auth, users, facilities, dashboard, reports, audit
 from .routers import water_quality_logs, incident_reports
@@ -20,8 +21,11 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="ACare API", lifespan=lifespan)
 
 
+extra_origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
+    allow_origins=extra_origins,
     allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
