@@ -24,6 +24,8 @@ Thumbs.db
 .agents/
 .gemini/
 .antigravity/
+.claude/
+CLAUDE.md
 docs/
 
 # Root Scratch & Helper Scripts
