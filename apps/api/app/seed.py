@@ -23,7 +23,9 @@ async def seed():
         await su.insert()
         print("Super admin created: superadmin@uwindsor.ca / ChangeMe123!")
     else:
-        print("Super admin already exists.")
+        existing.password_hash = hash_password("ChangeMe123!")
+        await existing.save()
+        print("Super admin password reset to ChangeMe123!")
 
     # 2. Seed Facility
     fac = await Facility.find_one({"name": "LaSalle Freshwater Restoration Ecology Centre"})

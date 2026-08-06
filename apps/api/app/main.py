@@ -21,12 +21,28 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="ACare API", lifespan=lifespan)
 
 
-extra_origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+# Clean up configured origins (strip quotes, whitespace, and trailing slashes)
+configured_origins = [
+    o.strip().strip("'\"").rstrip("/")
+    for o in settings.CORS_ORIGINS.split(",")
+    if o.strip()
+]
+
+# Default allowed production origins for resilience
+default_origins = [
+    "https://uwindsor-accs.vercel.app",
+]
+
+# Combine and deduplicate allowed origins
+allowed_origins = list(set(configured_origins + default_origins))
+
+# Regex matching local dev servers and any Vercel domain (*.vercel.app)
+origin_regex = r"https?://(localhost|127\.0\.0\.1)(:\d+)?|https://.*\.vercel\.app"
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=extra_origins,
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_origins=allowed_origins,
+    allow_origin_regex=origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

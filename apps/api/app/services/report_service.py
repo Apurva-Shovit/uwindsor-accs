@@ -27,6 +27,45 @@ class ReportService:
         aupp_number: Optional[str] = None,
     ) -> Dict[str, Any]:
 
+        results = await ReportService._get_filtered_rows(
+            date_from, date_to, facility_id, project_id, tank_id,
+            event_type=event_type, aupp_number=aupp_number,
+        )
+
+        total = len(results)
+        skip = (page - 1) * limit
+        items = results[skip:skip + limit]
+        total_pages = (total + limit - 1) // limit if limit > 0 else 1
+
+        return {"items": items, "total": total, "page": page, "limit": limit, "total_pages": total_pages}
+
+    @staticmethod
+    async def get_reports_export_rows(
+        date_from: Optional[datetime],
+        date_to: Optional[datetime],
+        facility_id: Optional[str],
+        project_id: Optional[str],
+        tank_id: Optional[str],
+        event_type: Optional[str] = None,
+        aupp_number: Optional[str] = None,
+    ) -> List[dict]:
+        """Full (unpaginated) filtered rows, for CSV/PDF export."""
+        return await ReportService._get_filtered_rows(
+            date_from, date_to, facility_id, project_id, tank_id,
+            event_type=event_type, aupp_number=aupp_number,
+        )
+
+    @staticmethod
+    async def _get_filtered_rows(
+        date_from: Optional[datetime],
+        date_to: Optional[datetime],
+        facility_id: Optional[str],
+        project_id: Optional[str],
+        tank_id: Optional[str],
+        event_type: Optional[str] = None,
+        aupp_number: Optional[str] = None,
+    ) -> List[dict]:
+
         tanks_list = await Tank.find_all().to_list()
         rooms_list = await Room.find_all().to_list()
         facs_list = await Facility.find_all().to_list()
@@ -217,13 +256,7 @@ class ReportService:
             aupp_lower = aupp_number.strip().lower()
             results = [r for r in results if aupp_lower in r.get("aupp_number", "").lower()]
 
-
-        total = len(results)
-        skip = (page - 1) * limit
-        items = results[skip:skip + limit]
-        total_pages = (total + limit - 1) // limit if limit > 0 else 1
-
-        return {"items": items, "total": total, "page": page, "limit": limit, "total_pages": total_pages}
+        return results
 
 
     @staticmethod

@@ -2,10 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getProjectReport } from '../lib/api';
 import { ModificationCard } from '../components/audit/ModificationCard';
-import { BookOpen, ArrowLeft, AlertTriangle, Printer } from 'lucide-react';
+import { BookOpen, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { formatDate } from '../utils/formatters';
 import { Paginator } from '../components/ui/Paginator';
-import { ProtectedView, triggerAuthorizedPrint } from '../components/security/ProtectedView';
+import { ProtectedView } from '../components/security/ProtectedView';
 
 
 const UWindsorBufferingLoader: React.FC<{ message?: string }> = ({ message = "Synchronizing ACARE Facility Data..." }) => (
@@ -187,12 +187,7 @@ export const ProjectReportPage: React.FC = () => {
             </button>
           )}
 
-          <button
-            onClick={() => triggerAuthorizedPrint()}
-            className="flex items-center gap-2 px-3.5 py-2 bg-[#005596] text-white font-bold text-xs rounded-xl shadow hover:bg-blue-800 transition-colors mt-3 sm:mt-0 print:hidden"
-          >
-            <Printer className="w-3.5 h-3.5" /> Print Report
-          </button>
+
         </div>
       </div>
 
