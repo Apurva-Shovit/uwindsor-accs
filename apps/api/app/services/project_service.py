@@ -642,28 +642,6 @@ class ProjectService:
                     after=ta.model_dump(mode="json")
                 ))
 
-                from ..models.facility import Tank
-                remaining = await TankAssignment.find({
-                    "tank_id": ta.tank_id,
-                    "current_count": {"$gt": 0}
-                }).to_list()
-                if not remaining:
-                    tank_obj = await Tank.get(ta.tank_id)
-                    if tank_obj and tank_obj.status != "empty":
-                        before_tank = tank_obj.model_dump(mode="json")
-                        tank_obj.status = "empty"
-                        await tank_obj.save()
-
-                        await AuditRepository.insert(AuditLog(
-                            actor_id=str(current_user.id),
-                            actor_role=str(current_user.role.value if current_user.role else "none"),
-                            action="update",
-                            entity_type="tank",
-                            entity_id=str(tank_obj.id),
-                            before=before_tank,
-                            after=tank_obj.model_dump(mode="json")
-                        ))
-
         after = p.model_dump(mode="json")
         await AuditRepository.insert(AuditLog(
             actor_id=str(current_user.id),
