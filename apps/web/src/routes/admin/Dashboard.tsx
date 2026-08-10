@@ -93,12 +93,18 @@ export const Dashboard: React.FC = () => {
     const getY = (val: number) => height - paddingBottom - ((val - minVal) / range) * (height - paddingTop - paddingBottom);
     const stepWidth = (width - paddingLeft - paddingRight) / (series.length - 1 || 1);
 
+    let lastWasNull = true;
     const pathD = series.reduce((acc: string, item: any, index: number) => {
       const val = item[dataKey];
-      if (val === null || val === undefined) return acc;
+      if (val === null || val === undefined) {
+        lastWasNull = true;
+        return acc;
+      }
       const x = getX(index);
       const y = getY(val);
-      return acc ? `${acc} L ${x} ${y}` : `M ${x} ${y}`;
+      const segment = lastWasNull ? `M ${x} ${y}` : `L ${x} ${y}`;
+      lastWasNull = false;
+      return acc ? `${acc} ${segment}` : segment;
     }, '');
 
     const missingDays = series.filter((item: any) => item.log_count === 0);

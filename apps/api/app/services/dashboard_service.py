@@ -117,11 +117,12 @@ class DashboardService:
         # omitted from the series and compressing the chart's timeline.
         start_date = cutoff.date()
         end_date = datetime.now(timezone.utc).date()
-        all_dates = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
+        num_days = max(0, (end_date - start_date).days + 1)
+        calendar_dates = { (start_date + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(num_days) }
+        all_date_strs = sorted(calendar_dates.union(daily_map.keys()))
 
         series = []
-        for d in all_dates:
-            d_str = d.strftime("%Y-%m-%d")
+        for d_str in all_date_strs:
             entry = daily_map.get(d_str)
 
             if entry:
