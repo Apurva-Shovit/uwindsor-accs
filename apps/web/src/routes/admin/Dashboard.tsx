@@ -91,6 +91,7 @@ export const Dashboard: React.FC = () => {
     const range = maxVal - minVal || 1;
     const getX = (index: number) => paddingLeft + (index / (series.length - 1 || 1)) * (width - paddingLeft - paddingRight);
     const getY = (val: number) => height - paddingBottom - ((val - minVal) / range) * (height - paddingTop - paddingBottom);
+    const stepWidth = (width - paddingLeft - paddingRight) / (series.length - 1 || 1);
 
     const pathD = series.reduce((acc: string, item: any, index: number) => {
       const val = item[dataKey];
@@ -99,6 +100,8 @@ export const Dashboard: React.FC = () => {
       const y = getY(val);
       return acc ? `${acc} L ${x} ${y}` : `M ${x} ${y}`;
     }, '');
+
+    const missingDays = series.filter((item: any) => item.log_count === 0);
 
     return (
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2">
@@ -127,6 +130,30 @@ export const Dashboard: React.FC = () => {
 
             {/* Y Axis line */}
             <line x1={paddingLeft} y1={paddingTop} x2={paddingLeft} y2={height - paddingBottom} stroke="#cbd5e1" strokeWidth="1.5" />
+
+            {/* Missed-entry day bands: shade the column for any day with zero logs */}
+            {missingDays.map((item: any) => {
+              const index = series.indexOf(item);
+              const x = getX(index);
+              return (
+                <g key={`missing-${index}`} className="group">
+                  <rect
+                    x={x - stepWidth / 2}
+                    y={paddingTop}
+                    width={stepWidth}
+                    height={height - paddingTop - paddingBottom}
+                    fill="#ef4444"
+                    opacity="0.08"
+                  />
+                  <line
+                    x1={x} y1={paddingTop} x2={x} y2={height - paddingBottom}
+                    stroke="#ef4444" strokeWidth="1" strokeDasharray="2 2" opacity="0.5"
+                  />
+                  <circle cx={x} cy={height - paddingBottom} r="3" fill="#ffffff" stroke="#ef4444" strokeWidth="1.5" />
+                  <title>No entries logged on {item.date}</title>
+                </g>
+              );
+            })}
 
             {/* Grid lines */}
             <line x1={paddingLeft} y1={paddingTop} x2={width - paddingRight} y2={paddingTop} stroke="#e2e8f0" strokeDasharray="3 3" />
@@ -201,6 +228,13 @@ export const Dashboard: React.FC = () => {
           <span>{series[Math.floor(series.length / 2)]?.date || ''}</span>
           <span>{series[series.length - 1]?.date || ''}</span>
         </div>
+
+        {missingDays.length > 0 && (
+          <div className="flex items-center gap-1.5 text-[9px] font-semibold text-red-500 pl-10">
+            <span className="inline-block w-2 h-2 rounded-full border-[1.5px] border-red-500 bg-white" />
+            {missingDays.length} day{missingDays.length > 1 ? 's' : ''} with no entries logged
+          </div>
+        )}
       </div>
     );
   };
