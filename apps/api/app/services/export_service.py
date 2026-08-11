@@ -1,5 +1,6 @@
 import csv
 import json
+import re
 import zipfile
 from datetime import date, datetime, time, timedelta, timezone
 from io import BytesIO, StringIO
@@ -39,8 +40,30 @@ COLLECTIONS: Dict[str, Dict[str, Any]] = {
     "audit_logs": {"model": AuditLog, "static": False, "date_field": "created_at"},
 }
 
+_ACTION_HUMAN_MAP = {
+    "user_signup": "Signed Up User Account",
+    "user_approve": "Approved User Account",
+    "user_reject": "Rejected User Account",
+    "user_role_update": "Updated User Role",
+    "user_status_update": "Updated User Status",
+    "user_tank_assignments_update": "Updated User Tank Assignments",
+    "login": "User Logged In",
+    "logout": "User Logged Out",
+    "login_failed": "Failed Login Attempt",
+    "login_blocked": "Blocked Login Attempt",
+    "placed_in_quarantine": "Placed Tank in Quarantine",
+    "lifted_quarantine": "Lifted Tank Quarantine",
+    "quarantine_exemption_request": "Requested Quarantine Exemption",
+    "quarantine_exemption_approve": "Approved Quarantine Exemption",
+    "quarantine_exemption_reject": "Rejected Quarantine Exemption",
+    "individual_fish_register": "Registered Individual Fish Tag",
+    "data_export": "Exported System Data",
+    "close": "Closed Project",
+}
+
+HEX_OBJECT_ID_REGEX = re.compile(r"^[0-9a-fA-F]{24}$")
+
 # Explicit CSV column schemas: list of (field_key, display_header, format_type)
-# Removes raw MongoDB Object IDs (id, _id, v, revision_id) and resolves references in place.
 COLLECTION_SCHEMAS: Dict[str, List[tuple]] = {
     "users": [
         ("first_name", "First Name", "text"),
@@ -169,16 +192,6 @@ COLLECTION_SCHEMAS: Dict[str, List[tuple]] = {
         ("created_at", "Logged At", "datetime"),
         ("created_by", "Logged By", "id_user"),
     ],
-    "water_quality_logs": [
-        ("date", "Date", "date_only"),
-        ("tank_id", "Tank Number", "id_tank"),
-        ("project_id", "Project Title", "id_project"),
-        ("type", "Log Type", "text"),
-        ("parameters", "Water Parameters", "json_dict"),
-        ("comments", "Comments", "text"),
-        ("created_at", "Logged At", "datetime"),
-        ("created_by", "Logged By", "id_user"),
-    ],
     "incident_reports": [
         ("date", "Date", "date_only"),
         ("tank_id", "Tank Number", "id_tank"),
@@ -214,20 +227,14 @@ COLLECTION_SCHEMAS: Dict[str, List[tuple]] = {
         ("deleted_by", "Deleted By", "id_user"),
     ],
     "audit_logs": [
+        ("created_at", "Timestamp", "datetime"),
         ("actor_id", "Actor Name", "id_user"),
         ("actor_role", "Actor Role", "text"),
-        ("action", "Action", "text"),
+        ("action", "Action", "action_human"),
         ("entity_type", "Entity Type", "text"),
         ("entity_id", "Target Entity Name", "id_polymorphic"),
-        ("before", "State Before", "json_dict"),
-        ("after", "State After", "json_dict"),
-        ("created_at", "Timestamp", "datetime"),
-        ("created_by", "Created By", "id_user"),
-        ("updated_at", "Updated At", "datetime"),
-        ("updated_by", "Updated By", "id_user"),
-        ("deleted", "Deleted", "boolean"),
-        ("deleted_at", "Deleted At", "datetime"),
-        ("deleted_by", "Deleted By", "id_user"),
+        ("before", "State Before", "state_diff"),
+        ("after", "State After", "state_diff"),
     ],
 }
 
@@ -358,6 +365,79 @@ class ExportService:
             return str(val)
 
     @staticmethod
+    def _format_state_dict(val: Any, format_cell_fn) -> str:
+        if val is None or val == "":
+            return "N/A"
+        d = val
+        if isinstance(val, str):
+            try:
+                d = json.loads(val)
+            except Exception:
+                return str(val)
+        if not isinstance(d, dict):
+            return str(val)
+
+        formatted_pairs = []
+        for k, v in d.items():
+            if k in ("_id", "id", "v", "revision_id", "password_hash"):
+                continue
+            if v is None or v == "":
+                continue
+
+            if k in ("created_by", "updated_by", "deleted_by", "actor_id", "requested_by", "decided_by", "approved_by", "closed_by"):
+                human_v = format_cell_fn("id_user", v, d)
+            elif k in ("tank_id", "target_tank_id"):
+                human_v = format_cell_fn("id_tank", v, d)
+            elif k == "room_id":
+                human_v = format_cell_fn("id_room", v, d)
+            elif k == "facility_id":
+                human_v = format_cell_fn("id_facility", v, d)
+            elif k == "project_id":
+                human_v = format_cell_fn("id_project", v, d)
+            elif k == "species_id":
+                human_v = format_cell_fn("id_species", v, d)
+            elif k == "facility_ids":
+                human_v = format_cell_fn("id_facility_list", v, d)
+            elif k == "room_ids":
+                human_v = format_cell_fn("id_room_list", v, d)
+            elif k == "assigned_tank_ids":
+                human_v = format_cell_fn("id_tank_list", v, d)
+            elif isinstance(v, bool):
+                human_v = "Yes" if v else "No"
+            elif isinstance(v, (datetime, date)):
+                human_v = ExportService._format_date_val(v, include_time=True)
+            elif isinstance(v, str):
+                v_clean = v.replace("RoleEnum.", "").replace("StatusEnum.", "")
+                if HEX_OBJECT_ID_REGEX.match(v_clean):
+                    continue
+                human_v = v_clean
+            else:
+                human_v = str(v)
+
+            if human_v and human_v != "N/A" and not HEX_OBJECT_ID_REGEX.match(human_v):
+                pretty_k = k.replace("_", " ").title()
+                formatted_pairs.append(f"{pretty_k}: {human_v}")
+
+        return " | ".join(formatted_pairs) if formatted_pairs else "N/A"
+
+    @staticmethod
+    def _format_action_human(action: str, row: dict) -> str:
+        if not action:
+            return "N/A"
+        if action in _ACTION_HUMAN_MAP:
+            return _ACTION_HUMAN_MAP[action]
+
+        e_type = row.get("entity_type", "").replace("_", " ").title()
+        if action == "create":
+            return f"Created {e_type}" if e_type else "Created Entity"
+        if action == "update":
+            return f"Updated {e_type}" if e_type else "Updated Entity"
+        if action == "delete":
+            return f"Deleted {e_type}" if e_type else "Deleted Entity"
+
+        return action.replace("_", " ").title()
+
+    @staticmethod
     def _write_collection_sheet(zf: zipfile.ZipFile, name: str, rows: List[dict], format_cell_fn) -> None:
         schema = COLLECTION_SCHEMAS.get(name)
         buf = StringIO()
@@ -373,12 +453,10 @@ class ExportService:
                     line.append(format_cell_fn(fmt_type, raw_val, row))
                 writer.writerow(line)
         else:
-            # Fallback for dynamic/unknown collections
             if not rows:
                 headers = list(COLLECTIONS[name]["model"].model_fields.keys())
             else:
                 headers = list(rows[0].keys())
-            # Exclude raw ID fields
             headers = [h for h in headers if h not in ("id", "_id", "v", "revision_id", "password_hash")]
             writer.writerow([h.replace("_", " ").title() for h in headers])
             for row in rows:
@@ -400,6 +478,151 @@ class ExportService:
         zf.writestr(f"{name}.csv", buf.getvalue())
 
     @staticmethod
+    def _write_water_quality_sheet(zf: zipfile.ZipFile, rows: List[dict], format_cell_fn) -> None:
+        buf = StringIO()
+        writer = csv.writer(buf)
+        headers = [
+            "Date", "Tank Number", "Project Title", "pH",
+            "Temperature (°C)", "Dissolved Oxygen (mg/L)",
+            "Comments", "Logged At", "Logged By",
+        ]
+        writer.writerow(headers)
+
+        for row in rows:
+            params = row.get("parameters") or {}
+            ph = params.get("ph", params.get("pH", "N/A"))
+            temp = params.get("temp_c", params.get("temperature", params.get("temp", "N/A")))
+            do = params.get("do_mg_l", params.get("dissolved_oxygen", params.get("do", "N/A")))
+
+            writer.writerow([
+                ExportService._format_date_val(row.get("date"), include_time=False),
+                format_cell_fn("id_tank", row.get("tank_id"), row),
+                format_cell_fn("id_project", row.get("project_id"), row),
+                str(ph) if ph is not None else "N/A",
+                str(temp) if temp is not None else "N/A",
+                str(do) if do is not None else "N/A",
+                row.get("comments") or "N/A",
+                ExportService._format_date_val(row.get("created_at"), include_time=True),
+                format_cell_fn("id_user", row.get("created_by"), row),
+            ])
+
+        zf.writestr("water_quality.csv", buf.getvalue())
+
+    @staticmethod
+    def _write_test_strip_sheet(zf: zipfile.ZipFile, rows: List[dict], format_cell_fn) -> None:
+        buf = StringIO()
+        writer = csv.writer(buf)
+        headers = [
+            "Date", "Tank Number", "Project Title", "Nitrate (mg/L)",
+            "Nitrite (mg/L)", "Hardness", "Chlorine (mg/L)", "Alkalinity",
+            "pH", "Ammonia (mg/L)", "Comments", "Logged At", "Logged By",
+        ]
+        writer.writerow(headers)
+
+        for row in rows:
+            params = row.get("parameters") or {}
+            nitrate = params.get("nitrate", params.get("nitrate_mg_l", "N/A"))
+            nitrite = params.get("nitrite", params.get("nitrite_mg_l", "N/A"))
+            hardness = params.get("hardness", "N/A")
+            chlorine = params.get("chlorine", "N/A")
+            alkalinity = params.get("alkalinity", "N/A")
+            ph = params.get("ph", params.get("pH", "N/A"))
+            ammonia = params.get("ammonia", params.get("ammonia_mg_l", "N/A"))
+
+            writer.writerow([
+                ExportService._format_date_val(row.get("date"), include_time=False),
+                format_cell_fn("id_tank", row.get("tank_id"), row),
+                format_cell_fn("id_project", row.get("project_id"), row),
+                str(nitrate) if nitrate is not None else "N/A",
+                str(nitrite) if nitrite is not None else "N/A",
+                str(hardness) if hardness is not None else "N/A",
+                str(chlorine) if chlorine is not None else "N/A",
+                str(alkalinity) if alkalinity is not None else "N/A",
+                str(ph) if ph is not None else "N/A",
+                str(ammonia) if ammonia is not None else "N/A",
+                row.get("comments") or "N/A",
+                ExportService._format_date_val(row.get("created_at"), include_time=True),
+                format_cell_fn("id_user", row.get("created_by"), row),
+            ])
+
+        zf.writestr("test_strip.csv", buf.getvalue())
+
+    @staticmethod
+    def _write_quarantine_sheet(zf: zipfile.ZipFile, bundle: Dict[str, List[dict]], format_cell_fn) -> int:
+        buf = StringIO()
+        writer = csv.writer(buf)
+        headers = [
+            "Event Type", "Date / Timestamp", "Source Tank", "Target Tank",
+            "Project Title", "Fish Count", "Reason / Notes", "Urgency",
+            "Status", "Initiated By", "Decided / Approved By",
+        ]
+        writer.writerow(headers)
+
+        rows_written = 0
+
+        # 1. Quarantine exemptions
+        for q in bundle.get("quarantine_exemptions", []):
+            st = q.get("status", "pending")
+            evt_type = f"Exemption Request ({st.capitalize()})"
+            writer.writerow([
+                evt_type,
+                ExportService._format_date_val(q.get("requested_at") or q.get("created_at"), include_time=True),
+                format_cell_fn("id_tank", q.get("tank_id"), q),
+                format_cell_fn("id_tank", q.get("target_tank_id"), q),
+                format_cell_fn("id_project", q.get("project_id"), q),
+                str(q.get("fish_count", "N/A")),
+                q.get("reason") or "N/A",
+                q.get("urgency") or "normal",
+                st,
+                format_cell_fn("id_user", q.get("requested_by") or q.get("created_by"), q),
+                format_cell_fn("id_user", q.get("decided_by"), q),
+            ])
+            rows_written += 1
+
+        # 2. Census quarantine events
+        for c in bundle.get("census_events", []):
+            e_type = c.get("event_type")
+            if e_type in ("quarantine_placed", "quarantine_lifted"):
+                evt_label = "Placed in Quarantine" if e_type == "quarantine_placed" else "Lifted Quarantine"
+                writer.writerow([
+                    evt_label,
+                    ExportService._format_date_val(c.get("date") or c.get("created_at"), include_time=False),
+                    format_cell_fn("id_tank", c.get("tank_id"), c),
+                    "N/A",
+                    format_cell_fn("id_project", c.get("project_id"), c),
+                    ExportService._format_change_val(c.get("change")),
+                    c.get("reason") or c.get("notes") or "N/A",
+                    "normal",
+                    "completed",
+                    format_cell_fn("id_user", c.get("created_by"), c),
+                    "N/A",
+                ])
+                rows_written += 1
+
+        # 3. Audit log quarantine actions
+        for a in bundle.get("audit_logs", []):
+            act = a.get("action")
+            if act in ("placed_in_quarantine", "lifted_quarantine"):
+                evt_label = "Placed in Quarantine" if act == "placed_in_quarantine" else "Lifted Quarantine"
+                writer.writerow([
+                    evt_label,
+                    ExportService._format_date_val(a.get("created_at"), include_time=True),
+                    format_cell_fn("id_tank", a.get("entity_id"), a),
+                    "N/A",
+                    "N/A",
+                    "N/A",
+                    f"Tank action: {act.replace('_', ' ')}",
+                    "normal",
+                    "completed",
+                    format_cell_fn("id_user", a.get("actor_id"), a),
+                    "N/A",
+                ])
+                rows_written += 1
+
+        zf.writestr("quarantine.csv", buf.getvalue())
+        return rows_written
+
+    @staticmethod
     def _write_manifest(zf: zipfile.ZipFile, meta: Dict[str, Any], record_counts: Dict[str, int]) -> None:
         buf = StringIO()
         writer = csv.writer(buf)
@@ -416,7 +639,7 @@ class ExportService:
 
     @staticmethod
     def generate_csv_export(bundle: Dict[str, List[dict]], meta: Dict[str, Any]) -> BytesIO:
-        """Human-readable export: one CSV per collection + a manifest, zipped."""
+        """Human-readable export: one CSV per collection + quarantine sheet + manifest, zipped."""
         user_map = {}
         for u in bundle.get("users", []):
             name_str = f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() or u.get("email", "Unknown User")
@@ -476,6 +699,46 @@ class ExportService:
             if ta.get("_id"):
                 tank_assignment_map[str(ta["_id"])] = ta_str
 
+        water_quality_log_map = {}
+        for w in bundle.get("water_quality_logs", []):
+            w_str = f"Water Quality Log ({ExportService._format_date_val(w.get('date'), include_time=False)})"
+            if w.get("id"):
+                water_quality_log_map[str(w["id"])] = w_str
+            if w.get("_id"):
+                water_quality_log_map[str(w["_id"])] = w_str
+
+        incident_report_map = {}
+        for i in bundle.get("incident_reports", []):
+            i_str = f"Incident Report ({i.get('problem', 'Incident')})"
+            if i.get("id"):
+                incident_report_map[str(i["id"])] = i_str
+            if i.get("_id"):
+                incident_report_map[str(i["_id"])] = i_str
+
+        quarantine_exemption_map = {}
+        for q in bundle.get("quarantine_exemptions", []):
+            q_str = f"Quarantine Exemption ({q.get('reason', 'Exemption')})"
+            if q.get("id"):
+                quarantine_exemption_map[str(q["id"])] = q_str
+            if q.get("_id"):
+                quarantine_exemption_map[str(q["_id"])] = q_str
+
+        census_event_map = {}
+        for c in bundle.get("census_events", []):
+            c_str = f"Census Event ({c.get('event_type', 'Event')})"
+            if c.get("id"):
+                census_event_map[str(c["id"])] = c_str
+            if c.get("_id"):
+                census_event_map[str(c["_id"])] = c_str
+
+        individual_fish_map = {}
+        for f_item in bundle.get("individual_fish", []):
+            f_str = f"Fish Tag {f_item.get('fish_id', 'Unknown')}"
+            if f_item.get("id"):
+                individual_fish_map[str(f_item["id"])] = f_str
+            if f_item.get("_id"):
+                individual_fish_map[str(f_item["_id"])] = f_str
+
         entity_label_maps = {
             "user": user_map,
             "tank": tank_map,
@@ -484,13 +747,19 @@ class ExportService:
             "project": project_map,
             "tank_assignment": tank_assignment_map,
             "species": species_map,
+            "water_quality_log": water_quality_log_map,
+            "incident_report": incident_report_map,
+            "quarantine_exemption": quarantine_exemption_map,
+            "census_event": census_event_map,
+            "individual_fish": individual_fish_map,
         }
 
         def format_cell_fn(fmt_type: str, val: Any, row: dict) -> str:
             if fmt_type == "text":
                 if val is None or val == "":
                     return "N/A"
-                return str(val)
+                val_str = str(val).replace("RoleEnum.", "").replace("StatusEnum.", "")
+                return val_str
             elif fmt_type == "id_user":
                 return user_map.get(str(val), "N/A") if val else "N/A"
             elif fmt_type == "id_tank":
@@ -524,8 +793,13 @@ class ExportService:
             elif fmt_type == "id_polymorphic":
                 if not val:
                     return "N/A"
-                l_map = entity_label_maps.get(row.get("entity_type"))
-                return l_map.get(str(val), "Unknown Entity") if l_map else str(val)
+                e_type = row.get("entity_type")
+                l_map = entity_label_maps.get(e_type)
+                if l_map and str(val) in l_map:
+                    return l_map[str(val)]
+                if HEX_OBJECT_ID_REGEX.match(str(val)):
+                    return f"{e_type.replace('_', ' ').title() if e_type else 'Entity'}"
+                return str(val)
             elif fmt_type == "datetime":
                 return ExportService._format_date_val(val, include_time=True)
             elif fmt_type == "date_only":
@@ -534,16 +808,37 @@ class ExportService:
                 return ExportService._format_boolean_val(val)
             elif fmt_type == "json_dict":
                 return ExportService._format_json_dict_val(val)
+            elif fmt_type == "state_diff":
+                return ExportService._format_state_dict(val, format_cell_fn)
+            elif fmt_type == "action_human":
+                return ExportService._format_action_human(str(val), row)
             elif fmt_type == "count_change":
                 return ExportService._format_change_val(val)
-            return str(val) if val is not None else "N/A"
+            
+            clean_str = str(val).replace("RoleEnum.", "").replace("StatusEnum.", "") if val is not None else "N/A"
+            return clean_str
 
         zip_buffer = BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-            record_counts = {name: len(rows) for name, rows in bundle.items()}
+            record_counts = {}
+
             for name, rows in bundle.items():
-                ExportService._write_collection_sheet(zf, name, rows, format_cell_fn)
+                if name == "water_quality_logs":
+                    daily_rows = [r for r in rows if r.get("type") != "test_strip"]
+                    test_strip_rows = [r for r in rows if r.get("type") == "test_strip"]
+                    ExportService._write_water_quality_sheet(zf, daily_rows, format_cell_fn)
+                    ExportService._write_test_strip_sheet(zf, test_strip_rows, format_cell_fn)
+                    record_counts["water_quality"] = len(daily_rows)
+                    record_counts["test_strip"] = len(test_strip_rows)
+                else:
+                    ExportService._write_collection_sheet(zf, name, rows, format_cell_fn)
+                    record_counts[name] = len(rows)
+
+            q_count = ExportService._write_quarantine_sheet(zf, bundle, format_cell_fn)
+            record_counts["quarantine"] = q_count
+
             ExportService._write_manifest(zf, meta, record_counts)
+
         zip_buffer.seek(0)
         return zip_buffer
 
@@ -568,4 +863,3 @@ class ExportService:
                 "record_counts": record_counts,
             },
         ))
-
