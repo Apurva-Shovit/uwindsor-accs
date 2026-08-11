@@ -39,28 +39,201 @@ COLLECTIONS: Dict[str, Dict[str, Any]] = {
     "audit_logs": {"model": AuditLog, "static": False, "date_field": "created_at"},
 }
 
-# Reference-field -> resolved-column-label, used only for the CSV (human) export.
-# The JSON export keeps raw ids only, since it's meant for recovery, not reading.
-_USER_REF_FIELDS = {
-    "created_by", "updated_by", "deleted_by", "actor_id",
-    "requested_by", "decided_by", "approved_by", "closed_by",
+# Explicit CSV column schemas: list of (field_key, display_header, format_type)
+# Removes raw MongoDB Object IDs (id, _id, v, revision_id) and resolves references in place.
+COLLECTION_SCHEMAS: Dict[str, List[tuple]] = {
+    "users": [
+        ("first_name", "First Name", "text"),
+        ("last_name", "Last Name", "text"),
+        ("email", "Email", "text"),
+        ("role", "Role", "text"),
+        ("requested_role", "Requested Role", "text"),
+        ("status", "Status", "text"),
+        ("facility_ids", "Assigned Facilities", "id_facility_list"),
+        ("room_ids", "Assigned Rooms", "id_room_list"),
+        ("assigned_tank_ids", "Assigned Tanks", "id_tank_list"),
+        ("approved_by", "Approved By", "id_user"),
+        ("approved_at", "Approved At", "datetime"),
+        ("rejection_reason", "Rejection Reason", "text"),
+        ("created_at", "Created At", "datetime"),
+        ("created_by", "Created By", "id_user"),
+        ("updated_at", "Updated At", "datetime"),
+        ("updated_by", "Updated By", "id_user"),
+        ("deleted", "Deleted", "boolean"),
+        ("deleted_at", "Deleted At", "datetime"),
+        ("deleted_by", "Deleted By", "id_user"),
+    ],
+    "facilities": [
+        ("name", "Facility Name", "text"),
+        ("address", "Address", "text"),
+        ("description", "Description", "text"),
+        ("active", "Active", "boolean"),
+        ("created_at", "Created At", "datetime"),
+        ("created_by", "Created By", "id_user"),
+        ("updated_at", "Updated At", "datetime"),
+        ("updated_by", "Updated By", "id_user"),
+        ("deleted", "Deleted", "boolean"),
+        ("deleted_at", "Deleted At", "datetime"),
+        ("deleted_by", "Deleted By", "id_user"),
+    ],
+    "rooms": [
+        ("room_number", "Room Number", "text"),
+        ("facility_id", "Facility", "id_facility"),
+        ("description", "Description", "text"),
+        ("active", "Active", "boolean"),
+        ("created_at", "Created At", "datetime"),
+        ("created_by", "Created By", "id_user"),
+        ("updated_at", "Updated At", "datetime"),
+        ("updated_by", "Updated By", "id_user"),
+        ("deleted", "Deleted", "boolean"),
+        ("deleted_at", "Deleted At", "datetime"),
+        ("deleted_by", "Deleted By", "id_user"),
+    ],
+    "tanks": [
+        ("tank_number", "Tank Number", "text"),
+        ("room_id", "Room", "id_room"),
+        ("status", "Status", "text"),
+        ("is_quarantined", "Is Quarantined", "boolean"),
+        ("quarantine_start_date", "Quarantine Start Date", "datetime"),
+        ("quarantine_end_date", "Quarantine End Date", "datetime"),
+        ("notes", "Notes", "text"),
+        ("created_at", "Created At", "datetime"),
+        ("created_by", "Created By", "id_user"),
+        ("updated_at", "Updated At", "datetime"),
+        ("updated_by", "Updated By", "id_user"),
+        ("deleted", "Deleted", "boolean"),
+        ("deleted_at", "Deleted At", "datetime"),
+        ("deleted_by", "Deleted By", "id_user"),
+    ],
+    "species": [
+        ("name", "Species Name", "text"),
+        ("created_at", "Created At", "datetime"),
+        ("created_by", "Created By", "id_user"),
+    ],
+    "projects": [
+        ("title", "Project Title", "text"),
+        ("pi_name", "PI Name", "text"),
+        ("aupp_number", "AUPP Number", "text"),
+        ("status", "Status", "text"),
+        ("rfid_tracking_enabled", "RFID Tracking Enabled", "boolean"),
+        ("species", "Species", "text"),
+        ("sex", "Sex", "text"),
+        ("dob", "Date of Birth / Hatch", "date_only"),
+        ("established_date", "Established Date", "date_only"),
+        ("source", "Source", "text"),
+        ("aupp_expiry_date", "AUPP Expiry Date", "date_only"),
+        ("room_number", "Room Number", "text"),
+        ("closed_at", "Closed At", "datetime"),
+        ("closed_by", "Closed By", "id_user"),
+        ("disposition_type", "Disposition Type", "text"),
+        ("disposition_notes", "Disposition Notes", "text"),
+        ("created_at", "Created At", "datetime"),
+        ("created_by", "Created By", "id_user"),
+    ],
+    "tank_assignments": [
+        ("project_id", "Project Title", "id_project"),
+        ("tank_id", "Tank Number", "id_tank"),
+        ("current_count", "Current Fish Count", "text"),
+        ("pi_name", "PI Name", "text"),
+        ("aupp_number", "AUPP Number", "text"),
+        ("created_at", "Created At", "datetime"),
+        ("created_by", "Created By", "id_user"),
+    ],
+    "individual_fish": [
+        ("fish_id", "Fish Tag ID", "text"),
+        ("rfid_tag", "RFID Tag", "text"),
+        ("species", "Species", "text"),
+        ("tank_id", "Tank Number", "id_tank"),
+        ("project_id", "Project Title", "id_project"),
+        ("dob", "Date of Birth", "date_only"),
+        ("sex", "Sex", "text"),
+        ("status", "Status", "text"),
+        ("notes", "Notes", "text"),
+        ("created_at", "Created At", "datetime"),
+        ("created_by", "Created By", "id_user"),
+        ("updated_at", "Updated At", "datetime"),
+        ("updated_by", "Updated By", "id_user"),
+        ("deleted", "Deleted", "boolean"),
+        ("deleted_at", "Deleted At", "datetime"),
+        ("deleted_by", "Deleted By", "id_user"),
+    ],
+    "census_events": [
+        ("date", "Date", "date_only"),
+        ("project_id", "Project Title", "id_project"),
+        ("tank_id", "Tank Number", "id_tank"),
+        ("event_type", "Event Type", "text"),
+        ("change", "Count Change", "count_change"),
+        ("reason", "Reason", "text"),
+        ("notes", "Notes", "text"),
+        ("transfer_group_id", "Transfer Group ID", "text"),
+        ("created_at", "Logged At", "datetime"),
+        ("created_by", "Logged By", "id_user"),
+    ],
+    "water_quality_logs": [
+        ("date", "Date", "date_only"),
+        ("tank_id", "Tank Number", "id_tank"),
+        ("project_id", "Project Title", "id_project"),
+        ("type", "Log Type", "text"),
+        ("parameters", "Water Parameters", "json_dict"),
+        ("comments", "Comments", "text"),
+        ("created_at", "Logged At", "datetime"),
+        ("created_by", "Logged By", "id_user"),
+    ],
+    "incident_reports": [
+        ("date", "Date", "date_only"),
+        ("tank_id", "Tank Number", "id_tank"),
+        ("project_id", "Project Title", "id_project"),
+        ("problem", "Problem Summary", "text"),
+        ("treatment", "Treatment / Action", "text"),
+        ("comments", "Comments", "text"),
+        ("aquatic_condition_checked", "Aquatic Condition Checked", "boolean"),
+        ("vet_contacted", "Vet Contacted", "boolean"),
+        ("researcher_notified", "Researcher Notified", "boolean"),
+        ("created_at", "Reported At", "datetime"),
+        ("created_by", "Reported By", "id_user"),
+    ],
+    "quarantine_exemptions": [
+        ("tank_id", "Source Tank", "id_tank"),
+        ("target_tank_id", "Target Tank", "id_tank"),
+        ("project_id", "Project Title", "id_project"),
+        ("fish_count", "Fish Count", "text"),
+        ("reason", "Reason", "text"),
+        ("urgency", "Urgency", "text"),
+        ("status", "Status", "text"),
+        ("requested_by", "Requested By", "id_user"),
+        ("requested_at", "Requested At", "datetime"),
+        ("decided_by", "Decided By", "id_user"),
+        ("decided_at", "Decided At", "datetime"),
+        ("rejection_reason", "Rejection Reason", "text"),
+        ("created_at", "Created At", "datetime"),
+        ("created_by", "Created By", "id_user"),
+        ("updated_at", "Updated At", "datetime"),
+        ("updated_by", "Updated By", "id_user"),
+        ("deleted", "Deleted", "boolean"),
+        ("deleted_at", "Deleted At", "datetime"),
+        ("deleted_by", "Deleted By", "id_user"),
+    ],
+    "audit_logs": [
+        ("actor_id", "Actor Name", "id_user"),
+        ("actor_role", "Actor Role", "text"),
+        ("action", "Action", "text"),
+        ("entity_type", "Entity Type", "text"),
+        ("entity_id", "Target Entity Name", "id_polymorphic"),
+        ("before", "State Before", "json_dict"),
+        ("after", "State After", "json_dict"),
+        ("created_at", "Timestamp", "datetime"),
+        ("created_by", "Created By", "id_user"),
+        ("updated_at", "Updated At", "datetime"),
+        ("updated_by", "Updated By", "id_user"),
+        ("deleted", "Deleted", "boolean"),
+        ("deleted_at", "Deleted At", "datetime"),
+        ("deleted_by", "Deleted By", "id_user"),
+    ],
 }
-_TANK_REF_FIELDS = {"tank_id", "target_tank_id"}
-_ROOM_REF_FIELDS = {"room_id"}
-_FACILITY_REF_FIELDS = {"facility_id"}
-_PROJECT_REF_FIELDS = {"project_id"}
-_TANK_ASSIGNMENT_REF_FIELDS = {"tank_assignment_id"}
-_TANK_LIST_REF_FIELDS = {"assigned_tank_ids"}
-_ROOM_LIST_REF_FIELDS = {"room_ids"}
-_FACILITY_LIST_REF_FIELDS = {"facility_ids"}
 
 
 def _json_safe(value: Any) -> Any:
-    """Recursively converts a value into JSON-safe primitives. Needed because
-    free-form dict fields (e.g. AuditLog.before/after) can contain raw
-    bson.ObjectId or datetime values that Pydantic's model_dump(mode="json")
-    cannot handle once they're nested inside an untyped dict - it only
-    special-cases types it recognizes from the schema, not arbitrary content."""
+    """Recursively converts a value into JSON-safe primitives."""
     if isinstance(value, dict):
         return {k: _json_safe(v) for k, v in value.items()}
     if isinstance(value, list):
@@ -100,9 +273,7 @@ class ExportService:
 
     @staticmethod
     async def build_export_bundle(start_date: Optional[date], end_date: Optional[date]) -> Dict[str, List[dict]]:
-        """Fetches every collection into one bundle. Static entities are always
-        full; transactional entities are scoped to the date range if provided.
-        Raises on any query failure - callers must not persist a partial bundle."""
+        """Fetches every collection into one bundle."""
         bundle: Dict[str, List[dict]] = {}
         for name, spec in COLLECTIONS.items():
             model = spec["model"]
@@ -116,72 +287,116 @@ class ExportService:
 
     @staticmethod
     def generate_json_export(bundle: Dict[str, List[dict]]) -> bytes:
-        """Full-fidelity machine export, including password_hash - required so a
-        future importer can reconstruct the database exactly. Treat as a secret."""
+        """Full-fidelity machine export for disaster recovery."""
         return json.dumps(bundle, default=str, ensure_ascii=False, indent=2).encode("utf-8")
 
     @staticmethod
-    def _flatten_value(value: Any) -> Any:
-        if value is None:
-            return ""
-        if isinstance(value, bool):
-            return "true" if value else "false"
-        if isinstance(value, (dict, list)):
-            return json.dumps(value, default=str, ensure_ascii=False)
-        return value
+    def _format_date_val(val: Any, include_time: bool = True) -> str:
+        if val is None or val == "":
+            return "N/A"
+        if isinstance(val, datetime):
+            return val.strftime("%a, %b %d, %Y, %I:%M %p") if include_time else val.strftime("%a, %b %d, %Y")
+        if isinstance(val, date):
+            return val.strftime("%a, %b %d, %Y")
+        if isinstance(val, str):
+            try:
+                dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
+                return dt.strftime("%a, %b %d, %Y, %I:%M %p") if include_time else dt.strftime("%a, %b %d, %Y")
+            except Exception:
+                try:
+                    d = date.fromisoformat(val)
+                    return d.strftime("%a, %b %d, %Y")
+                except Exception:
+                    return str(val)
+        return str(val)
 
     @staticmethod
-    def _extra_label(column: str) -> Optional[str]:
-        if column in _USER_REF_FIELDS:
-            return f"{column}_name"
-        if column in _TANK_REF_FIELDS:
-            return column.replace("_id", "_number")
-        if column in _TANK_ASSIGNMENT_REF_FIELDS:
-            return "tank_assignment_label"
-        if column in _ROOM_REF_FIELDS:
-            return "room_number"
-        if column in _FACILITY_REF_FIELDS:
-            return "facility_name"
-        if column in _PROJECT_REF_FIELDS:
-            return "project_title"
-        if column in _TANK_LIST_REF_FIELDS:
-            return "assigned_tank_numbers"
-        if column in _ROOM_LIST_REF_FIELDS:
-            return "room_numbers"
-        if column in _FACILITY_LIST_REF_FIELDS:
-            return "facility_names"
-        if column == "entity_id":
-            return "entity_name"
-        return None
+    def _format_boolean_val(val: Any) -> str:
+        if val is None or val == "":
+            return "N/A"
+        if isinstance(val, bool):
+            return "Yes" if val else "No"
+        if isinstance(val, str):
+            lower = val.strip().lower()
+            if lower in ("true", "1", "yes"):
+                return "Yes"
+            if lower in ("false", "0", "no"):
+                return "No"
+        return "Yes" if bool(val) else "No"
 
     @staticmethod
-    def _collection_columns(name: str, rows: List[dict]) -> List[str]:
-        if rows:
-            return list(rows[0].keys())
-        return list(COLLECTIONS[name]["model"].model_fields.keys())
+    def _format_json_dict_val(val: Any) -> str:
+        if val is None or val == "":
+            return "N/A"
+        if isinstance(val, dict):
+            if not val:
+                return "N/A"
+            return " | ".join(f"{k}: {v}" for k, v in val.items())
+        if isinstance(val, str):
+            try:
+                parsed = json.loads(val)
+                if isinstance(parsed, dict):
+                    if not parsed:
+                        return "N/A"
+                    return " | ".join(f"{k}: {v}" for k, v in parsed.items())
+                if isinstance(parsed, list):
+                    return ", ".join(str(x) for x in parsed) if parsed else "N/A"
+            except Exception:
+                return str(val)
+        if isinstance(val, list):
+            return ", ".join(str(x) for x in val) if val else "N/A"
+        return str(val)
 
     @staticmethod
-    def _write_collection_sheet(zf: zipfile.ZipFile, name: str, rows: List[dict], resolve) -> None:
-        base_columns = ExportService._collection_columns(name, rows)
-        if name == "users":
-            base_columns = [c for c in base_columns if c != "password_hash"]
+    def _format_change_val(val: Any) -> str:
+        if val is None or val == "":
+            return "N/A"
+        try:
+            num = int(val)
+            return f"+{num}" if num > 0 else str(num)
+        except Exception:
+            return str(val)
 
-        extra_columns: List[tuple] = []
-        seen_labels = set()
-        for col in base_columns:
-            label = ExportService._extra_label(col)
-            if label and label not in seen_labels:
-                extra_columns.append((col, label))
-                seen_labels.add(label)
-
+    @staticmethod
+    def _write_collection_sheet(zf: zipfile.ZipFile, name: str, rows: List[dict], format_cell_fn) -> None:
+        schema = COLLECTION_SCHEMAS.get(name)
         buf = StringIO()
         writer = csv.writer(buf)
-        writer.writerow(base_columns + [label for _, label in extra_columns])
-        for row in rows:
-            line = [ExportService._flatten_value(row.get(c)) for c in base_columns]
-            for col, _ in extra_columns:
-                line.append(resolve(col, row.get(col), row) or "")
-            writer.writerow(line)
+
+        if schema:
+            headers = [header for _, header, _ in schema]
+            writer.writerow(headers)
+            for row in rows:
+                line = []
+                for field_key, _, fmt_type in schema:
+                    raw_val = row.get(field_key)
+                    line.append(format_cell_fn(fmt_type, raw_val, row))
+                writer.writerow(line)
+        else:
+            # Fallback for dynamic/unknown collections
+            if not rows:
+                headers = list(COLLECTIONS[name]["model"].model_fields.keys())
+            else:
+                headers = list(rows[0].keys())
+            # Exclude raw ID fields
+            headers = [h for h in headers if h not in ("id", "_id", "v", "revision_id", "password_hash")]
+            writer.writerow([h.replace("_", " ").title() for h in headers])
+            for row in rows:
+                line = []
+                for h in headers:
+                    val = row.get(h)
+                    if isinstance(val, bool):
+                        line.append(ExportService._format_boolean_val(val))
+                    elif isinstance(val, (datetime, date)):
+                        line.append(ExportService._format_date_val(val))
+                    elif isinstance(val, dict):
+                        line.append(ExportService._format_json_dict_val(val))
+                    elif val is None:
+                        line.append("N/A")
+                    else:
+                        line.append(str(val))
+                writer.writerow(line)
+
         zf.writestr(f"{name}.csv", buf.getvalue())
 
     @staticmethod
@@ -189,37 +404,78 @@ class ExportService:
         buf = StringIO()
         writer = csv.writer(buf)
         writer.writerow(["ACARE Data Export Manifest"])
-        writer.writerow(["Generated At (UTC)", meta["generated_at"]])
-        writer.writerow(["Exported By", meta["actor_name"]])
-        writer.writerow(["Scope", meta["scope"]])
+        writer.writerow(["Generated At (UTC)", ExportService._format_date_val(meta.get("generated_at"), include_time=True)])
+        writer.writerow(["Exported By", meta.get("actor_name", "Unknown User")])
+        writer.writerow(["Scope", meta.get("scope", "All Records")])
         writer.writerow([])
         writer.writerow(["Collection", "Record Count"])
         for collection_name, count in record_counts.items():
-            writer.writerow([collection_name, count])
+            pretty_name = collection_name.replace("_", " ").title()
+            writer.writerow([pretty_name, count])
         zf.writestr("manifest.csv", buf.getvalue())
 
     @staticmethod
     def generate_csv_export(bundle: Dict[str, List[dict]], meta: Dict[str, Any]) -> BytesIO:
-        """Human-readable export: one CSV per collection + a manifest, zipped.
-        Excludes password_hash. Id -> name lookups are built once from the bundle
-        itself (users/tanks/rooms/facilities/projects are always exported in
-        full), so no extra database queries are needed."""
-        user_map = {
-            u["id"]: (f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() or u.get("email", "Unknown User"))
-            for u in bundle.get("users", [])
-        }
-        tank_map = {t["id"]: f"Tank {t.get('tank_number')}" for t in bundle.get("tanks", [])}
-        room_map = {r["id"]: f"Room {r.get('room_number')}" for r in bundle.get("rooms", [])}
-        facility_map = {f["id"]: f.get("name", "Unknown Facility") for f in bundle.get("facilities", [])}
-        project_map = {p["id"]: p.get("title", "Unknown Project") for p in bundle.get("projects", [])}
-        species_map = {s["id"]: s.get("name", "Unknown Species") for s in bundle.get("species", [])}
-        tank_assignment_map = {
-            ta["id"]: f"{tank_map.get(ta.get('tank_id'), 'Unknown Tank')} / {project_map.get(ta.get('project_id'), 'Unknown Project')}"
-            for ta in bundle.get("tank_assignments", [])
-        }
-        # entity_id on audit_logs is polymorphic - which map applies depends on
-        # the sibling entity_type column, so it's resolved separately below
-        # rather than through the flat field->map rules the other refs use.
+        """Human-readable export: one CSV per collection + a manifest, zipped."""
+        user_map = {}
+        for u in bundle.get("users", []):
+            name_str = f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() or u.get("email", "Unknown User")
+            if u.get("id"):
+                user_map[str(u["id"])] = name_str
+            if u.get("_id"):
+                user_map[str(u["_id"])] = name_str
+
+        tank_map = {}
+        for t in bundle.get("tanks", []):
+            t_str = f"Tank {t.get('tank_number')}"
+            if t.get("id"):
+                tank_map[str(t["id"])] = t_str
+            if t.get("_id"):
+                tank_map[str(t["_id"])] = t_str
+
+        facility_map = {}
+        for f in bundle.get("facilities", []):
+            f_str = f.get("name", "Unknown Facility")
+            if f.get("id"):
+                facility_map[str(f["id"])] = f_str
+            if f.get("_id"):
+                facility_map[str(f["_id"])] = f_str
+
+        room_map = {}
+        for r in bundle.get("rooms", []):
+            fac_name = facility_map.get(str(r.get("facility_id")), "")
+            r_str = f"Room {r.get('room_number')}" + (f" ({fac_name})" if fac_name else "")
+            if r.get("id"):
+                room_map[str(r["id"])] = r_str
+            if r.get("_id"):
+                room_map[str(r["_id"])] = r_str
+
+        project_map = {}
+        for p in bundle.get("projects", []):
+            p_str = p.get("title", "Unknown Project")
+            if p.get("id"):
+                project_map[str(p["id"])] = p_str
+            if p.get("_id"):
+                project_map[str(p["_id"])] = p_str
+
+        species_map = {}
+        for s in bundle.get("species", []):
+            s_str = s.get("name", "Unknown Species")
+            if s.get("id"):
+                species_map[str(s["id"])] = s_str
+            if s.get("_id"):
+                species_map[str(s["_id"])] = s_str
+
+        tank_assignment_map = {}
+        for ta in bundle.get("tank_assignments", []):
+            t_lbl = tank_map.get(str(ta.get("tank_id")), "Unknown Tank")
+            p_lbl = project_map.get(str(ta.get("project_id")), "Unknown Project")
+            ta_str = f"{t_lbl} / {p_lbl}"
+            if ta.get("id"):
+                tank_assignment_map[str(ta["id"])] = ta_str
+            if ta.get("_id"):
+                tank_assignment_map[str(ta["_id"])] = ta_str
+
         entity_label_maps = {
             "user": user_map,
             "tank": tank_map,
@@ -230,43 +486,63 @@ class ExportService:
             "species": species_map,
         }
 
-        def resolve(field: str, value: Any, row: dict) -> Optional[str]:
-            if field == "entity_id":
-                if not value or not isinstance(value, str):
-                    return None
-                label_map = entity_label_maps.get(row.get("entity_type"))
-                return label_map.get(value, "Unknown Reference") if label_map is not None else None
-            if isinstance(value, list):
-                if not value:
-                    return None
-                if field in _TANK_LIST_REF_FIELDS:
-                    return "; ".join(tank_map.get(v, "Unknown Tank") for v in value)
-                if field in _ROOM_LIST_REF_FIELDS:
-                    return "; ".join(room_map.get(v, "Unknown Room") for v in value)
-                if field in _FACILITY_LIST_REF_FIELDS:
-                    return "; ".join(facility_map.get(v, "Unknown Facility") for v in value)
-                return None
-            if not value or not isinstance(value, str):
-                return None
-            if field in _USER_REF_FIELDS:
-                return user_map.get(value, "Unknown User")
-            if field in _TANK_REF_FIELDS:
-                return tank_map.get(value, "Unknown Tank")
-            if field in _TANK_ASSIGNMENT_REF_FIELDS:
-                return tank_assignment_map.get(value, "Unknown Tank Assignment")
-            if field in _ROOM_REF_FIELDS:
-                return room_map.get(value, "Unknown Room")
-            if field in _FACILITY_REF_FIELDS:
-                return facility_map.get(value, "Unknown Facility")
-            if field in _PROJECT_REF_FIELDS:
-                return project_map.get(value, "Unknown Project")
-            return None
+        def format_cell_fn(fmt_type: str, val: Any, row: dict) -> str:
+            if fmt_type == "text":
+                if val is None or val == "":
+                    return "N/A"
+                return str(val)
+            elif fmt_type == "id_user":
+                return user_map.get(str(val), "N/A") if val else "N/A"
+            elif fmt_type == "id_tank":
+                return tank_map.get(str(val), "N/A") if val else "N/A"
+            elif fmt_type == "id_room":
+                return room_map.get(str(val), "N/A") if val else "N/A"
+            elif fmt_type == "id_facility":
+                return facility_map.get(str(val), "N/A") if val else "N/A"
+            elif fmt_type == "id_project":
+                return project_map.get(str(val), "N/A") if val else "N/A"
+            elif fmt_type == "id_species":
+                return species_map.get(str(val), "N/A") if val else "N/A"
+            elif fmt_type == "id_tank_assignment":
+                return tank_assignment_map.get(str(val), "N/A") if val else "N/A"
+            elif fmt_type == "id_user_list":
+                if isinstance(val, list) and val:
+                    return "; ".join(user_map.get(str(v), "Unknown User") for v in val)
+                return "N/A"
+            elif fmt_type == "id_tank_list":
+                if isinstance(val, list) and val:
+                    return "; ".join(tank_map.get(str(v), "Unknown Tank") for v in val)
+                return "N/A"
+            elif fmt_type == "id_room_list":
+                if isinstance(val, list) and val:
+                    return "; ".join(room_map.get(str(v), "Unknown Room") for v in val)
+                return "N/A"
+            elif fmt_type == "id_facility_list":
+                if isinstance(val, list) and val:
+                    return "; ".join(facility_map.get(str(v), "Unknown Facility") for v in val)
+                return "N/A"
+            elif fmt_type == "id_polymorphic":
+                if not val:
+                    return "N/A"
+                l_map = entity_label_maps.get(row.get("entity_type"))
+                return l_map.get(str(val), "Unknown Entity") if l_map else str(val)
+            elif fmt_type == "datetime":
+                return ExportService._format_date_val(val, include_time=True)
+            elif fmt_type == "date_only":
+                return ExportService._format_date_val(val, include_time=False)
+            elif fmt_type == "boolean":
+                return ExportService._format_boolean_val(val)
+            elif fmt_type == "json_dict":
+                return ExportService._format_json_dict_val(val)
+            elif fmt_type == "count_change":
+                return ExportService._format_change_val(val)
+            return str(val) if val is not None else "N/A"
 
         zip_buffer = BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
             record_counts = {name: len(rows) for name, rows in bundle.items()}
             for name, rows in bundle.items():
-                ExportService._write_collection_sheet(zf, name, rows, resolve)
+                ExportService._write_collection_sheet(zf, name, rows, format_cell_fn)
             ExportService._write_manifest(zf, meta, record_counts)
         zip_buffer.seek(0)
         return zip_buffer
@@ -292,3 +568,4 @@ class ExportService:
                 "record_counts": record_counts,
             },
         ))
+
