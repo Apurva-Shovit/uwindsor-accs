@@ -197,6 +197,14 @@ class FacilityService:
         if current_user.role == RoleEnum.staff:
             tanks = [t for t in tanks if str(t.id) in current_user.assigned_tank_ids]
 
+        def tank_sort_key(t: Tank):
+            try:
+                return (0, int(t.tank_number))
+            except (ValueError, TypeError):
+                return (1, str(t.tank_number or ""))
+
+        tanks.sort(key=tank_sort_key)
+
         tank_ids = [str(t.id) for t in tanks]
         
         # Bulk query for active assignments

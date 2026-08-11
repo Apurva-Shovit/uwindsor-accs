@@ -75,14 +75,20 @@ export const CensusPage: React.FC = () => {
 
   /* ── Load tanks + projects (for arrival/hatch) ── */
   useEffect(() => {
-    getTanks().then(r => setTanks(r.data)).catch(() => {});
+    getTanks().then(r => {
+      const sorted = [...(r.data || [])].sort((a: Tank, b: Tank) => {
+        const numA = parseInt(a.tank_number, 10);
+        const numB = parseInt(b.tank_number, 10);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        return (a.tank_number || '').localeCompare(b.tank_number || '', undefined, { numeric: true, sensitivity: 'base' });
+      });
+      setTanks(sorted);
+    }).catch(() => {});
     getProjects().then(r => {
       const rawList = Array.isArray(r.data) ? r.data : (r.data?.items || r.data?.projects || []);
       const active = (rawList as Project[]).filter(p => p.status !== 'closed');
       setProjects(active);
     }).catch(() => {});
-
-
   }, []);
 
   /* ── Load assignments (for death/adjustment) ── */

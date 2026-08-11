@@ -86,6 +86,15 @@ export const UserManagement: React.FC = () => {
     }
   });
 
+  const sortedTanksList = React.useMemo(() => {
+    return [...tanksList].sort((a: any, b: any) => {
+      const numA = parseInt(a.tank_number, 10);
+      const numB = parseInt(b.tank_number, 10);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return (a.tank_number || '').localeCompare(b.tank_number || '', undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [tanksList]);
+
   // Role Update Mutation
   const roleMutation = useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
@@ -411,10 +420,10 @@ export const UserManagement: React.FC = () => {
                 <div>
                   <label className="block text-slate-600 font-bold mb-1">Assign Tank Access (Optional)</label>
                   <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg p-2 space-y-1 bg-slate-50">
-                    {tanksList.length === 0 ? (
+                    {sortedTanksList.length === 0 ? (
                       <div className="text-center py-3 text-slate-400 italic">No tanks found in facility structure.</div>
                     ) : (
-                      tanksList.map((t: any) => {
+                      sortedTanksList.map((t: any) => {
                         const tId = t.id || t._id;
                         return (
                           <label key={tId} className="flex items-center gap-2 text-slate-700 cursor-pointer p-1 hover:bg-white rounded">
@@ -509,10 +518,10 @@ export const UserManagement: React.FC = () => {
               <div className="space-y-4 text-xs font-medium">
                 <p className="text-slate-500">Select specific tanks to grant access to this user. Leave empty for all facility tanks.</p>
                 <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-lg p-2 space-y-1 bg-slate-50">
-                  {tanksList.length === 0 ? (
+                  {sortedTanksList.length === 0 ? (
                     <div className="text-center py-4 text-slate-400 italic">No tanks found in facility structure.</div>
                   ) : (
-                    tanksList.map((t: any) => {
+                    sortedTanksList.map((t: any) => {
                       const tId = t.id || t._id;
                       return (
                         <label key={tId} className="flex items-center gap-2 text-slate-700 cursor-pointer p-1 hover:bg-white rounded">
