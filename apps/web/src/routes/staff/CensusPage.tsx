@@ -241,7 +241,7 @@ export const CensusPage: React.FC = () => {
                     required
                   >
                     <option value="">Select a tank...</option>
-                    {tanks.filter(t => t.status === 'active').map(t => {
+                    {tanks.filter(t => t.status !== 'inactive').map(t => {
                       const da = assignments.find(a => a.tank_id === getId(t) && a.current_count > 0);
                       const occupantDesc = da ? ` (AUPP: ${da.aupp_number || 'N/A'} - Count: ${da.current_count})` : ' (Empty)';
                       return (

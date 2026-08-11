@@ -91,14 +91,57 @@ export const Dashboard: React.FC = () => {
     const range = maxVal - minVal || 1;
     const getX = (index: number) => paddingLeft + (index / (series.length - 1 || 1)) * (width - paddingLeft - paddingRight);
     const getY = (val: number) => height - paddingBottom - ((val - minVal) / range) * (height - paddingTop - paddingBottom);
+    const validIndices = series
+      .map((item: any, idx: number) => (item[dataKey] !== null && item[dataKey] !== undefined ? idx : -1))
+      .filter((idx: number) => idx !== -1);
 
-    const pathD = series.reduce((acc: string, item: any, index: number) => {
+    const interpolatedSeries = series.map((item: any, idx: number) => {
       const val = item[dataKey];
-      if (val === null || val === undefined) return acc;
-      const x = getX(index);
-      const y = getY(val);
+      if (val !== null && val !== undefined) {
+        return { ...item, val, isInterpolated: false };
+      }
+
+      // Find nearest preceding and succeeding valid indices for smooth trend estimation
+      const prevIdx = validIndices.slice().reverse().find((i: number) => i < idx);
+      const nextIdx = validIndices.find((i: number) => i > idx);
+
+      let interpolatedVal: number;
+      if (prevIdx !== undefined && nextIdx !== undefined) {
+        const prevVal = series[prevIdx][dataKey];
+        const nextVal = series[nextIdx][dataKey];
+        const ratio = (idx - prevIdx) / (nextIdx - prevIdx);
+        interpolatedVal = prevVal + (nextVal - prevVal) * ratio;
+      } else if (prevIdx !== undefined) {
+        interpolatedVal = series[prevIdx][dataKey];
+      } else if (nextIdx !== undefined) {
+        interpolatedVal = series[nextIdx][dataKey];
+      } else {
+        interpolatedVal = midVal;
+      }
+
+      return { ...item, val: interpolatedVal, isInterpolated: true };
+    });
+
+    const dashedPathD = interpolatedSeries.reduce((acc: string, item: any, idx: number) => {
+      const x = getX(idx);
+      const y = getY(item.val);
       return acc ? `${acc} L ${x} ${y}` : `M ${x} ${y}`;
     }, '');
+
+    let inSolidSegment = false;
+    const solidPathD = interpolatedSeries.reduce((acc: string, item: any, idx: number) => {
+      if (item.isInterpolated) {
+        inSolidSegment = false;
+        return acc;
+      }
+      const x = getX(idx);
+      const y = getY(item.val);
+      const command = !inSolidSegment ? `M ${x} ${y}` : `L ${x} ${y}`;
+      inSolidSegment = true;
+      return acc ? `${acc} ${command}` : command;
+    }, '');
+
+    const missingDays = series.filter((item: any) => item.log_count === 0);
 
     return (
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2">
@@ -133,10 +176,24 @@ export const Dashboard: React.FC = () => {
             <line x1={paddingLeft} y1={(paddingTop + height - paddingBottom) / 2} x2={width - paddingRight} y2={(paddingTop + height - paddingBottom) / 2} stroke="#e2e8f0" strokeDasharray="3 3" />
             <line x1={paddingLeft} y1={height - paddingBottom} x2={width - paddingRight} y2={height - paddingBottom} stroke="#cbd5e1" />
 
-            {/* Sparkline Path */}
-            {pathD && (
+            {/* Interpolated Gap Dashed Bridge Path */}
+            {missingDays.length > 0 && dashedPathD && (
               <path
-                d={pathD}
+                d={dashedPathD}
+                fill="none"
+                stroke={strokeColor}
+                strokeWidth="2"
+                strokeDasharray="4 4"
+                opacity="0.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )}
+
+            {/* Solid Recorded Line Path */}
+            {solidPathD && (
+              <path
+                d={solidPathD}
                 fill="none"
                 stroke={strokeColor}
                 strokeWidth="3"
@@ -145,18 +202,66 @@ export const Dashboard: React.FC = () => {
               />
             )}
 
-            {/* Data Points */}
-            {series.map((item: any, index: number) => {
-              const val = item[dataKey];
-              if (val === null || val === undefined) return null;
-              const x = getX(index);
-              const y = getY(val);
-              const labelText = `${item.date}: ${val} ${unit}`;
+            {/* Data & Missing Points */}
+            {interpolatedSeries.map((item: any, idx: number) => {
+              const x = getX(idx);
+              const y = getY(item.val);
+              const isMissing = item.isInterpolated;
+
+              if (isMissing) {
+                const labelText = `${item.date}: No entry logged`;
+                const tooltipWidth = labelText.length * 5.6 + 14;
+                const tooltipX = Math.min(Math.max(x - tooltipWidth / 2, paddingLeft), width - paddingRight - tooltipWidth);
+
+                return (
+                  <g key={`missing-${idx}`} className="group cursor-pointer">
+                    {/* Soft vertical guide line on hover */}
+                    <line
+                      x1={x} y1={paddingTop} x2={x} y2={height - paddingBottom}
+                      stroke="#94a3b8" strokeWidth="1" strokeDasharray="2 2"
+                      className="opacity-0 group-hover:opacity-40 transition-opacity"
+                    />
+                    {/* Sleek hollow ring for missing day */}
+                    <circle
+                      cx={x} cy={y} r="3"
+                      fill="#ffffff"
+                      stroke="#94a3b8"
+                      strokeWidth="1.5"
+                      className="transition-all group-hover:r-5 group-hover:stroke-amber-500 group-hover:stroke-2"
+                    />
+                    {/* SVG Hover Tooltip Badge */}
+                    <g className="opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                      <rect
+                        x={tooltipX}
+                        y={Math.max(y - 28, 2)}
+                        width={tooltipWidth}
+                        height="20"
+                        rx="4"
+                        fill="#334155"
+                        opacity="0.95"
+                      />
+                      <text
+                        x={tooltipX + tooltipWidth / 2}
+                        y={Math.max(y - 14, 15)}
+                        textAnchor="middle"
+                        fill="#f8fafc"
+                        fontSize="9.5"
+                        fontWeight="600"
+                      >
+                        {labelText}
+                      </text>
+                    </g>
+                    <title>{labelText}</title>
+                  </g>
+                );
+              }
+
+              const labelText = `${item.date}: ${item.val} ${unit}`;
               const tooltipWidth = labelText.length * 5.8 + 12;
               const tooltipX = Math.min(Math.max(x - tooltipWidth / 2, paddingLeft), width - paddingRight - tooltipWidth);
 
               return (
-                <g key={index} className="group cursor-pointer">
+                <g key={`data-${idx}`} className="group cursor-pointer">
                   {/* Hover vertical guide line */}
                   <line
                     x1={x} y1={paddingTop} x2={x} y2={height - paddingBottom}
@@ -164,9 +269,12 @@ export const Dashboard: React.FC = () => {
                     className="opacity-0 group-hover:opacity-60 transition-opacity"
                   />
                   {/* Point Circle */}
-                  <circle cx={x} cy={y} r="4" fill={strokeColor} className="transition-all group-hover:r-6 group-hover:stroke-white group-hover:stroke-2" />
-
-                  {/* SVG Hover Tooltip Badge showing date and exact value */}
+                  <circle
+                    cx={x} cy={y} r="4"
+                    fill={strokeColor}
+                    className="transition-all group-hover:r-6 group-hover:stroke-white group-hover:stroke-2"
+                  />
+                  {/* SVG Hover Tooltip Badge */}
                   <g className="opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                     <rect
                       x={tooltipX}
@@ -188,7 +296,6 @@ export const Dashboard: React.FC = () => {
                       {labelText}
                     </text>
                   </g>
-
                   <title>{labelText}</title>
                 </g>
               );
@@ -200,6 +307,33 @@ export const Dashboard: React.FC = () => {
           <span>{series[0]?.date || ''}</span>
           <span>{series[Math.floor(series.length / 2)]?.date || ''}</span>
           <span>{series[series.length - 1]?.date || ''}</span>
+        </div>
+
+        {/* Sleek Legend & Gap Summary Footer */}
+        <div className="flex items-center justify-between text-[10px] text-slate-500 bg-slate-50/80 border border-slate-200/70 rounded-lg px-3 py-1.5 mt-1">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-0.5 rounded-full" style={{ backgroundColor: strokeColor }} />
+              <span className="font-semibold text-slate-600 text-[9.5px]">Recorded</span>
+            </div>
+            {missingDays.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 border-b border-dashed border-slate-400 opacity-60" />
+                <span className="font-medium text-slate-500 text-[9.5px]">Gap Bridge</span>
+              </div>
+            )}
+          </div>
+
+          {missingDays.length > 0 ? (
+            <div className="flex items-center gap-1.5 text-amber-700 bg-amber-50/90 border border-amber-200/80 px-2 py-0.5 rounded-full font-semibold text-[9px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              {missingDays.length} unlogged day{missingDays.length > 1 ? 's' : ''}
+            </div>
+          ) : (
+            <span className="text-[9px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200/70 px-2 py-0.5 rounded-full">
+              Complete Data
+            </span>
+          )}
         </div>
       </div>
     );

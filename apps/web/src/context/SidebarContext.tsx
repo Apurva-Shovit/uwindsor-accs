@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState } from 'react';
+import { DESKTOP_QUERY } from '../hooks/useMediaQuery';
 
 interface SidebarContextType {
   isSidebarOpen: boolean;
@@ -9,7 +10,10 @@ interface SidebarContextType {
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
 
 export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // Desktop starts expanded (as it always has); mobile starts with the drawer shut.
+  const [isSidebarOpen, setIsSidebarOpen] = useState(
+    () => window.matchMedia(DESKTOP_QUERY).matches
+  );
 
   const toggleSidebar = () => {
     setIsSidebarOpen(prev => !prev);

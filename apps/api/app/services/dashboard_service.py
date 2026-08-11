@@ -112,19 +112,35 @@ class DashboardService:
             
             daily_map[date_str]["log_count"] += 1
 
+        # Walk every calendar day in the range (not just days that have a log) so
+        # days with zero entries show up as explicit gaps instead of being silently
+        # omitted from the series and compressing the chart's timeline.
+        start_date = cutoff.date()
+        end_date = datetime.now(timezone.utc).date()
+        num_days = max(0, (end_date - start_date).days + 1)
+        calendar_dates = { (start_date + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(num_days) }
+        all_date_strs = sorted(calendar_dates.union(daily_map.keys()))
+
         series = []
-        for d_str in sorted(daily_map.keys()):
-            entry = daily_map[d_str]
-            avg_ph = round(sum(entry["ph_values"]) / len(entry["ph_values"]), 2) if entry["ph_values"] else None
-            avg_temp = round(sum(entry["temp_values"]) / len(entry["temp_values"]), 1) if entry["temp_values"] else None
-            avg_do = round(sum(entry["do_values"]) / len(entry["do_values"]), 1) if entry["do_values"] else None
-            
+        for d_str in all_date_strs:
+            entry = daily_map.get(d_str)
+
+            if entry:
+                avg_ph = round(sum(entry["ph_values"]) / len(entry["ph_values"]), 2) if entry["ph_values"] else None
+                avg_temp = round(sum(entry["temp_values"]) / len(entry["temp_values"]), 1) if entry["temp_values"] else None
+                avg_do = round(sum(entry["do_values"]) / len(entry["do_values"]), 1) if entry["do_values"] else None
+                log_count = entry["log_count"]
+            else:
+                avg_ph = avg_temp = avg_do = None
+                log_count = 0
+
             series.append({
                 "date": d_str,
                 "ph": avg_ph,
                 "temperature": avg_temp,
                 "dissolved_oxygen": avg_do,
-                "log_count": entry["log_count"]
+                "log_count": log_count,
+                "has_entry": log_count > 0,
             })
 
         all_tanks = await Tank.find({"deleted": False}).to_list()
