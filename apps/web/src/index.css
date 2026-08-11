@@ -23,6 +23,16 @@ body {
   }
 }
 
+/* iOS Safari zooms the viewport whenever a focused control's font-size is under
+   16px, and every control in this app is text-sm (14px). Desktop is untouched. */
+@media (max-width: 1023px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 /* Global Anti-Selection for Protected Classes */
 .select-none {
   -webkit-user-select: none !important;

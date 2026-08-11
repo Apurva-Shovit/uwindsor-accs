@@ -19,11 +19,11 @@ export const AdminLayout: React.FC = () => {
 
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-surface">
+    <div className="flex flex-col h-screen max-lg:h-[100dvh] overflow-hidden bg-surface">
       <Topbar />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
           <Routes>
             <Route path="facility" element={<TanksView isAdminMode={true} />} />
             <Route path="tanks" element={<TanksView isAdminMode={true} />} />

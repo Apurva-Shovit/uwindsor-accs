@@ -1,30 +1,96 @@
-import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
 import { Users, LayoutDashboard, Database, Activity, ClipboardList, TrendingUp, RefreshCw, BookOpen, FileText, ChevronDown, Fish, Download } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSidebar } from '../../context/SidebarContext';
+import { useIsDesktop } from '../../hooks/useMediaQuery';
 
 export const Sidebar: React.FC = () => {
   const { user } = useAuth();
-  const { isSidebarOpen } = useSidebar();
+  const { isSidebarOpen, setIsSidebarOpen } = useSidebar();
+  const isDesktop = useIsDesktop();
+  const location = useLocation();
+  const asideRef = useRef<HTMLElement>(null);
   const isManagerPlus = ['super_admin', 'chair', 'admin', 'manager'].includes(user?.role || '');
   const [isFishMgmtOpen, setIsFishMgmtOpen] = useState(true);
 
+  const isDrawerOpen = !isDesktop && isSidebarOpen;
+  const isDrawerShut = !isDesktop && !isSidebarOpen;
+  // The mobile drawer is always full width, so labels always show there.
+  // On desktop this is exactly isSidebarOpen, so desktop rendering is unchanged.
+  const showLabels = isDesktop ? isSidebarOpen : true;
+
+  // Close the drawer after navigating (mobile only).
+  useEffect(() => {
+    if (!isDesktop) setIsSidebarOpen(false);
+  }, [location.pathname, isDesktop, setIsSidebarOpen]);
+
+  // Escape closes the drawer.
+  useEffect(() => {
+    if (!isDrawerOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsSidebarOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isDrawerOpen, setIsSidebarOpen]);
+
+  // Move focus into the drawer when it opens.
+  useEffect(() => {
+    if (isDrawerOpen) asideRef.current?.focus();
+  }, [isDrawerOpen]);
+
   const linkClass = (isActive: boolean) =>
     `flex items-center rounded-md text-sm font-medium transition-colors ${
-      isSidebarOpen ? 'px-3 py-2' : 'p-2 justify-center'
+      showLabels ? 'px-3 py-2' : 'p-2 justify-center'
     } ${
       isActive
         ? 'bg-brandBlueTint text-brandBlueDark'
         : 'text-textSecondary hover:bg-surface hover:text-textPrimary'
     }`;
 
-  return (
-    <aside
-      className={`border-r border-border bg-white transition-all duration-300 ease-in-out h-full overflow-y-auto flex-shrink-0 ${
+  const asideClass = isDesktop
+    ? `border-r border-border bg-white transition-all duration-300 ease-in-out h-full overflow-y-auto flex-shrink-0 ${
         isSidebarOpen ? 'w-64 p-4' : 'w-16 p-2'
-      }`}
+      }`
+    : `fixed left-0 top-16 bottom-0 z-40 w-64 p-4 border-r border-border bg-white overflow-y-auto overscroll-contain shadow-xl transition-transform duration-300 ease-in-out ${
+        isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      }`;
+
+  return (
+    <>
+      {isDrawerOpen && (
+        <div
+          data-sidebar-backdrop
+          aria-hidden="true"
+          onClick={() => setIsSidebarOpen(false)}
+          className="fixed inset-x-0 bottom-0 top-16 z-30 bg-black/40"
+        />
+      )}
+    <aside
+      id="app-sidebar"
+      ref={asideRef}
+      aria-label="Main navigation"
+      tabIndex={isDesktop ? undefined : -1}
+      inert={isDrawerShut}
+      aria-hidden={isDrawerShut || undefined}
+      className={asideClass}
     >
+      {!isDesktop && (
+        <div className="mb-3 flex items-center gap-3 border-b border-border pb-3">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brandBlueTint text-sm font-bold text-brandBlueDark">
+            {`${user?.first_name?.[0] ?? ''}${user?.last_name?.[0] ?? ''}`}
+          </div>
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-textPrimary">
+              {user?.first_name} {user?.last_name}
+            </div>
+            <div className="truncate text-xs capitalize text-textSecondary">
+              {user?.role?.replace(/_/g, ' ')}
+            </div>
+          </div>
+        </div>
+      )}
       <nav className="space-y-1">
         {/* 1. Dashboard */}
         {isManagerPlus && (
@@ -33,8 +99,8 @@ export const Sidebar: React.FC = () => {
             title="Dashboard"
             className={({ isActive }) => linkClass(isActive)}
           >
-            <LayoutDashboard className={`h-5 w-5 ${isSidebarOpen ? 'mr-3' : ''}`} />
-            {isSidebarOpen && <span>Dashboard</span>}
+            <LayoutDashboard className={`h-5 w-5 ${showLabels ? 'mr-3' : ''}`} />
+            {showLabels && <span>Dashboard</span>}
           </NavLink>
         )}
 
@@ -44,15 +110,15 @@ export const Sidebar: React.FC = () => {
             <button
               onClick={() => setIsFishMgmtOpen((prev) => !prev)}
               className={`w-full flex items-center justify-between rounded-md text-sm font-bold text-slate-700 hover:bg-slate-100 transition-colors ${
-                isSidebarOpen ? 'px-3 py-2' : 'p-2 justify-center'
+                showLabels ? 'px-3 py-2' : 'p-2 justify-center'
               }`}
               title="Fish Management"
             >
               <div className="flex items-center gap-2">
-                <Fish className={`h-5 w-5 text-[#005596] ${isSidebarOpen ? 'mr-1' : ''}`} />
-                {isSidebarOpen && <span>Fish Management</span>}
+                <Fish className={`h-5 w-5 text-[#005596] ${showLabels ? 'mr-1' : ''}`} />
+                {showLabels && <span>Fish Management</span>}
               </div>
-              {isSidebarOpen && (
+              {showLabels && (
                 <ChevronDown
                   className={`h-4 w-4 text-slate-400 transition-transform duration-200 ${
                     isFishMgmtOpen ? 'transform rotate-180' : ''
@@ -62,7 +128,7 @@ export const Sidebar: React.FC = () => {
             </button>
 
             {isFishMgmtOpen && (
-              <div className={`space-y-1 ${isSidebarOpen ? 'pl-2 border-l-2 border-slate-200 ml-3' : ''}`}>
+              <div className={`space-y-1 ${showLabels ? 'pl-2 border-l-2 border-slate-200 ml-3' : ''}`}>
                 {/* 2. Daily Log Entry */}
                 <NavLink
                   end
@@ -70,8 +136,8 @@ export const Sidebar: React.FC = () => {
                   title="Daily Log Entry"
                   className={({ isActive }) => linkClass(isActive)}
                 >
-                  <ClipboardList className={`h-4 w-4 text-brandBlue ${isSidebarOpen ? 'mr-2.5' : ''}`} />
-                  {isSidebarOpen && <span className="text-xs font-semibold">Daily Log Entry</span>}
+                  <ClipboardList className={`h-4 w-4 text-brandBlue ${showLabels ? 'mr-2.5' : ''}`} />
+                  {showLabels && <span className="text-xs font-semibold">Daily Log Entry</span>}
                 </NavLink>
 
                 {/* 3. Population Census */}
@@ -81,8 +147,8 @@ export const Sidebar: React.FC = () => {
                   title="Population Census"
                   className={({ isActive }) => linkClass(isActive)}
                 >
-                  <TrendingUp className={`h-4 w-4 text-emerald-600 ${isSidebarOpen ? 'mr-2.5' : ''}`} />
-                  {isSidebarOpen && <span className="text-xs font-semibold">Population Census</span>}
+                  <TrendingUp className={`h-4 w-4 text-emerald-600 ${showLabels ? 'mr-2.5' : ''}`} />
+                  {showLabels && <span className="text-xs font-semibold">Population Census</span>}
                 </NavLink>
 
                 {/* 4. Tank Transfers */}
@@ -92,8 +158,8 @@ export const Sidebar: React.FC = () => {
                   title="Tank Transfers"
                   className={({ isActive }) => linkClass(isActive)}
                 >
-                  <RefreshCw className={`h-4 w-4 text-indigo-600 ${isSidebarOpen ? 'mr-2.5' : ''}`} />
-                  {isSidebarOpen && <span className="text-xs font-semibold">Tank Transfers</span>}
+                  <RefreshCw className={`h-4 w-4 text-indigo-600 ${showLabels ? 'mr-2.5' : ''}`} />
+                  {showLabels && <span className="text-xs font-semibold">Tank Transfers</span>}
                 </NavLink>
 
                 {/* 5. Quarantine Monitor */}
@@ -103,8 +169,8 @@ export const Sidebar: React.FC = () => {
                   title="Quarantine Monitor"
                   className={({ isActive }) => linkClass(isActive)}
                 >
-                  <Activity className={`h-4 w-4 text-amber-600 ${isSidebarOpen ? 'mr-2.5' : ''}`} />
-                  {isSidebarOpen && <span className="text-xs font-semibold">Quarantine Monitor</span>}
+                  <Activity className={`h-4 w-4 text-amber-600 ${showLabels ? 'mr-2.5' : ''}`} />
+                  {showLabels && <span className="text-xs font-semibold">Quarantine Monitor</span>}
                 </NavLink>
               </div>
             )}
@@ -118,8 +184,8 @@ export const Sidebar: React.FC = () => {
               title="Daily Log Entry"
               className={({ isActive }) => linkClass(isActive)}
             >
-              <ClipboardList className={`h-5 w-5 text-brandBlue ${isSidebarOpen ? 'mr-3' : ''}`} />
-              {isSidebarOpen && <span>Daily Log Entry</span>}
+              <ClipboardList className={`h-5 w-5 text-brandBlue ${showLabels ? 'mr-3' : ''}`} />
+              {showLabels && <span>Daily Log Entry</span>}
             </NavLink>
 
             <NavLink
@@ -128,8 +194,8 @@ export const Sidebar: React.FC = () => {
               title="Population Census"
               className={({ isActive }) => linkClass(isActive)}
             >
-              <TrendingUp className={`h-5 w-5 text-emerald-600 ${isSidebarOpen ? 'mr-3' : ''}`} />
-              {isSidebarOpen && <span>Population Census</span>}
+              <TrendingUp className={`h-5 w-5 text-emerald-600 ${showLabels ? 'mr-3' : ''}`} />
+              {showLabels && <span>Population Census</span>}
             </NavLink>
 
             <NavLink
@@ -138,8 +204,8 @@ export const Sidebar: React.FC = () => {
               title="Tank Transfers"
               className={({ isActive }) => linkClass(isActive)}
             >
-              <RefreshCw className={`h-5 w-5 text-indigo-600 ${isSidebarOpen ? 'mr-3' : ''}`} />
-              {isSidebarOpen && <span>Tank Transfers</span>}
+              <RefreshCw className={`h-5 w-5 text-indigo-600 ${showLabels ? 'mr-3' : ''}`} />
+              {showLabels && <span>Tank Transfers</span>}
             </NavLink>
 
             <NavLink
@@ -148,8 +214,8 @@ export const Sidebar: React.FC = () => {
               title="Quarantine Monitor"
               className={({ isActive }) => linkClass(isActive)}
             >
-              <Activity className={`h-5 w-5 text-amber-600 ${isSidebarOpen ? 'mr-3' : ''}`} />
-              {isSidebarOpen && <span>Quarantine Monitor</span>}
+              <Activity className={`h-5 w-5 text-amber-600 ${showLabels ? 'mr-3' : ''}`} />
+              {showLabels && <span>Quarantine Monitor</span>}
             </NavLink>
           </>
         )}
@@ -162,8 +228,8 @@ export const Sidebar: React.FC = () => {
             title="User Management"
             className={({ isActive }) => linkClass(isActive)}
           >
-            <Users className={`h-5 w-5 text-indigo-600 ${isSidebarOpen ? 'mr-3' : ''}`} />
-            {isSidebarOpen && <span>User Management</span>}
+            <Users className={`h-5 w-5 text-indigo-600 ${showLabels ? 'mr-3' : ''}`} />
+            {showLabels && <span>User Management</span>}
           </NavLink>
         )}
 
@@ -174,8 +240,8 @@ export const Sidebar: React.FC = () => {
           title="Tanks & Racks"
           className={({ isActive }) => linkClass(isActive)}
         >
-          <Database className={`h-5 w-5 ${isSidebarOpen ? 'mr-3' : ''}`} />
-          {isSidebarOpen && <span>Tanks & Racks</span>}
+          <Database className={`h-5 w-5 ${showLabels ? 'mr-3' : ''}`} />
+          {showLabels && <span>Tanks & Racks</span>}
         </NavLink>
 
         {/* 8. Tank History Explorer */}
@@ -185,8 +251,8 @@ export const Sidebar: React.FC = () => {
           title="Tank History Explorer"
           className={({ isActive }) => linkClass(isActive)}
         >
-          <ClipboardList className={`h-5 w-5 text-slate-500 ${isSidebarOpen ? 'mr-3' : ''}`} />
-          {isSidebarOpen && <span>Tank History Explorer</span>}
+          <ClipboardList className={`h-5 w-5 text-slate-500 ${showLabels ? 'mr-3' : ''}`} />
+          {showLabels && <span>Tank History Explorer</span>}
         </NavLink>
 
         {/* 9. Research Projects */}
@@ -196,8 +262,8 @@ export const Sidebar: React.FC = () => {
           title="Research Projects"
           className={({ isActive }) => linkClass(isActive)}
         >
-          <BookOpen className={`h-5 w-5 ${isSidebarOpen ? 'mr-3' : ''}`} />
-          {isSidebarOpen && <span>Research Projects</span>}
+          <BookOpen className={`h-5 w-5 ${showLabels ? 'mr-3' : ''}`} />
+          {showLabels && <span>Research Projects</span>}
         </NavLink>
 
         {/* 10. Reports */}
@@ -208,8 +274,8 @@ export const Sidebar: React.FC = () => {
             title="Reports"
             className={({ isActive }) => linkClass(isActive)}
           >
-            <FileText className={`h-5 w-5 ${isSidebarOpen ? 'mr-3' : ''}`} />
-            {isSidebarOpen && <span>Reports</span>}
+            <FileText className={`h-5 w-5 ${showLabels ? 'mr-3' : ''}`} />
+            {showLabels && <span>Reports</span>}
           </NavLink>
         )}
 
@@ -221,8 +287,8 @@ export const Sidebar: React.FC = () => {
             title="Audit Logs"
             className={({ isActive }) => linkClass(isActive)}
           >
-            <Activity className={`h-5 w-5 text-slate-600 ${isSidebarOpen ? 'mr-3' : ''}`} />
-            {isSidebarOpen && <span>Audit Logs</span>}
+            <Activity className={`h-5 w-5 text-slate-600 ${showLabels ? 'mr-3' : ''}`} />
+            {showLabels && <span>Audit Logs</span>}
           </NavLink>
         )}
 
@@ -234,12 +300,13 @@ export const Sidebar: React.FC = () => {
             title="Data Export"
             className={({ isActive }) => linkClass(isActive)}
           >
-            <Download className={`h-5 w-5 text-slate-600 ${isSidebarOpen ? 'mr-3' : ''}`} />
-            {isSidebarOpen && <span>Data Export</span>}
+            <Download className={`h-5 w-5 text-slate-600 ${showLabels ? 'mr-3' : ''}`} />
+            {showLabels && <span>Data Export</span>}
           </NavLink>
         )}
       </nav>
     </aside>
+    </>
   );
 };
 
