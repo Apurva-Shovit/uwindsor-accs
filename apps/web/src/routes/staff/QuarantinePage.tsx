@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Clock, ShieldAlert, CheckCircle2, XCircle } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
+import { parseApiDate, formatQuarantineRemaining } from '../../utils/formatters';
+import type { QuarantineTone } from '../../utils/formatters';
 import {
   getTanksSummary,
   getQuarantineExemptions,
@@ -11,6 +13,14 @@ import {
   decideExemption,
 } from '../../lib/api';
 import { Paginator } from '../../components/ui/Paginator';
+
+const REMAINING_BADGE_STYLES: Record<QuarantineTone, string> = {
+  steady: 'bg-amber-200 text-amber-800',
+  soon: 'bg-orange-200 text-orange-900',
+  urgent: 'bg-red-100 text-red-700 border border-red-300',
+  critical: 'bg-red-600 text-white animate-pulse',
+  expired: 'bg-slate-200 text-slate-700',
+};
 
 export const QuarantinePage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -27,6 +37,14 @@ export const QuarantinePage: React.FC = () => {
 
   const [liftModalTank, setLiftModalTank] = useState<any>(null);
   const [liftVerification, setLiftVerification] = useState('');
+
+  // The countdown now resolves down to the minute, so it has to tick rather than
+  // only recomputing when the tank query happens to refetch.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // Fetch tanks
   const { data: tanks, refetch: refetchTanks } = useQuery({
@@ -142,24 +160,21 @@ export const QuarantinePage: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {sortedTanks.filter((t: any) => t.is_quarantined === true).map((t: any) => {
-              const start = new Date(t.quarantine_start_date);
-              const end = new Date(t.quarantine_end_date);
-              const now = new Date();
-              const diffMs = end.getTime() - now.getTime();
-              const rawDays = diffMs / (1000 * 3600 * 24);
-              const daysLeft = Math.max(0, Math.min(14, Math.ceil(rawDays)));
+              const start = parseApiDate(t.quarantine_start_date);
+              const end = parseApiDate(t.quarantine_end_date);
+              const remaining = formatQuarantineRemaining(end, now);
 
               return (
                 <div key={t.id || t._id} className="border border-amber-200 bg-amber-50 rounded-lg p-4 flex flex-col gap-2">
                   <div className="flex justify-between items-center">
                     <span className="font-bold text-amber-900 text-lg">Tank {t.tank_number}</span>
-                    <span className="bg-amber-200 text-amber-800 text-xs font-bold px-2 py-1 rounded">
-                      {daysLeft > 0 ? `${daysLeft} days left` : 'Expired'}
+                    <span className={`text-xs font-bold px-2 py-1 rounded ${REMAINING_BADGE_STYLES[remaining.tone]}`}>
+                      {remaining.label}
                     </span>
                   </div>
                   <div className="text-xs text-amber-700">
-                    <div><strong>Started:</strong> {start.toLocaleDateString()}</div>
-                    <div><strong>Ends:</strong> {end.toLocaleDateString()}</div>
+                    <div><strong>Started:</strong> {start ? start.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '-'}</div>
+                    <div><strong>Ends:</strong> {end ? end.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '-'}</div>
                   </div>
                   {isManagerPlus && (
                     <button
