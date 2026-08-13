@@ -13,18 +13,30 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
-        <!-- Apps targeting SDK 35+ cannot opt out of edge-to-edge, so
-             StatusBar.setBackgroundColor() is a no-op. Capacitor's built-in
-             SystemBars plugin instead paints the system bar areas with the
-             theme's windowBackground, which is why the brand colour lives here
-             rather than in JS. -->
+        <!-- The system bars have to be coloured twice, because the two Android
+             generations get there by different routes:
+
+             API 35+ enforces edge-to-edge, so StatusBar.setBackgroundColor() is
+             a no-op and Capacitor's SystemBars plugin paints the bar areas with
+             the theme's windowBackground.
+
+             API < 35 (this app's minSdk is 24) draws the bars as separate
+             regions from statusBarColor/navigationBarColor, and windowBackground
+             never reaches them. Without these two, the parent AppCompat theme's
+             platform default — black — wins. -->
         <item name="android:windowBackground">@color/systemBarBackground</item>
+        <item name="android:statusBarColor">@color/systemBarBackground</item>
+        <item name="android:navigationBarColor">@color/systemBarBackground</item>
     </style>
 
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
         <item name="android:windowBackground">@color/systemBarBackground</item>
+        <!-- Matched to AppTheme.NoActionBar so the bars do not flash black
+             during the splash and then change colour. -->
+        <item name="android:statusBarColor">@color/systemBarBackground</item>
+        <item name="android:navigationBarColor">@color/systemBarBackground</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 </resources>
