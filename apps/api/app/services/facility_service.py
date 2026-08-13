@@ -12,6 +12,7 @@ from ..models.incident_report import IncidentReport
 from ..repositories.base_repository import BaseRepository
 from ..repositories.audit_repository import AuditRepository
 from ..utils.entity_resolver import EntityResolver
+from ..utils.datetime_parsing import parse_iso_datetime
 
 class FacilityService:
     """Service layer for Facility, Room, and Tank Management."""
@@ -365,9 +366,13 @@ class FacilityService:
 
         combined = []
 
-        # Dates parsing
-        df = datetime.fromisoformat(date_from).date() if date_from else None
-        dt = datetime.fromisoformat(date_to).date() if date_to else None
+        # Dates parsing. Goes through the shared helper because these come
+        # straight from query params and can carry a 'Z' suffix, which the
+        # production Python 3.10 image cannot parse on its own.
+        df_dt = parse_iso_datetime(date_from)
+        dt_dt = parse_iso_datetime(date_to)
+        df = df_dt.date() if df_dt else None
+        dt = dt_dt.date() if dt_dt else None
 
         # 1. Census & Quarantine Events
         if not event_type or event_type in ["census", "quarantine", "quarantine_placed", "quarantine_lifted"]:

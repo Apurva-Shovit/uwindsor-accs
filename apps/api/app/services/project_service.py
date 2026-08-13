@@ -12,15 +12,16 @@ from ..models.facility import Tank
 from ..schemas.project import ProjectCreate, ProjectClose
 from ..repositories.base_repository import BaseRepository
 from ..repositories.audit_repository import AuditRepository
+from ..utils.datetime_parsing import parse_iso_datetime
 
 class ProjectService:
     """Service layer for Project Management."""
 
     @staticmethod
     async def create_project(body: ProjectCreate, current_user: User) -> Project:
-        dob_dt = datetime.fromisoformat(body.dob) if body.dob else None
-        est_dt = datetime.fromisoformat(body.established_date) if body.established_date else None
-        exp_dt = datetime.fromisoformat(body.aupp_expiry_date) if body.aupp_expiry_date else None
+        dob_dt = parse_iso_datetime(body.dob)
+        est_dt = parse_iso_datetime(body.established_date)
+        exp_dt = parse_iso_datetime(body.aupp_expiry_date)
 
         existing_project = await Project.find_one({"aupp_number": body.aupp_number})
         if existing_project:
