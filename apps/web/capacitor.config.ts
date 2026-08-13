@@ -1,5 +1,13 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
+// Builds pointed at a plain-HTTP dev backend must set CAP_DEV_HTTP=1. A
+// https://localhost page is a secure context, so the WebView blocks its requests
+// to http:// as mixed content; serving the bundled assets over http://localhost
+// instead avoids that. Both origins match the API's CORS allow-list, and
+// http://localhost is still a trustworthy origin to Chromium, so nothing else
+// about the app changes. Never set it for a distributable build.
+const devHttp = process.env.CAP_DEV_HTTP === '1';
+
 const config: CapacitorConfig = {
   appId: 'ca.uwindsor.acare',
   appName: 'ACARE',
@@ -8,7 +16,7 @@ const config: CapacitorConfig = {
   // inside the API's existing CORS allow-list (see apps/api/app/main.py), so no
   // backend change is needed for the Android build.
   server: {
-    androidScheme: 'https',
+    androidScheme: devHttp ? 'http' : 'https',
   },
   android: {
     allowMixedContent: false,

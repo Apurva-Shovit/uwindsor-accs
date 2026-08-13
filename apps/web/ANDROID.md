@@ -92,11 +92,39 @@ Connect the device, open `chrome://inspect` in desktop Chrome, and inspect the
 WebView. This works because the `debugger`-loop guard in `ProtectedView.tsx` is
 disabled on native — see `src/lib/platform.ts`.
 
-### Local API
+### Building against a local backend
 
-The release build blocks cleartext HTTP. To point an emulator at a local API
-over plain HTTP you need a debug-only network security config; do not relax
-`usesCleartextTraffic` on the release build.
+Two things get in the way of a plain-HTTP dev API, and both are already handled
+for **debug builds only** — the release build stays strict.
+
+1. **Cleartext is blocked.** `android/app/src/debug/` carries a network security
+   config allowing HTTP to `10.0.2.2`, `localhost`, and the dev machine's LAN
+   address. Add your own IP there if it changes (it is DHCP-assigned).
+2. **Mixed content is blocked.** The default `https://localhost` WebView origin
+   is a secure context, so its requests to `http://` are refused. Set
+   `CAP_DEV_HTTP=1` when syncing to serve the bundled assets over
+   `http://localhost` instead:
+
+   ```powershell
+   $env:CAP_DEV_HTTP = "1"
+   npm run android:sync
+   cd android; ./gradlew assembleDebug
+   ```
+
+   Never set `CAP_DEV_HTTP` for a build you hand out.
+
+Set `VITE_API_URL` in `.env.mobile` to the **LAN address** of the dev machine
+(e.g. `http://10.190.22.209:8000`), not `localhost` — inside the WebView,
+`localhost` is the app's own bundled assets. `http://10.0.2.2:8000` also works,
+but only on the emulator.
+
+Two things to check on the API side: uvicorn must bind `0.0.0.0` (not
+`127.0.0.1`) for a device to reach it, and Windows Firewall must allow inbound
+TCP on port 8000 for the private network.
+
+The debug APK lands at
+`android/app/build/outputs/apk/debug/app-debug.apk`. It is debug-signed, so a
+later release-signed build cannot upgrade it in place — uninstall first.
 
 ---
 
