@@ -343,8 +343,8 @@ class FacilityService:
 
         tank_id: Optional[str],
         event_type: Optional[str],
-        date_from: Optional[str],
-        date_to: Optional[str],
+        date_from: Optional[datetime],
+        date_to: Optional[datetime],
         keyword: Optional[str],
         current_user: User,
         page: int = 1,
@@ -365,9 +365,10 @@ class FacilityService:
 
         combined = []
 
-        # Dates parsing
-        df = datetime.fromisoformat(date_from).date() if date_from else None
-        dt = datetime.fromisoformat(date_to).date() if date_to else None
+        # Already parsed by Pydantic at the route boundary; only the date part
+        # is compared below.
+        df = date_from.date() if date_from else None
+        dt = date_to.date() if date_to else None
 
         # 1. Census & Quarantine Events
         if not event_type or event_type in ["census", "quarantine", "quarantine_placed", "quarantine_lifted"]:

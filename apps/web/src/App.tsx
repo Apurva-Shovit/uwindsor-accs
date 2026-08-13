@@ -1,6 +1,8 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { RoleGuard } from './components/guards/RoleGuard';
+import { AuthLanding } from './components/guards/AuthLanding';
+import { ALL_ROLES, MANAGER_PLUS_ROLES } from './lib/roles';
 import { Login } from './routes/Login';
 import { Signup } from './routes/Signup';
 import { PendingApproval } from './routes/PendingApproval';
@@ -19,13 +21,17 @@ export function App() {
         <Router>
           <NativeBackHandler />
           <Routes>
+            {/* The bare site URL has to resolve against the session, not jump
+                straight to the login form — a signed-in user landing here was
+                being shown a login screen despite a valid session. */}
+            <Route path="/" element={<AuthLanding />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/pending-approval" element={<PendingApproval />} />
             <Route
               path="/staff/*"
               element={
-                <RoleGuard allowedRoles={['staff', 'manager', 'chair', 'admin', 'super_admin']}>
+                <RoleGuard allowedRoles={ALL_ROLES}>
                   <StaffLayout />
                 </RoleGuard>
               }
@@ -33,12 +39,14 @@ export function App() {
             <Route
               path="/admin/*"
               element={
-                <RoleGuard allowedRoles={['manager', 'chair', 'admin', 'super_admin']}>
+                <RoleGuard allowedRoles={MANAGER_PLUS_ROLES}>
                   <AdminLayout />
                 </RoleGuard>
               }
             />
-            <Route path="*" element={<Navigate to="/login" replace />} />
+            {/* Unknown paths resolve the same way, so a stale bookmark returns
+                a signed-in user to their dashboard rather than to the login form. */}
+            <Route path="*" element={<AuthLanding />} />
           </Routes>
         </Router>
       </SidebarProvider>

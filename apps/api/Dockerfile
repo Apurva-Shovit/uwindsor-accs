@@ -1,4 +1,8 @@
-FROM python:3.10-slim
+# Keep this in step with the interpreter used for development. Running 3.10 in
+# production while developing on 3.13 meant stdlib differences only ever showed
+# up as production errors — datetime.fromisoformat rejecting the 'Z' suffix that
+# every browser timestamp carries being the one that actually bit.
+FROM python:3.13-slim
 
 WORKDIR /app
 

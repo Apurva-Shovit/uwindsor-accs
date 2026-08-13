@@ -50,7 +50,9 @@ docker compose up --build
 
 ## 💻 Manual Setup (Without Docker)
 
-If you prefer to run the services locally without Docker, you will need MongoDB (port 27017), Python 3.10+, and Node.js 18+.
+If you prefer to run the services locally without Docker, you will need MongoDB (port 27017), Python 3.13, and Node.js 18+.
+
+> Use **Python 3.13** — the same version `apps/api/Dockerfile` deploys. Developing on a different minor version hides stdlib differences until they surface as production-only errors.
 
 ### Backend (FastAPI)
 ```bash

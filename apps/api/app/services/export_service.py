@@ -20,6 +20,7 @@ from ..models.tank_assignment import TankAssignment
 from ..models.user import User
 from ..models.water_quality_log import WaterQualityLog
 from ..repositories.audit_repository import AuditRepository
+from ..utils.datetime_parsing import parse_iso_datetime
 
 # Single source of truth for the export bundle: which collections exist, whether
 # they're always exported in full ("static"), and which field (if any) scopes
@@ -307,7 +308,7 @@ class ExportService:
             return val.strftime("%a, %b %d, %Y")
         if isinstance(val, str):
             try:
-                dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
+                dt = parse_iso_datetime(val)
                 return dt.strftime("%a, %b %d, %Y, %I:%M %p") if include_time else dt.strftime("%a, %b %d, %Y")
             except Exception:
                 try:
