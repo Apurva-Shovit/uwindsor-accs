@@ -12,17 +12,12 @@ from ..models.facility import Tank
 from ..schemas.project import ProjectCreate, ProjectClose
 from ..repositories.base_repository import BaseRepository
 from ..repositories.audit_repository import AuditRepository
-from ..utils.datetime_parsing import parse_iso_datetime
 
 class ProjectService:
     """Service layer for Project Management."""
 
     @staticmethod
     async def create_project(body: ProjectCreate, current_user: User) -> Project:
-        dob_dt = parse_iso_datetime(body.dob)
-        est_dt = parse_iso_datetime(body.established_date)
-        exp_dt = parse_iso_datetime(body.aupp_expiry_date)
-
         existing_project = await Project.find_one({"aupp_number": body.aupp_number})
         if existing_project:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"A project with AUPP number '{body.aupp_number}' already exists.")
@@ -33,10 +28,10 @@ class ProjectService:
             aupp_number=body.aupp_number,
             species=body.species,
             sex=body.sex,
-            dob=dob_dt,
-            established_date=est_dt,
+            dob=body.dob,
+            established_date=body.established_date,
             source=body.source,
-            aupp_expiry_date=exp_dt,
+            aupp_expiry_date=body.aupp_expiry_date,
             room_number=body.room_number,
             rfid_tracking_enabled=body.rfid_tracking_enabled,
             created_by=str(current_user.id),

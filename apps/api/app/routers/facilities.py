@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
@@ -89,8 +90,11 @@ async def get_tank_history(
 async def search_tank_history(
     tank_id: str | None = Query(None),
     event_type: str | None = Query(None),
-    date_from: str | None = Query(None),
-    date_to: str | None = Query(None),
+    # Parsed by Pydantic, matching /audit-logs and /reports. Hand-parsing these
+    # in the service depended on the runtime's fromisoformat accepting a 'Z'
+    # suffix, which is only true from Python 3.11 on.
+    date_from: datetime | None = Query(None),
+    date_to: datetime | None = Query(None),
     keyword: str | None = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),

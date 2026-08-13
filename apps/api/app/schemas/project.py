@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal, Optional
 from pydantic import BaseModel
 
@@ -8,10 +9,17 @@ class ProjectCreate(BaseModel):
     aupp_number: str
     species: Optional[str] = None
     sex: Optional[Literal["male", "female", "both"]] = None
-    dob: Optional[str] = None  # ISO date string
-    established_date: Optional[str] = None  # ISO date string
+    # Typed as datetime so Pydantic does the parsing. It accepts the full ISO
+    # 8601 range on every supported interpreter — including the trailing 'Z'
+    # that Date.toISOString() emits and the date-only form the forms send — so
+    # this no longer depends on the runtime's fromisoformat being new enough.
+    # It also turns a malformed date into a 422 with a field-level message,
+    # where hand-parsing in the service raised ValueError and returned a 500.
+    # The Project document already stores these as datetime.
+    dob: Optional[datetime] = None
+    established_date: Optional[datetime] = None
     source: Optional[str] = None
-    aupp_expiry_date: Optional[str] = None  # ISO date string
+    aupp_expiry_date: Optional[datetime] = None
     room_number: Optional[str] = None
     rfid_tracking_enabled: bool = False
 

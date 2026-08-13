@@ -1,6 +1,8 @@
 import pytest
 from datetime import datetime, timezone
+from pydantic import ValidationError
 
+from app.schemas.project import ProjectCreate
 from app.utils.datetime_parsing import parse_iso_datetime
 
 
@@ -47,3 +49,39 @@ class TestParseIsoDatetime:
         parsed = parse_iso_datetime("2027-08-13T00:00:00.000Z")
         assert parsed.tzinfo is not None
         assert parsed.utcoffset().total_seconds() == 0
+
+
+class TestProjectCreateDates:
+    """Project creation is where this surfaced, and Pydantic now owns the parsing.
+
+    The helper above no longer sits in this path, so these assert the schema
+    itself accepts what the browser actually sends.
+    """
+
+    BASE = {"title": "Zebrafish study", "pi_name": "Dr Smith", "aupp_number": "AUP-1"}
+
+    def test_accepts_browser_timestamp(self):
+        """The exact payload shape that produced the 500 on Render."""
+        body = ProjectCreate(
+            **self.BASE,
+            dob="2025-01-01T00:00:00.000Z",
+            aupp_expiry_date="2027-08-13T00:00:00.000Z",
+        )
+        assert body.dob == datetime(2025, 1, 1, tzinfo=timezone.utc)
+        assert body.aupp_expiry_date == datetime(2027, 8, 13, tzinfo=timezone.utc)
+
+    def test_accepts_date_only(self):
+        """The create form sends toISOString().slice(0, 10) for established_date."""
+        body = ProjectCreate(**self.BASE, established_date="2026-08-13")
+        assert body.established_date == datetime(2026, 8, 13)
+
+    def test_dates_are_optional(self):
+        body = ProjectCreate(**self.BASE)
+        assert body.dob is None
+        assert body.established_date is None
+        assert body.aupp_expiry_date is None
+
+    def test_malformed_date_is_a_validation_error(self):
+        """Rejected at the boundary as a 422, rather than a 500 from the service."""
+        with pytest.raises(ValidationError):
+            ProjectCreate(**self.BASE, aupp_expiry_date="not-a-date")

@@ -12,7 +12,6 @@ from ..models.incident_report import IncidentReport
 from ..repositories.base_repository import BaseRepository
 from ..repositories.audit_repository import AuditRepository
 from ..utils.entity_resolver import EntityResolver
-from ..utils.datetime_parsing import parse_iso_datetime
 
 class FacilityService:
     """Service layer for Facility, Room, and Tank Management."""
@@ -344,8 +343,8 @@ class FacilityService:
 
         tank_id: Optional[str],
         event_type: Optional[str],
-        date_from: Optional[str],
-        date_to: Optional[str],
+        date_from: Optional[datetime],
+        date_to: Optional[datetime],
         keyword: Optional[str],
         current_user: User,
         page: int = 1,
@@ -366,13 +365,10 @@ class FacilityService:
 
         combined = []
 
-        # Dates parsing. Goes through the shared helper because these come
-        # straight from query params and can carry a 'Z' suffix, which the
-        # production Python 3.10 image cannot parse on its own.
-        df_dt = parse_iso_datetime(date_from)
-        dt_dt = parse_iso_datetime(date_to)
-        df = df_dt.date() if df_dt else None
-        dt = dt_dt.date() if dt_dt else None
+        # Already parsed by Pydantic at the route boundary; only the date part
+        # is compared below.
+        df = date_from.date() if date_from else None
+        dt = date_to.date() if date_to else None
 
         # 1. Census & Quarantine Events
         if not event_type or event_type in ["census", "quarantine", "quarantine_placed", "quarantine_lifted"]:
