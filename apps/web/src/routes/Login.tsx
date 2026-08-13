@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, Navigate } from 'react-router-dom';
 import { login } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { homePathForRole } from '../lib/roles';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -12,7 +13,7 @@ export const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { loginToken } = useAuth();
+  const { loginToken, user, loading: authLoading } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,11 +25,7 @@ export const Login: React.FC = () => {
       const { access_token, role, status } = res.data;
       await loginToken(access_token, role, status, rememberMe);
 
-      if (['super_admin', 'chair', 'admin', 'manager'].includes(role)) {
-        navigate('/admin');
-      } else {
-        navigate('/staff/tanks');
-      }
+      navigate(homePathForRole(role));
     } catch (err: any) {
       if (err.response?.status === 403 && err.response?.data?.detail?.includes('pending')) {
         navigate('/pending-approval');
@@ -39,6 +36,13 @@ export const Login: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // Someone with a live session reaching the form directly (a bookmark, or the
+  // browser restoring tabs) should go to their dashboard rather than be asked
+  // to sign in again.
+  if (!authLoading && user && user.status === 'active') {
+    return <Navigate to={homePathForRole(user.role)} replace />;
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface px-4">
