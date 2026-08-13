@@ -12,7 +12,7 @@ from .models.tank_assignment import TankAssignment
 from .models.census_event import CensusEvent
 from .models.individual_fish import IndividualFish
 from .models.quarantine import QuarantineExemption
-from .models.notification import Notification, NotificationSweepState
+from .models.notification import Notification, NotificationSettings, NotificationSweepState
 
 import certifi
 
@@ -28,7 +28,7 @@ async def init_db():
             WaterQualityLog, IncidentReport, Project,
             TankAssignment, CensusEvent, Species,
             IndividualFish, QuarantineExemption,
-            Notification, NotificationSweepState
+            Notification, NotificationSettings, NotificationSweepState
         ],
     )
     # Ensure superadmin account exists with known password

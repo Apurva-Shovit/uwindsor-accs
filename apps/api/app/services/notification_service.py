@@ -10,9 +10,11 @@ one instead of leaving a permanent hole.
 
 Three rules are implemented:
 
-* `water_quality_missing` — past the 17:00 UTC deadline with no daily water
-  quality log for a tank on that day. Addressed to the staff the tank is
-  assigned to; managers and above see every tank plus who owns it.
+* `water_quality_missing` — past the daily deadline with no water quality log
+  for a tank on that day. The deadline is a wall-clock time in the facility's
+  own zone and chairs and admins can move it, so it is read from the settings
+  record rather than hardcoded. Addressed to the staff the tank is assigned to;
+  managers and above see every tank plus who owns it.
 * `quarantine_expiring`   — a tank's quarantine window closes within a day.
 * `aupp_expiring`         — an active project's AUPP lapses within a month.
 
@@ -25,13 +27,17 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Sequence
 
 from ..config import settings
+from ..models.audit_log import AuditLog
 from ..models.facility import Tank
-from ..models.notification import Notification, NotificationSweepState
+from ..models.notification import Notification, NotificationSettings, NotificationSweepState
 from ..models.project import Project
 from ..models.tank_assignment import TankAssignment
 from ..models.user import RoleEnum, StatusEnum, User
 from ..models.water_quality_log import WaterQualityLog
-from ..utils.server_time import as_utc, day_bounds, server_datetime, server_now
+from ..repositories.audit_repository import AuditRepository
+from ..utils.clock import as_utc, day_bounds, local_date, now_utc
+from ..utils.entity_resolver import EntityResolver
+from .notification_settings import Deadline, NotificationSettingsStore
 
 MANAGER_PLUS = {RoleEnum.manager, RoleEnum.chair, RoleEnum.admin, RoleEnum.super_admin}
 
@@ -83,8 +89,6 @@ def _format_day(day: date) -> str:
     return f"{day.strftime('%b')} {day.day}, {day.year}"
 
 
-def _format_hour(hour: int) -> str:
-    return f"{hour % 12 or 12} {'AM' if hour < 12 else 'PM'}"
 
 
 @dataclass
@@ -98,6 +102,7 @@ class FacilitySnapshot:
     them be tested against a hand-built snapshot.
     """
     now: datetime
+    deadline: Deadline = field(default=Deadline(15, 0, "America/Toronto"))
     days: List[date] = field(default_factory=list)
     tanks: List[Tank] = field(default_factory=list)
     logged_by_day: Dict[str, set] = field(default_factory=dict)
@@ -105,19 +110,26 @@ class FacilitySnapshot:
     project_tanks: Dict[str, set] = field(default_factory=dict)
     assignees: Dict[str, List[str]] = field(default_factory=dict)
 
+    @property
+    def today(self) -> date:
+        """Today on the facility's clock, which is what "the current day's log" means."""
+        return local_date(self.now, self.deadline.zone)
+
     @classmethod
-    async def capture(cls, now: Optional[datetime] = None) -> "FacilitySnapshot":
-        now = now or server_now()
-        deadline_hour = settings.WATER_QUALITY_DEADLINE_HOUR
+    async def capture(
+        cls, now: Optional[datetime] = None, deadline: Optional[Deadline] = None
+    ) -> "FacilitySnapshot":
+        now = now or now_utc()
+        deadline = deadline or await NotificationSettingsStore.deadline()
         lookback = max(1, settings.WATER_QUALITY_MISSING_LOOKBACK_DAYS)
-        today = now.date()
+        today = local_date(now, deadline.zone)
 
         # Only days whose deadline has already passed can be "missed" — the
         # current day stays silent until then rather than nagging all morning.
         days = [
             today - timedelta(days=offset)
             for offset in range(lookback)
-            if server_datetime(today - timedelta(days=offset), deadline_hour) <= now
+            if deadline.on(today - timedelta(days=offset)) <= now
         ]
 
         tanks = await Tank.find({"deleted": False, "status": "active"}).to_list()
@@ -148,6 +160,7 @@ class FacilitySnapshot:
 
         return cls(
             now=now,
+            deadline=deadline,
             days=days,
             tanks=tanks,
             logged_by_day=logged_by_day,
@@ -183,7 +196,9 @@ class NotificationRules:
         if not tanks:
             return []
 
-        deadline_hour = settings.WATER_QUALITY_DEADLINE_HOUR
+        deadline = snap.deadline
+        zone = deadline.zone
+        today = snap.today
         notifications: List[Dict[str, Any]] = []
 
         for day in snap.days:
@@ -194,7 +209,7 @@ class NotificationRules:
                     continue
                 # A tank added after the fact was never owed a log for that day.
                 created = as_utc(tank.created_at)
-                if created and created.date() > day:
+                if created and local_date(created, zone) > day:
                     continue
                 missing.append(tank)
 
@@ -203,7 +218,10 @@ class NotificationRules:
 
             missing.sort(key=lambda t: _tank_sort_key(t.tank_number))
             labels = [f"Tank {t.tank_number}" for t in missing]
-            is_today = day == snap.now.date()
+            is_today = day == today
+            # Labelled with the zone in force on that day, so a miss from before
+            # a daylight-saving change still reads back correctly.
+            deadline_label = deadline.label(deadline.on(day))
 
             notifications.append({
                 "key": f"{WATER_QUALITY_MISSING}:{day.isoformat()}",
@@ -215,13 +233,13 @@ class NotificationRules:
                 ),
                 "message": (
                     f"{_join_tank_labels(labels)} had no water quality log recorded by "
-                    f"{_format_hour(deadline_hour)} UTC on {_format_day(day)}."
+                    f"{deadline_label} on {_format_day(day)}."
                 ),
-                "created_at": server_datetime(day, deadline_hour),
+                "created_at": deadline.on(day),
                 "link": "/staff/log-entry",
                 "meta": {
                     "date": day.isoformat(),
-                    "deadline_hour_utc": deadline_hour,
+                    "deadline": deadline_label,
                     "tank_count": len(missing),
                     "tanks": [
                         {
@@ -262,15 +280,18 @@ class NotificationRules:
 
             expired = snap.now >= end
             hours_left = (end - snap.now).total_seconds() / 3600
+            # Dates in the copy are the facility's, so a window closing at
+            # 9 PM Eastern does not read back as the following day.
+            end_day = local_date(end, snap.deadline.zone)
             if expired:
-                detail = f"ended {_format_day(end.date())} and the tank is still flagged"
+                detail = f"ended {_format_day(end_day)} and the tank is still flagged"
             elif hours_left >= 1:
                 detail = f"ends in {int(hours_left)} hour{'s' if int(hours_left) != 1 else ''}"
             else:
                 detail = "ends in under an hour"
 
             notifications.append({
-                "key": f"{QUARANTINE_EXPIRING}:{str(tank.id)}:{end.date().isoformat()}",
+                "key": f"{QUARANTINE_EXPIRING}:{str(tank.id)}:{end_day.isoformat()}",
                 "type": QUARANTINE_EXPIRING,
                 "severity": "critical" if expired else "warning",
                 "title": (
@@ -334,8 +355,8 @@ class NotificationRules:
             if snap.now < warn_from:
                 continue
 
-            expiry_day = expiry.date()
-            days_left = (expiry_day - snap.now.date()).days
+            expiry_day = local_date(expiry, snap.deadline.zone)
+            days_left = (expiry_day - snap.today).days
             expired = days_left < 0
 
             if expired:
@@ -383,6 +404,73 @@ class NotificationRules:
 class NotificationService:
     """Read side of the feed, plus the reconciliation the sweeper drives."""
 
+    # --------------------------------------------------------------- settings
+
+    @staticmethod
+    async def get_settings() -> Dict[str, Any]:
+        record = await NotificationSettingsStore.get()
+        deadline = await NotificationSettingsStore.deadline()
+        return {
+            "deadline": deadline.as_dict(),
+            "updated_at": as_utc(record.updated_at).isoformat() if record.updated_at else None,
+            "updated_by": record.updated_by,
+            "updated_by_name": await EntityResolver.resolve_user_name(record.updated_by),
+        }
+
+    @staticmethod
+    async def update_settings(
+        hour: int, minute: int, timezone_name: str, current_user: User
+    ) -> Dict[str, Any]:
+        """
+        Move the daily deadline, then rebuild anything that was measured against
+        the old one.
+
+        Missed-deadline alerts are normally never rewritten, but they quote the
+        cutoff they were generated against — leaving them in place after the
+        cutoff moves would leave the feed asserting a deadline that no longer
+        exists. Dropping and regenerating them is the only way the panel and the
+        setting agree.
+        """
+        NotificationSettingsStore.validate(hour, minute, timezone_name)
+
+        record = await NotificationSettingsStore.get()
+        before = record.model_dump(mode="json")
+        unchanged = (
+            record.water_quality_deadline_hour == hour
+            and record.water_quality_deadline_minute == minute
+            and record.timezone == timezone_name
+        )
+        if unchanged:
+            return {**await NotificationService.get_settings(), "changed": False}
+
+        record.water_quality_deadline_hour = hour
+        record.water_quality_deadline_minute = minute
+        record.timezone = timezone_name
+        record.updated_at = now_utc()
+        record.updated_by = str(current_user.id)
+        await record.save()
+
+        await AuditRepository.insert(AuditLog(
+            actor_id=str(current_user.id),
+            actor_role=current_user.role.value if current_user.role else "none",
+            action="update",
+            entity_type="notification_settings",
+            entity_id=str(record.id),
+            before=before,
+            after=record.model_dump(mode="json"),
+        ))
+
+        stale = await Notification.find({"type": WATER_QUALITY_MISSING}).to_list()
+        for doc in stale:
+            await doc.delete()
+
+        swept = await NotificationService.sweep()
+        return {
+            **await NotificationService.get_settings(),
+            "changed": True,
+            "regenerated": swept["created"],
+        }
+
     # ------------------------------------------------------------- generation
 
     @staticmethod
@@ -393,7 +481,7 @@ class NotificationService:
         Safe to run at any cadence and safe to run twice: keys are deterministic,
         so a second pass over unchanged data writes nothing.
         """
-        started = server_now()
+        started = now_utc()
         snap = await FacilitySnapshot.capture(now)
         users = await User.find({"status": StatusEnum.active.value}).to_list()
 
@@ -408,7 +496,7 @@ class NotificationService:
         # deleted would otherwise linger unreachable but counted.
         removed += await NotificationService._prune_orphans({str(u.id) for u in users})
 
-        duration_ms = int((server_now() - started).total_seconds() * 1000)
+        duration_ms = int((now_utc() - started).total_seconds() * 1000)
         await NotificationService._record_sweep(
             last_run_at=started, duration_ms=duration_ms,
             created=created, updated=updated, removed=removed,
@@ -437,7 +525,7 @@ class NotificationService:
                 await Notification(user_id=user_id, **spec).insert()
                 created += 1
             elif current.type not in STICKY_TYPES and NotificationService._apply(current, spec):
-                current.generated_at = server_now()
+                current.generated_at = now_utc()
                 await current.save()
                 updated += 1
 
@@ -471,7 +559,7 @@ class NotificationService:
 
     @staticmethod
     def _aged_out(doc: Notification, snap: FacilitySnapshot) -> bool:
-        oldest = min(snap.days) if snap.days else snap.now.date()
+        oldest = min(snap.days) if snap.days else snap.today
         day = (doc.meta or {}).get("date")
         if not day:
             return True
@@ -512,7 +600,7 @@ class NotificationService:
 
     @staticmethod
     async def list_notifications(current_user: User, window: str = "all") -> Dict[str, Any]:
-        now = server_now()
+        now = now_utc()
         docs = await Notification.find({"user_id": str(current_user.id)}).to_list()
 
         items = [
@@ -536,13 +624,16 @@ class NotificationService:
         visible = recent if window == "recent" else items
 
         state = await NotificationSweepState.find_one({"singleton": "notification-sweep"})
+        deadline = await NotificationSettingsStore.deadline()
         return {
             "items": [{**i, "created_at": i["created_at"].isoformat()} for i in visible],
             "total": len(items),
             "unread_count": sum(1 for i in items if not i["read"]),
             "recent_unread_count": sum(1 for i in recent if not i["read"]),
             "server_time": now.isoformat(),
-            "deadline_hour_utc": settings.WATER_QUALITY_DEADLINE_HOUR,
+            # Everyone sees the cutoff, including staff who cannot change it —
+            # an alert about a deadline is not much use without the deadline.
+            "deadline": deadline.as_dict(now),
             # None means the generator has not completed a pass yet, which is a
             # different thing to show than "nothing needs attention".
             "last_generated_at": (
@@ -566,7 +657,7 @@ class NotificationService:
             query["key"] = {"$in": keys}
 
         pending = await Notification.find(query).to_list()
-        now = server_now()
+        now = now_utc()
         for doc in pending:
             doc.read = True
             doc.read_at = now

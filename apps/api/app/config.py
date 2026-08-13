@@ -17,11 +17,16 @@ class Settings(BaseSettings):
     RATE_LIMIT_DATA_ENTRY: str = "60/minute"
     RATE_LIMIT_ADMIN: str = "30/minute"
 
-    # Notification thresholds. The deadline is server time, meaning UTC — the API
-    # runs on UTC in production and the rule is defined against that clock, not
-    # against Windsor's. During EDT that puts the cutoff at 1 PM locally, so move
-    # this hour rather than the timezone if the alert should land later in the day.
-    WATER_QUALITY_DEADLINE_HOUR: int = 17          # 17:00 UTC
+    # Seed values for the daily water quality deadline. These only apply the
+    # first time the API starts against a database with no settings record —
+    # after that the stored record is authoritative, because chairs and admins
+    # edit the deadline from the app and a redeploy must not quietly reset it.
+    WATER_QUALITY_DEADLINE_HOUR: int = 15          # 3 PM
+    WATER_QUALITY_DEADLINE_MINUTE: int = 0
+    # Named zone rather than a fixed offset so the cutoff stays at 3 PM as staff
+    # experience it on both sides of the daylight-saving change.
+    NOTIFICATION_TIMEZONE: str = "America/Toronto"
+
     WATER_QUALITY_MISSING_LOOKBACK_DAYS: int = 7   # how far back the panel keeps missed days
     QUARANTINE_EXPIRY_WARNING_DAYS: int = 1
     AUPP_EXPIRY_WARNING_DAYS: int = 30

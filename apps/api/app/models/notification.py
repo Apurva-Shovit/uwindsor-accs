@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone as dt_timezone
 from typing import Any, Dict, Optional
 
 from beanie import Document
@@ -35,7 +35,7 @@ class Notification(Document):
     # deliberately not the row's insert time — a sweep that runs late, or
     # backfills after the service was spun down, must not look recent.
     created_at: datetime
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(dt_timezone.utc))
 
     read: bool = False
     read_at: Optional[datetime] = None
@@ -49,6 +49,32 @@ class Notification(Document):
         ]
 
 
+class NotificationSettings(Document):
+    """
+    The parts of the notification rules a chair or admin owns, kept as a single
+    row so a redeploy cannot quietly reset a deadline someone deliberately moved.
+
+    The deadline is stored as a wall-clock time plus a named zone rather than as
+    a UTC hour: staff mean "3 PM" as they read it off the wall, and a stored UTC
+    hour would silently drift by an hour every daylight-saving change.
+    """
+    singleton: str = "notification-settings"
+    water_quality_deadline_hour: int = 15
+    water_quality_deadline_minute: int = 0
+    timezone: str = "America/Toronto"
+
+    # `timezone` here is a field name, which is why datetime's is imported as
+    # dt_timezone throughout this module.
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(dt_timezone.utc))
+    updated_by: Optional[str] = None
+
+    class Settings:
+        name = "notification_settings"
+        indexes = [
+            IndexModel([("singleton", ASCENDING)], unique=True),
+        ]
+
+
 class NotificationSweepState(Document):
     """
     Bookkeeping for the generator, kept as a single row.
@@ -58,7 +84,7 @@ class NotificationSweepState(Document):
     things to show someone looking at an empty feed.
     """
     singleton: str = "notification-sweep"
-    last_run_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_run_at: datetime = Field(default_factory=lambda: datetime.now(dt_timezone.utc))
     duration_ms: int = 0
     created: int = 0
     updated: int = 0

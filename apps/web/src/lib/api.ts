@@ -118,6 +118,9 @@ export const getNotifications = (window: 'all' | 'recent' = 'all') =>
   api.get('/notifications', { params: { window } });
 export const markNotificationsRead = (body: { keys?: string[]; all?: boolean }) =>
   api.post('/notifications/mark-read', body);
+export const getNotificationSettings = () => api.get('/notifications/settings');
+export const updateNotificationSettings = (body: { hour: number; minute: number; timezone: string }) =>
+  api.put('/notifications/settings', body);
 
 // Dashboard
 export const getDashboardSummary = () => api.get('/dashboard/summary');

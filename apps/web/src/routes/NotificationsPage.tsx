@@ -1,7 +1,8 @@
 import React from 'react';
+import { DeadlineSettings } from '../components/notifications/DeadlineSettings';
 import { NotificationsPanel } from '../components/notifications/NotificationsPanel';
 import { useAuth } from '../context/AuthContext';
-import { isManagerPlus } from '../lib/roles';
+import { isChairOrAdmin, isManagerPlus } from '../lib/roles';
 
 /** The notification feed, reached from the bell and from the sidebar. */
 export const NotificationsPage: React.FC = () => {
@@ -17,6 +18,11 @@ export const NotificationsPage: React.FC = () => {
             : 'Everything currently needing attention on the tanks you are assigned to.'}
         </p>
       </div>
+
+      {/* Managers can see the deadline on the panel below, but only chairs and
+          admins get to move it. */}
+      {isChairOrAdmin(user?.role) && <DeadlineSettings />}
+
       <NotificationsPanel />
     </div>
   );

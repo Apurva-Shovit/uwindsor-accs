@@ -2,10 +2,12 @@
 Notification rules and the generator that stores them.
 
 The three rules are all "is it late yet?" questions, and the interesting cases
-sit on the boundary — a minute either side of 17:00 UTC, an hour either side of
-a quarantine window, a day either side of the AUPP warning. Rules are pure
-functions over a captured snapshot, and the snapshot takes the current time as
-an argument, so every boundary here is asserted without freezing the clock.
+sit on the boundary — a minute either side of the daily cutoff, an hour either
+side of a quarantine window, a day either side of the AUPP warning. Rules are
+pure functions over a captured snapshot, and the snapshot takes both the current
+time and the deadline as arguments, so every boundary here is asserted without
+freezing the clock and without depending on whatever deadline happens to be
+stored in the database this suite runs against.
 """
 import asyncio
 import contextlib
@@ -20,7 +22,11 @@ from app.config import settings
 from app.db import init_db
 from app.main import app
 from app.models.facility import Room, Tank
-from app.models.notification import Notification, NotificationSweepState
+from app.models.notification import (
+    Notification,
+    NotificationSettings,
+    NotificationSweepState,
+)
 from app.models.project import Project
 from app.models.tank_assignment import TankAssignment
 from app.models.user import RoleEnum, StatusEnum, User
@@ -31,19 +37,31 @@ from app.services.notification_service import (
     NotificationRules,
     NotificationService,
     _format_day,
-    _format_hour,
     _join_tank_labels,
 )
-from app.utils.server_time import as_utc, day_bounds, server_datetime, server_today
+from app.services.notification_settings import Deadline, NotificationSettingsStore
+from app.utils.clock import as_utc, day_bounds, is_valid_zone, local_date, now_utc
 
 TEST_TANK_NUMBER = "NOTIF-TEST"
 TEST_EMAIL = "notif_staff@uwindsor.ca"
 TEST_AUPP = "NOTIF-TEST-AUPP"
-DEADLINE = settings.WATER_QUALITY_DEADLINE_HOUR
+
+# Fixed for the suite so the rule tests do not move when someone changes the
+# deadline in the app; the settings tests exercise the stored value instead.
+DEADLINE = Deadline(15, 0, "America/Toronto")
 
 
-async def snapshot(now):
-    return await FacilitySnapshot.capture(now)
+def today_local():
+    """Today on the facility clock, which is the day the rules reason about."""
+    return local_date(now_utc(), DEADLINE.zone)
+
+
+def at_deadline(day, offset=timedelta()):
+    return DEADLINE.on(day) + offset
+
+
+async def snapshot(now, deadline=DEADLINE):
+    return await FacilitySnapshot.capture(now, deadline)
 
 
 def _hours_in(message: str) -> int:
@@ -109,12 +127,19 @@ async def _purge():
 
 
 class TestHelpers:
-    def test_hour_labels_cover_both_halves_of_the_clock(self):
-        # A bare "PM" suffix would be wrong for any morning deadline.
-        assert _format_hour(17) == "5 PM"
-        assert _format_hour(9) == "9 AM"
-        assert _format_hour(0) == "12 AM"
-        assert _format_hour(12) == "12 PM"
+    @pytest.mark.parametrize(
+        "hour,minute,expected",
+        [
+            (15, 0, "3:00 PM"),
+            (9, 30, "9:30 AM"),
+            (0, 5, "12:05 AM"),   # a bare "PM" suffix would be wrong here
+            (12, 0, "12:00 PM"),
+            (23, 59, "11:59 PM"),
+        ],
+    )
+    def test_deadline_labels_read_like_a_clock(self, hour, minute, expected):
+        label = Deadline(hour, minute, "America/Toronto").label()
+        assert label.startswith(expected)
 
     def test_day_label_avoids_platform_specific_strftime(self):
         """%-d is glibc-only and %#d is Windows-only; neither may appear."""
@@ -133,14 +158,27 @@ class TestHelpers:
     def test_tank_lists_stay_readable(self, labels, expected):
         assert _join_tank_labels(labels) == expected
 
-    def test_the_deadline_is_utc(self):
+    def test_the_deadline_keeps_its_wall_clock_across_the_dst_change(self):
         """
-        The rule is defined against the server clock. If this ever resolves
-        through a local zone, the cutoff silently moves by the host's offset.
+        3 PM has to stay 3 PM to the person holding the clipboard. Storing the
+        cutoff as a UTC hour instead would silently shift it by an hour every
+        March and November.
         """
-        stamped = server_datetime(datetime(2026, 8, 13).date(), 17)
-        assert stamped == datetime(2026, 8, 13, 17, tzinfo=timezone.utc)
-        assert stamped.utcoffset().total_seconds() == 0
+        deadline = Deadline(15, 0, "America/Toronto")
+        winter = deadline.on(datetime(2026, 1, 15).date())
+        summer = deadline.on(datetime(2026, 8, 13).date())
+
+        # Same local time, deliberately different UTC instants.
+        assert winter == datetime(2026, 1, 15, 20, tzinfo=timezone.utc)
+        assert summer == datetime(2026, 8, 13, 19, tzinfo=timezone.utc)
+        assert deadline.label(winter).endswith("EST")
+        assert deadline.label(summer).endswith("EDT")
+
+    def test_an_unknown_zone_degrades_instead_of_erroring(self):
+        """A bad stored value must not take every request down with it."""
+        assert Deadline(15, 0, "Mars/Olympus_Mons").label().endswith("UTC")
+        assert not is_valid_zone("Mars/Olympus_Mons")
+        assert is_valid_zone("America/Toronto")
 
     def test_day_bounds_are_utc_midnight_to_midnight(self):
         """
@@ -160,27 +198,28 @@ class TestHelpers:
 class TestWaterQualityDeadline:
     @pytest.mark.asyncio
     async def test_silent_before_the_deadline(self, env):
-        today = server_today()
-        snap = await snapshot(server_datetime(today, DEADLINE) - timedelta(minutes=1))
+        today = today_local()
+        snap = await snapshot(at_deadline(today) - timedelta(minutes=1))
         items = NotificationRules.water_quality(env["staff"], snap)
         assert not [i for i in items if i["meta"]["date"] == today.isoformat()]
 
     @pytest.mark.asyncio
     async def test_fires_once_the_deadline_passes(self, env):
-        today = server_today()
-        snap = await snapshot(server_datetime(today, DEADLINE))
+        today = today_local()
+        snap = await snapshot(at_deadline(today))
         items = NotificationRules.water_quality(env["staff"], snap)
         today_item = next(i for i in items if i["meta"]["date"] == today.isoformat())
 
         assert today_item["severity"] == "critical"
         assert today_item["key"] == f"water_quality_missing:{today.isoformat()}"
-        assert "UTC" in today_item["message"], "the cutoff is UTC, so say so"
+        # The message has to name the cutoff it is holding people to.
+        assert DEADLINE.label(at_deadline(today)) in today_item["message"]
         numbers = [t["tank_number"] for t in today_item["meta"]["tanks"]]
         assert numbers == [TEST_TANK_NUMBER], "staff must only be told about their own tanks"
 
     @pytest.mark.asyncio
     async def test_a_logged_tank_drops_out(self, env):
-        today = server_today()
+        today = today_local()
         await WaterQualityLog(
             tank_id=str(env["tank"].id),
             type="daily",
@@ -189,7 +228,7 @@ class TestWaterQualityDeadline:
             created_by="notif-test",
         ).insert()
 
-        snap = await snapshot(server_datetime(today, DEADLINE))
+        snap = await snapshot(at_deadline(today))
         items = NotificationRules.water_quality(env["staff"], snap)
         assert not [i for i in items if i["meta"]["date"] == today.isoformat()]
 
@@ -200,15 +239,15 @@ class TestWaterQualityDeadline:
         tank.created_at = datetime.now(timezone.utc)
         await tank.save()
 
-        today = server_today()
-        snap = await snapshot(server_datetime(today, DEADLINE))
+        today = today_local()
+        snap = await snapshot(at_deadline(today))
         items = NotificationRules.water_quality(env["staff"], snap)
         assert [i["meta"]["date"] for i in items] == [today.isoformat()]
 
     @pytest.mark.asyncio
     async def test_lookback_is_bounded(self, env):
-        today = server_today()
-        snap = await snapshot(server_datetime(today, DEADLINE))
+        today = today_local()
+        snap = await snapshot(at_deadline(today))
         items = NotificationRules.water_quality(env["staff"], snap)
         oldest = min(i["meta"]["date"] for i in items)
         window_start = today - timedelta(days=settings.WATER_QUALITY_MISSING_LOOKBACK_DAYS - 1)
@@ -221,11 +260,11 @@ class TestWaterQualityDeadline:
         at the deadline — stamping it when the sweeper happened to notice would
         keep a week-old miss looking brand new.
         """
-        today = server_today()
-        snap = await snapshot(server_datetime(today, 23, 30))
+        today = today_local()
+        snap = await snapshot(at_deadline(today, timedelta(hours=8, minutes=30)))
         items = NotificationRules.water_quality(env["staff"], snap)
         today_item = next(i for i in items if i["meta"]["date"] == today.isoformat())
-        assert today_item["created_at"] == server_datetime(today, DEADLINE)
+        assert today_item["created_at"] == at_deadline(today)
 
 
 class TestQuarantineWindow:
@@ -336,7 +375,7 @@ class TestStaffSeeTheMinimum:
 
     @pytest.mark.asyncio
     async def test_no_tank_roster_for_staff(self, env):
-        snap = await snapshot(server_datetime(server_today(), DEADLINE))
+        snap = await snapshot(at_deadline(today_local()))
         for item in NotificationRules.water_quality(env["staff"], snap):
             for tank in item["meta"]["tanks"]:
                 assert "assignees" not in tank
@@ -344,7 +383,7 @@ class TestStaffSeeTheMinimum:
     @pytest.mark.asyncio
     async def test_managers_still_get_the_tank_roster(self, env):
         admin = await User.find_one({"email": "superadmin@uwindsor.ca"})
-        snap = await snapshot(server_datetime(server_today(), DEADLINE))
+        snap = await snapshot(at_deadline(today_local()))
         items = NotificationRules.water_quality(admin, snap)
         assert items, "the fixture tank has no logs, so managers must see it"
         assert all("assignees" in t for i in items for t in i["meta"]["tanks"])
@@ -405,7 +444,7 @@ class TestStaffSeeTheMinimum:
         staff.assigned_tank_ids = []
         await staff.save()
 
-        snap = await snapshot(server_datetime(server_today(), DEADLINE))
+        snap = await snapshot(at_deadline(today_local()))
         assert NotificationRules.for_user(staff, snap) == []
 
 
@@ -419,7 +458,7 @@ class TestGenerator:
     @pytest.mark.asyncio
     async def test_first_pass_writes_the_feed(self, env):
         staff = env["staff"]
-        snap = await snapshot(server_datetime(server_today(), DEADLINE))
+        snap = await snapshot(at_deadline(today_local()))
         created, updated, removed = await NotificationService._reconcile_user(staff, snap)
 
         assert created > 0 and updated == 0 and removed == 0
@@ -428,7 +467,7 @@ class TestGenerator:
     @pytest.mark.asyncio
     async def test_a_second_pass_over_unchanged_data_writes_nothing(self, env):
         staff = env["staff"]
-        snap = await snapshot(server_datetime(server_today(), DEADLINE))
+        snap = await snapshot(at_deadline(today_local()))
         await NotificationService._reconcile_user(staff, snap)
 
         assert await NotificationService._reconcile_user(staff, snap) == (0, 0, 0)
@@ -480,8 +519,8 @@ class TestGenerator:
         Logging a tank at 6 PM does not un-miss the 5 PM cutoff, so the alert
         stays and keeps the wording it had when the deadline passed.
         """
-        staff, today = env["staff"], server_today()
-        snap = await snapshot(server_datetime(today, DEADLINE))
+        staff, today = env["staff"], today_local()
+        snap = await snapshot(at_deadline(today))
         await NotificationService._reconcile_user(staff, snap)
 
         key = f"water_quality_missing:{today.isoformat()}"
@@ -496,7 +535,7 @@ class TestGenerator:
             created_by="notif-test",
         ).insert()
 
-        later = await snapshot(server_datetime(today, DEADLINE) + timedelta(hours=1))
+        later = await snapshot(at_deadline(today) + timedelta(hours=1))
         still_firing = {i["key"] for i in NotificationRules.water_quality(staff, later)}
         assert key not in still_firing, "the rule itself stops firing for that day"
 
@@ -507,13 +546,13 @@ class TestGenerator:
 
     @pytest.mark.asyncio
     async def test_a_missed_deadline_is_dropped_once_it_ages_out(self, env):
-        staff, today = env["staff"], server_today()
-        await NotificationService._reconcile_user(staff, await snapshot(server_datetime(today, DEADLINE)))
+        staff, today = env["staff"], today_local()
+        await NotificationService._reconcile_user(staff, await snapshot(at_deadline(today)))
         key = f"water_quality_missing:{today.isoformat()}"
         assert await Notification.find_one({"user_id": str(staff.id), "key": key})
 
         # Far enough ahead that today has fallen out of the lookback window.
-        future = server_datetime(today + timedelta(days=30), DEADLINE)
+        future = at_deadline(today + timedelta(days=30))
         await NotificationService._reconcile_user(staff, await snapshot(future))
         assert await Notification.find_one({"user_id": str(staff.id), "key": key}) is None
 
@@ -553,7 +592,7 @@ class TestReadState:
     async def test_marking_read_is_per_user_and_idempotent(self, env):
         staff = env["staff"]
         await NotificationService._reconcile_user(
-            staff, await snapshot(server_datetime(server_today(), DEADLINE))
+            staff, await snapshot(at_deadline(today_local()))
         )
         feed = await NotificationService.list_notifications(staff)
         assert feed["unread_count"] == feed["total"] > 0
@@ -583,7 +622,7 @@ class TestReadState:
     async def test_mark_all_clears_the_feed(self, env):
         staff = env["staff"]
         await NotificationService._reconcile_user(
-            staff, await snapshot(server_datetime(server_today(), DEADLINE))
+            staff, await snapshot(at_deadline(today_local()))
         )
         await NotificationService.mark_read(staff, mark_all=True)
         assert (await NotificationService.list_notifications(staff))["unread_count"] == 0
@@ -592,7 +631,7 @@ class TestReadState:
     async def test_the_bell_window_is_a_subset_of_the_panel(self, env):
         staff = env["staff"]
         await NotificationService._reconcile_user(
-            staff, await snapshot(server_datetime(server_today(), DEADLINE))
+            staff, await snapshot(at_deadline(today_local()))
         )
         every = await NotificationService.list_notifications(staff, window="all")
         recent = await NotificationService.list_notifications(staff, window="recent")
@@ -671,6 +710,168 @@ class TestScheduler:
         await NotificationService.sweep()
 
 
+class TestDeadlineSettings:
+    """
+    The cutoff is policy, so only chair, admin and super admin may move it — and
+    moving it has to actually change what the rules do, not just what a settings
+    screen displays.
+    """
+
+    @pytest.fixture(autouse=True)
+    async def restore_settings(self):
+        """Whatever a test does to the deadline, put the original back."""
+        await init_db()
+        before = await NotificationSettingsStore.get()
+        original = (
+            before.water_quality_deadline_hour,
+            before.water_quality_deadline_minute,
+            before.timezone,
+        )
+        yield
+        record = await NotificationSettingsStore.get()
+        (
+            record.water_quality_deadline_hour,
+            record.water_quality_deadline_minute,
+            record.timezone,
+        ) = original
+        await record.save()
+
+    @pytest.mark.asyncio
+    async def test_defaults_to_three_pm_eastern(self):
+        await NotificationSettings.find({}).delete()
+        deadline = await NotificationSettingsStore.deadline()
+
+        assert (deadline.hour, deadline.minute) == (15, 0)
+        assert deadline.timezone == "America/Toronto"
+        assert deadline.label().startswith("3:00 PM E")
+
+    @pytest.mark.asyncio
+    async def test_a_stored_deadline_survives_a_restart(self):
+        """
+        Config only seeds an empty database. If the seed ever won over the
+        stored row, every redeploy would quietly undo the chair's change.
+        """
+        record = await NotificationSettingsStore.get()
+        record.water_quality_deadline_hour = 9
+        record.water_quality_deadline_minute = 45
+        await record.save()
+
+        again = await NotificationSettingsStore.deadline()
+        assert (again.hour, again.minute) == (9, 45)
+        assert settings.WATER_QUALITY_DEADLINE_HOUR == 15, "the seed value is untouched"
+
+    @pytest.mark.asyncio
+    async def test_moving_the_deadline_moves_when_the_rule_fires(self, env):
+        """The setting is only real if the rules follow it."""
+        today = today_local()
+        early, late = Deadline(9, 0, "America/Toronto"), Deadline(21, 0, "America/Toronto")
+        noon = Deadline(12, 0, "America/Toronto").on(today)
+
+        fired = NotificationRules.water_quality(env["staff"], await snapshot(noon, early))
+        assert [i for i in fired if i["meta"]["date"] == today.isoformat()]
+
+        quiet = NotificationRules.water_quality(env["staff"], await snapshot(noon, late))
+        assert not [i for i in quiet if i["meta"]["date"] == today.isoformat()]
+
+    @pytest.mark.asyncio
+    async def test_updating_regenerates_alerts_against_the_new_cutoff(self, env):
+        admin = await User.find_one({"email": "superadmin@uwindsor.ca"})
+        today = today_local()
+
+        await NotificationService.update_settings(9, 0, "America/Toronto", admin)
+        after_early = await Notification.find_one(
+            {"user_id": str(env["staff"].id), "key": f"water_quality_missing:{today.isoformat()}"}
+        )
+        assert after_early is not None
+        assert "9:00 AM" in after_early.message
+
+        result = await NotificationService.update_settings(21, 30, "America/Toronto", admin)
+        assert result["changed"] is True
+
+        # 9:30 PM has not passed yet, so today's alert should be gone entirely
+        # rather than left behind quoting a cutoff nobody is held to.
+        after_late = await Notification.find_one(
+            {"user_id": str(env["staff"].id), "key": f"water_quality_missing:{today.isoformat()}"}
+        )
+        assert after_late is None
+
+    @pytest.mark.asyncio
+    async def test_saving_the_same_values_is_a_no_op(self, env):
+        admin = await User.find_one({"email": "superadmin@uwindsor.ca"})
+        current = await NotificationSettingsStore.deadline()
+        result = await NotificationService.update_settings(
+            current.hour, current.minute, current.timezone, admin
+        )
+        assert result["changed"] is False
+
+    @pytest.mark.asyncio
+    async def test_a_change_is_audited(self, env):
+        from app.models.audit_log import AuditLog
+
+        admin = await User.find_one({"email": "superadmin@uwindsor.ca"})
+        await NotificationService.update_settings(16, 15, "America/Toronto", admin)
+
+        entry = await AuditLog.find({"entity_type": "notification_settings"}).sort("-created_at").first_or_none()
+        assert entry is not None
+        assert entry.actor_id == str(admin.id)
+        assert entry.after["water_quality_deadline_hour"] == 16
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "hour,minute,zone",
+        [(24, 0, "America/Toronto"), (-1, 0, "America/Toronto"), (15, 60, "America/Toronto"),
+         (15, 0, "Mars/Olympus_Mons"), (15, 0, "")],
+    )
+    async def test_nonsense_values_are_rejected(self, env, hour, minute, zone):
+        from fastapi import HTTPException
+
+        admin = await User.find_one({"email": "superadmin@uwindsor.ca"})
+        with pytest.raises(HTTPException) as exc:
+            await NotificationService.update_settings(hour, minute, zone, admin)
+        assert exc.value.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_only_chairs_and_admins_may_move_it(self, env):
+        await init_db()
+        payload = {"hour": 16, "minute": 0, "timezone": "America/Toronto"}
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            staff = {"Authorization": f"Bearer {_token(env['staff'])}"}
+            assert (await ac.get("/notifications/settings", headers=staff)).status_code == 403
+            assert (await ac.put("/notifications/settings", json=payload, headers=staff)).status_code == 403
+
+            manager = await User.find_one({"role": RoleEnum.manager, "status": StatusEnum.active})
+            if manager:
+                headers = {"Authorization": f"Bearer {_token(manager)}"}
+                # Managers run the day; they can read the cutoff but not set it.
+                assert (await ac.get("/notifications/settings", headers=headers)).status_code == 200
+                assert (await ac.put("/notifications/settings", json=payload, headers=headers)).status_code == 403
+
+            admin = await User.find_one({"email": "superadmin@uwindsor.ca"})
+            headers = {"Authorization": f"Bearer {_token(admin)}"}
+            res = await ac.put("/notifications/settings", json=payload, headers=headers)
+            assert res.status_code == 200
+            assert res.json()["deadline"]["hour"] == 16
+
+    @pytest.mark.asyncio
+    async def test_the_endpoint_validates_before_it_stores(self, env):
+        await init_db()
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            admin = await User.find_one({"email": "superadmin@uwindsor.ca"})
+            headers = {"Authorization": f"Bearer {_token(admin)}"}
+
+            assert (await ac.put(
+                "/notifications/settings",
+                json={"hour": 99, "minute": 0, "timezone": "America/Toronto"},
+                headers=headers,
+            )).status_code == 422
+            assert (await ac.put(
+                "/notifications/settings",
+                json={"hour": 15, "minute": 0, "timezone": "Nowhere/Special"},
+                headers=headers,
+            )).status_code == 422
+
+
 class TestEndpoint:
     @pytest.mark.asyncio
     async def test_requires_authentication(self):
@@ -679,6 +880,8 @@ class TestEndpoint:
             assert (await ac.get("/notifications")).status_code == 401
             assert (await ac.post("/notifications/mark-read", json={"all": True})).status_code == 401
             assert (await ac.post("/notifications/sweep")).status_code == 401
+            assert (await ac.get("/notifications/settings")).status_code == 401
+            assert (await ac.put("/notifications/settings", json={"hour": 15})).status_code == 401
 
     @pytest.mark.asyncio
     async def test_manual_sweep_is_manager_only(self, env):
@@ -702,8 +905,10 @@ class TestEndpoint:
             ok = await ac.get("/notifications", params={"window": "recent"}, headers=headers)
             assert ok.status_code == 200
             body = ok.json()
-            assert {"items", "unread_count", "recent_unread_count", "deadline_hour_utc"} <= body.keys()
-            assert body["deadline_hour_utc"] == DEADLINE
+            assert {"items", "unread_count", "recent_unread_count", "deadline"} <= body.keys()
+            # Staff cannot change the cutoff but are held to it, so every feed
+            # response carries it.
+            assert {"hour", "minute", "timezone", "label"} == body["deadline"].keys()
 
 
 def _token(user: User) -> str:

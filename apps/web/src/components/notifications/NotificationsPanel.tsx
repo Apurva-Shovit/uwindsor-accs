@@ -4,7 +4,6 @@ import { Bell, CheckCheck, Inbox } from 'lucide-react';
 import { formatDate } from '../../utils/formatters';
 import {
   formatRelativeTime,
-  formatUtcHour,
   styleForSeverity,
   typeIcons,
   typeLabels,
@@ -159,11 +158,9 @@ export const NotificationsPanel: React.FC = () => {
           </h2>
           <p className="mt-0.5 text-xs text-slate-500">
             Missed water quality logs, closing quarantine windows, and lapsing AUPPs.
-            {data?.deadline_hour_utc !== undefined && (
-              // Spelled out because the cutoff is a server-clock time and will
-              // not line up with the reader's own afternoon.
+            {data?.deadline && (
               <span className="ml-1 text-slate-400">
-                Daily log cutoff is {formatUtcHour(data.deadline_hour_utc)}.
+                Daily log cutoff is {data.deadline.label}.
               </span>
             )}
           </p>
