@@ -37,6 +37,15 @@ export const QuarantinePage: React.FC = () => {
     }
   });
 
+  const sortedTanks = React.useMemo(() => {
+    return [...(tanks || [])].sort((a: any, b: any) => {
+      const numA = parseInt(a.tank_number, 10);
+      const numB = parseInt(b.tank_number, 10);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return (a.tank_number || '').localeCompare(b.tank_number || '', undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [tanks]);
+
   // Fetch exemptions history
   const { data: exemptionsResponse, refetch: refetchExemptions } = useQuery({
     queryKey: ['quarantineExemptions', page],
@@ -132,7 +141,7 @@ export const QuarantinePage: React.FC = () => {
           <div className="text-center py-4 text-slate-400 text-sm italic">Loading tanks...</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {tanks.filter((t: any) => t.is_quarantined === true).map((t: any) => {
+            {sortedTanks.filter((t: any) => t.is_quarantined === true).map((t: any) => {
               const start = new Date(t.quarantine_start_date);
               const end = new Date(t.quarantine_end_date);
               const now = new Date();
@@ -166,7 +175,7 @@ export const QuarantinePage: React.FC = () => {
                 </div>
               );
             })}
-            {tanks.filter((t: any) => t.is_quarantined === true).length === 0 && (
+            {sortedTanks.filter((t: any) => t.is_quarantined === true).length === 0 && (
               <div className="col-span-full text-center py-4 text-slate-400 text-sm italic">
                 No tanks are currently in quarantine.
               </div>
@@ -316,7 +325,7 @@ export const QuarantinePage: React.FC = () => {
                   className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-[#005596]"
                 >
                   <option value="">Select Quarantined Tank</option>
-                  {tanks?.filter((t: any) => t.is_quarantined === true).map((t: any) => (
+                  {sortedTanks.filter((t: any) => t.is_quarantined === true).map((t: any) => (
                     <option key={t.id || t._id} value={t.id || t._id}>
                       Tank {t.tank_number} - {t.count} fish (AUPP: {t.aupp})
                     </option>
@@ -333,7 +342,7 @@ export const QuarantinePage: React.FC = () => {
                   className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-[#005596]"
                 >
                   <option value="">Select Destination Tank</option>
-                  {tanks?.filter((t: any) => t.is_quarantined !== true).map((t: any) => (
+                  {sortedTanks.filter((t: any) => t.is_quarantined !== true).map((t: any) => (
                     <option key={t.id || t._id} value={t.id || t._id}>
                       Tank {t.tank_number} - {t.count} fish (AUPP: {t.aupp})
                     </option>

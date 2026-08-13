@@ -17,6 +17,9 @@ class SignupRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    # Opt-in: when false the session lasts ACCESS_TOKEN_EXPIRE_HOURS, when true
+    # REMEMBER_ME_EXPIRE_DAYS. Defaulted so existing clients keep working.
+    remember_me: bool = False
 
 class TokenResponse(BaseModel):
     access_token: str

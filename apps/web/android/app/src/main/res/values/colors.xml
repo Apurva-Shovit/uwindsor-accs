@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Mirrors the UWindsor brand tokens in apps/web/tailwind.config.js. -->
+<resources>
+    <color name="colorPrimary">#005596</color>
+    <color name="colorPrimaryDark">#003A66</color>
+    <color name="colorAccent">#FFCE00</color>
+    <color name="brandBlue">#005596</color>
+    <!-- System bar backdrop. White so the app's white Topbar appears to run to
+         the top of the screen, matching how the site looks in mobile Chrome. -->
+    <color name="systemBarBackground">#FFFFFF</color>
+</resources>

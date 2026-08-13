@@ -38,7 +38,13 @@ export const TransferPage: React.FC = () => {
   useEffect(() => {
     Promise.all([getTanks(), getTankAssignments()])
       .then(([tRes, aRes]) => {
-        setTanks(tRes.data);
+        const sorted = [...(tRes.data || [])].sort((a: Tank, b: Tank) => {
+          const numA = parseInt(a.tank_number, 10);
+          const numB = parseInt(b.tank_number, 10);
+          if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+          return (a.tank_number || '').localeCompare(b.tank_number || '', undefined, { numeric: true, sensitivity: 'base' });
+        });
+        setTanks(sorted);
         setAssignments(aRes.data);
       })
       .catch(() => {});

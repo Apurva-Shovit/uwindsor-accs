@@ -12,6 +12,13 @@ dist
 dist-ssr
 *.local
 
+# Android build secrets — never commit. Losing acare-release.jks means the app
+# can never be updated in place, so back it up outside the repo.
+.env.mobile
+android/keystore.properties
+*.jks
+*.keystore
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ACARE</string>
+    <string name="title_activity_main">ACARE</string>
+    <string name="package_name">ca.uwindsor.acare</string>
+    <string name="custom_url_scheme">ca.uwindsor.acare</string>
+</resources>

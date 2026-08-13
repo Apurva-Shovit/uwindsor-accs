@@ -6,6 +6,9 @@ import { useAuth } from '../context/AuthContext';
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Opt-in by default: a remembered session gets a 30-day token, and there is
+  // no server-side revocation if a device is lost.
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -17,9 +20,9 @@ export const Login: React.FC = () => {
     setLoading(true);
 
     try {
-      const res = await login({ email, password });
+      const res = await login({ email, password, remember_me: rememberMe });
       const { access_token, role, status } = res.data;
-      await loginToken(access_token, role, status);
+      await loginToken(access_token, role, status, rememberMe);
 
       if (['super_admin', 'chair', 'admin', 'manager'].includes(role)) {
         navigate('/admin');
@@ -73,6 +76,16 @@ export const Login: React.FC = () => {
               className="mt-1 w-full rounded-md border border-border px-3 py-2 text-sm focus:border-brandBlue focus:outline-none"
             />
           </div>
+
+          <label className="flex items-center gap-2.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="h-4 w-4 rounded border-border text-brandBlue accent-brandBlue focus:outline-none focus:ring-2 focus:ring-brandBlue/40"
+            />
+            <span className="text-sm text-textPrimary">Keep me signed in</span>
+          </label>
 
           <button
             type="submit"

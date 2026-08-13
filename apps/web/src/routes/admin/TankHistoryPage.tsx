@@ -36,6 +36,15 @@ export const TankHistoryPage: React.FC = () => {
     }
   });
 
+  const sortedTanks = React.useMemo(() => {
+    return [...(tanks || [])].sort((a: any, b: any) => {
+      const numA = parseInt(a.tank_number, 10);
+      const numB = parseInt(b.tank_number, 10);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return (a.tank_number || '').localeCompare(b.tank_number || '', undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [tanks]);
+
   // Fetch history search results
   const { data: historyData, isLoading } = useQuery({
     queryKey: ['tankHistorySearch', selectedTankId, eventType, dateFrom, dateTo, debouncedKeyword, historyPage, historyLimit],
@@ -104,7 +113,7 @@ export const TankHistoryPage: React.FC = () => {
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#005596] focus:outline-none"
             >
               <option value="">All Tanks</option>
-              {tanks?.map((t: any) => {
+              {sortedTanks?.map((t: any) => {
                 const tankId = t.id || t._id || '';
                 return (
                   <option key={tankId} value={tankId}>

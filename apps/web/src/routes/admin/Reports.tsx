@@ -171,14 +171,17 @@ export const Reports: React.FC = () => {
     // 3. Give browser one frame to paint before printing
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        triggerAuthorizedPrint();
-        // 4. Cleanup after print dialog closes
-        setTimeout(() => {
+        // 4. Cleanup once the print job has been handed off. This has to be
+        // driven by triggerAuthorizedPrint rather than our own timer — on
+        // Android the page is only rendered after the user confirms in the
+        // system print dialog, so a fixed timeout would tear the portal down
+        // first and print the ordinary screen instead.
+        triggerAuthorizedPrint(undefined, () => {
           const portal = document.getElementById('sop-print-portal');
           const override = document.getElementById('sop-print-override');
           if (portal) document.body.removeChild(portal);
           if (override) document.head.removeChild(override);
-        }, 500);
+        });
       });
     });
   };

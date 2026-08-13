@@ -3,8 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Deliberately no viewport-fit=cover: Capacitor's SystemBars plugin only
+         pads the WebView for the status/gesture bars while that is absent. The
+         app has no env(safe-area-inset-*) handling of its own, so adding it
+         would push content under the Android status bar. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>web</title>
+    <meta name="theme-color" content="#005596" />
+    <title>ACARE</title>
   </head>
   <body>
     <div id="root"></div>

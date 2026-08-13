@@ -5,6 +5,7 @@ from ..models.user import User
 from ..schemas.auth import SignupRequest, LoginRequest, TokenResponse, MeResponse
 from ..services.auth_service import AuthService
 from ..core.permissions import get_current_user
+from ..core.security import token_lifetime
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -22,7 +23,9 @@ async def login(request: Request, response: Response, body: LoginRequest):
         value=token,
         httponly=True,
         samesite="lax",
-        max_age=settings.ACCESS_TOKEN_EXPIRE_HOURS * 3600,
+        # Kept in step with the JWT's exp claim, so the cookie never outlives
+        # the token it carries.
+        max_age=int(token_lifetime(body.remember_me).total_seconds()),
     )
     return TokenResponse(access_token=token, role=role, status=user_status)
 

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Download, ShieldAlert, FileJson, FileSpreadsheet, AlertTriangle } from 'lucide-react';
 import { useDebounce } from '../../hooks/useDebounce';
 import { getExportPreview, downloadExport } from '../../lib/api';
+import { saveFile } from '../../lib/download';
 
 const UWindsorBufferingLoader: React.FC<{ message?: string }> = ({ message = "Synchronizing ACARE Facility Data..." }) => (
   <div className="flex flex-col items-center justify-center py-12 px-6 bg-gradient-to-b from-blue-50/40 via-white to-amber-50/20 border border-blue-100 rounded-2xl shadow-sm text-center space-y-4 my-4">
@@ -77,15 +78,8 @@ export const ExportPage: React.FC = () => {
       if (endDate) params.end_date = endDate;
       const res = await downloadExport(params);
       const blob = new Blob([res.data], { type: format === 'json' ? 'application/json' : 'application/zip' });
-      const url = URL.createObjectURL(blob);
       const today = new Date().toISOString().slice(0, 10);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `acare_backup_${today}.${format === 'json' ? 'json' : 'zip'}`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      await saveFile(blob, `acare_backup_${today}.${format === 'json' ? 'json' : 'zip'}`);
       setShowConfirm(false);
     } catch (err) {
       setError('Export failed. Please try again or contact your system administrator.');

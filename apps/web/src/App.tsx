@@ -7,6 +7,7 @@ import { PendingApproval } from './routes/PendingApproval';
 import { StaffLayout } from './routes/staff/StaffLayout';
 import { AdminLayout } from './routes/admin/AdminLayout';
 import { ErrorToast } from './components/ui/ErrorToast';
+import { NativeBackHandler } from './components/native/NativeBackHandler';
 
 import { SidebarProvider } from './context/SidebarContext';
 
@@ -16,6 +17,7 @@ export function App() {
       <ErrorToast />
       <SidebarProvider>
         <Router>
+          <NativeBackHandler />
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />

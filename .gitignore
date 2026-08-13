@@ -5,7 +5,10 @@ build/
 # Environment & Logs
 .env
 .env.*
+# Keep every *.example template — `.env.*` above would otherwise swallow new
+# ones (e.g. apps/web/.env.mobile.example) without any warning.
 !.env.example
+!.env.*.example
 *.log
 
 # Python virtualenvs & cache
@@ -19,6 +22,10 @@ env/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Editor config. The VS Code Java extension writes .vscode/settings.json on its
+# own once the Android/Gradle project is opened.
+.vscode/
 
 # Agent Customization & Documentation Exclusions
 .agents/

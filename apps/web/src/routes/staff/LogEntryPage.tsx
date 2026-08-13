@@ -371,11 +371,20 @@ function BatchEntry({ tanks }: { tanks: Tank[] }) {
 
   const setParam = (k: string) => (v: string) => setParams(p => ({ ...p, [k]: v }));
 
+  const sortedTanks = React.useMemo(() => {
+    return [...tanks].sort((a, b) => {
+      const numA = parseInt(a.tank_number, 10);
+      const numB = parseInt(b.tank_number, 10);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return (a.tank_number || '').localeCompare(b.tank_number || '', undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [tanks]);
+
   const applyGroup = (g: string) => {
     setGroup(g);
     if (g === 'custom') { setSelectedIds([]); return; }
     const [lo, hi] = g.split('-').map(Number);
-    const ids = tanks.filter(t => {
+    const ids = sortedTanks.filter(t => {
       const n = parseInt(t.tank_number, 10);
       return n >= lo && n <= hi;
     }).map(t => t.id || (t as any)._id || '');
@@ -385,7 +394,7 @@ function BatchEntry({ tanks }: { tanks: Tank[] }) {
   const toggleCustom = (id: string) =>
     setSelectedIds(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
 
-  const selectedTanks = tanks.filter(t => selectedIds.includes(t.id || (t as any)._id || ''));
+  const selectedTanks = sortedTanks.filter(t => selectedIds.includes(t.id || (t as any)._id || ''));
 
   const handleSubmit = async () => {
     setLoading(true); setError(''); setValidation(null);
@@ -428,15 +437,15 @@ function BatchEntry({ tanks }: { tanks: Tank[] }) {
           {group === 'custom' && (
             <div>
               <label className="block text-xs font-semibold text-textSecondary uppercase tracking-wide mb-2">Select Tanks</label>
-              <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto border border-border rounded-lg p-3 bg-surface">
-                {tanks.map(t => {
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-48 overflow-y-auto border border-border rounded-lg p-3 bg-surface">
+                {sortedTanks.map(t => {
                   const tankId = t.id || (t as any)._id || '';
                   return (
-                    <label key={tankId} htmlFor={`batch-tank-${tankId}`} className="flex items-center gap-2 text-sm cursor-pointer p-1 rounded hover:bg-white">
+                    <label key={tankId} htmlFor={`batch-tank-${tankId}`} className="flex items-center gap-2 text-sm cursor-pointer p-1.5 rounded hover:bg-white transition-colors">
                       <input id={`batch-tank-${tankId}`} type="checkbox" checked={selectedIds.includes(tankId)}
                         onChange={() => toggleCustom(tankId)}
-                        className="rounded border-border text-brandBlue focus:ring-brandBlue" />
-                      Tank {t.tank_number}
+                        className="rounded border-border text-brandBlue focus:ring-brandBlue cursor-pointer" />
+                      <span className="font-medium text-textPrimary">Tank {t.tank_number}</span>
                     </label>
                   );
                 })}
@@ -542,7 +551,15 @@ export const LogEntryPage: React.FC = () => {
   const [tanks, setTanks] = useState<Tank[]>([]);
 
   useEffect(() => {
-    getTanks().then(r => setTanks(r.data)).catch(() => {});
+    getTanks().then(r => {
+      const sorted = [...(r.data || [])].sort((a: Tank, b: Tank) => {
+        const numA = parseInt(a.tank_number, 10);
+        const numB = parseInt(b.tank_number, 10);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        return (a.tank_number || '').localeCompare(b.tank_number || '', undefined, { numeric: true, sensitivity: 'base' });
+      });
+      setTanks(sorted);
+    }).catch(() => {});
   }, []);
 
   return (
