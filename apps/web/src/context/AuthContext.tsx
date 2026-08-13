@@ -17,7 +17,7 @@ interface AuthContextType {
   role: string | null;
   status: string | null;
   loading: boolean;
-  loginToken: (token: string, role: string, status: string) => Promise<void>;
+  loginToken: (token: string, role: string, status: string, remember: boolean) => Promise<void>;
   logout: () => void;
   refetchUser: () => Promise<void>;
 }
@@ -51,8 +51,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchCurrentUser();
   }, []);
 
-  const loginToken = async (token: string, _role: string, _status: string) => {
-    setToken(token);
+  const loginToken = async (token: string, _role: string, _status: string, remember: boolean) => {
+    setToken(token, remember);
     await fetchCurrentUser();
   };
 

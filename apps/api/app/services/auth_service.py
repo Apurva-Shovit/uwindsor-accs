@@ -87,14 +87,15 @@ class AuthService:
             raise HTTPException(403, "Your account has been suspended. Kindly contact your superior to uplift the suspension.")
 
             
-        token = create_access_token(str(user.id), user.role.value)
-        
+        token = create_access_token(str(user.id), user.role.value, body.remember_me)
+
         await AuditRepository.insert(AuditLog(
-            actor_id=str(user.id), 
-            actor_role=user.role.value, 
+            actor_id=str(user.id),
+            actor_role=user.role.value,
             action="login",
-            entity_type="user", 
-            entity_id=str(user.id)
+            entity_type="user",
+            entity_id=str(user.id),
+            after={"remember_me": body.remember_me}
         ))
         
         return token, user.role.value, user.status.value

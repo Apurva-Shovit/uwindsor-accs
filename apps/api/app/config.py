@@ -7,6 +7,10 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "super-secret-key-change-in-prod-123456789"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_HOURS: int = 12
+    # Lifetime of a token issued with "Remember me". There is no server-side
+    # revocation, so this is also the worst-case window in which a stolen token
+    # stays usable — shorten it if devices are shared between shifts.
+    REMEMBER_ME_EXPIRE_DAYS: int = 30
     ENABLE_INDIVIDUAL_FISH_TRACKING: bool = False
 
     RATE_LIMIT_LOGIN: str = "5/minute"
