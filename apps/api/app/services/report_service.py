@@ -8,6 +8,7 @@ from ..models.census_event import CensusEvent
 from ..models.project import Project
 from ..models.facility import Facility, Room, Tank
 from ..utils.entity_resolver import EntityResolver
+from ..utils.quarantine_utils import describe_lift, snapshot_datetime, SYSTEM_ACTOR_ID
 from ..repositories.base_repository import BaseRepository
 
 class ReportService:
@@ -225,8 +226,19 @@ class ReportService:
 
             is_placed = a.action == "placed_in_quarantine" or (isinstance(a.after, dict) and a.after.get("is_quarantined") is True)
             action_label = "Quarantine Placed" if is_placed else "Quarantine Lifted"
-            
-            detail_reason = "Manual Biosecurity Quarantine Initiated" if is_placed else "Manually Lifted Prior to Expiration"
+
+            if is_placed:
+                detail_reason = "Manual Biosecurity Quarantine Initiated"
+            else:
+                # Reconstruct how much of the window was left from the audit
+                # snapshot rather than restating a fixed sentence. The snapshot
+                # is the only record of the end date, since lifting clears it.
+                detail_reason = describe_lift(
+                    snapshot_datetime(a.before, "quarantine_end_date"),
+                    a_dt,
+                    automatic=a.actor_id == SYSTEM_ACTOR_ID,
+                    quarantine_start_date=snapshot_datetime(a.before, "quarantine_start_date"),
+                )[0]
             results.append({
                 "date": a_dt.isoformat(),
                 "facility": fac_name, "room": room_name, "tank": tank_name,

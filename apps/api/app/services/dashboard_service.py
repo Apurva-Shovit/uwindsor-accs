@@ -6,12 +6,14 @@ from ..models.facility import Tank
 from ..models.incident_report import IncidentReport
 from ..repositories.base_repository import BaseRepository
 from ..services.audit_service import AuditService
+from ..utils.quarantine_utils import lift_expired_quarantines
 
 class DashboardService:
     """Service layer for Dashboard Aggregations."""
 
     @staticmethod
     async def get_dashboard_summary() -> Dict[str, Any]:
+        await lift_expired_quarantines()
         user_repo = BaseRepository(User)
         project_repo = BaseRepository(Project)
         tank_repo = BaseRepository(Tank)
