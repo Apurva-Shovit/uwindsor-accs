@@ -113,6 +113,12 @@ export const getAuditLogs = (params?: Record<string, any>) => api.get('/audit-lo
 export const getReportsSummary = (params?: Record<string, any>) => api.get('/reports/summary', { params });
 export const getExecutiveSummary = (params?: Record<string, any>) => api.get('/reports/executive-facility-summary', { params });
 
+// Notifications
+export const getNotifications = (window: 'all' | 'recent' = 'all') =>
+  api.get('/notifications', { params: { window } });
+export const markNotificationsRead = (body: { keys?: string[]; all?: boolean }) =>
+  api.post('/notifications/mark-read', body);
+
 // Dashboard
 export const getDashboardSummary = () => api.get('/dashboard/summary');
 export const getWaterQualityAnalytics = (params?: Record<string, any>) => api.get('/dashboard/water-quality-analytics', { params });
