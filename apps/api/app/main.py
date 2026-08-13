@@ -6,6 +6,7 @@ from .routers import auth, users, facilities, dashboard, reports, audit
 from .routers import water_quality_logs, incident_reports
 from .routers import projects, census, transfers, intake, species, quarantine, individual_fish, export
 from .routers import notifications
+from .services import notification_scheduler
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from .core.limiter import limiter
@@ -17,7 +18,13 @@ from contextlib import asynccontextmanager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    yield
+    # Generates facility notifications on an interval, starting with a pass on
+    # boot so a container that has just spun back up serves a current feed.
+    notification_scheduler.start(app)
+    try:
+        yield
+    finally:
+        await notification_scheduler.stop(app)
 
 app = FastAPI(title="ACare API", lifespan=lifespan)
 

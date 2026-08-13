@@ -17,15 +17,19 @@ class Settings(BaseSettings):
     RATE_LIMIT_DATA_ENTRY: str = "60/minute"
     RATE_LIMIT_ADMIN: str = "30/minute"
 
-    # Notification thresholds. The facility timezone is what "server time" means
-    # to the people reading the alerts — the API itself runs on UTC in
-    # production, so a bare 17:00 UTC deadline would fire at lunchtime in
-    # Windsor. Everything time-of-day sensitive resolves through this zone.
-    FACILITY_TIMEZONE: str = "America/Toronto"
-    WATER_QUALITY_DEADLINE_HOUR: int = 17          # 5 PM facility time
+    # Notification thresholds. The deadline is server time, meaning UTC — the API
+    # runs on UTC in production and the rule is defined against that clock, not
+    # against Windsor's. During EDT that puts the cutoff at 1 PM locally, so move
+    # this hour rather than the timezone if the alert should land later in the day.
+    WATER_QUALITY_DEADLINE_HOUR: int = 17          # 17:00 UTC
     WATER_QUALITY_MISSING_LOOKBACK_DAYS: int = 7   # how far back the panel keeps missed days
     QUARANTINE_EXPIRY_WARNING_DAYS: int = 1
     AUPP_EXPIRY_WARNING_DAYS: int = 30
+
+    # How often the generator reconciles stored notifications against live data.
+    # Each pass recomputes the whole lookback window, so a pass missed while the
+    # service was spun down is backfilled by the next one.
+    NOTIFICATION_SWEEP_INTERVAL_MINUTES: int = 15
 
     CORS_ORIGINS: str = ""  # comma-separated extra allowed origins, e.g. "https://acare-mvp.vercel.app"
 

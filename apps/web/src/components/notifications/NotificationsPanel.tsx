@@ -4,6 +4,7 @@ import { Bell, CheckCheck, Inbox } from 'lucide-react';
 import { formatDate } from '../../utils/formatters';
 import {
   formatRelativeTime,
+  formatUtcHour,
   styleForSeverity,
   typeIcons,
   typeLabels,
@@ -158,8 +159,12 @@ export const NotificationsPanel: React.FC = () => {
           </h2>
           <p className="mt-0.5 text-xs text-slate-500">
             Missed water quality logs, closing quarantine windows, and lapsing AUPPs.
-            {data?.facility_timezone && (
-              <span className="ml-1 text-slate-400">Times shown against {data.facility_timezone}.</span>
+            {data?.deadline_hour_utc !== undefined && (
+              // Spelled out because the cutoff is a server-clock time and will
+              // not line up with the reader's own afternoon.
+              <span className="ml-1 text-slate-400">
+                Daily log cutoff is {formatUtcHour(data.deadline_hour_utc)}.
+              </span>
             )}
           </p>
         </div>
@@ -212,8 +217,17 @@ export const NotificationsPanel: React.FC = () => {
         <div className="py-10 text-center text-slate-400">
           <Inbox className="mx-auto mb-2 h-8 w-8 text-slate-300" />
           <p className="text-xs font-semibold">
-            {items.length === 0 ? 'All clear — nothing needs attention.' : 'Nothing matches this filter.'}
+            {items.length > 0
+              ? 'Nothing matches this filter.'
+              : /* An empty feed the generator has never filled is not the same
+                   claim as an empty feed it just checked. */
+                data?.last_generated_at
+                ? 'All clear — nothing needs attention.'
+                : 'Waiting for the first check to run.'}
           </p>
+          {items.length === 0 && data?.last_generated_at && (
+            <p className="mt-1 text-[11px]">Last checked {formatRelativeTime(data.last_generated_at)}.</p>
+          )}
         </div>
       ) : (
         <ul className="space-y-2">

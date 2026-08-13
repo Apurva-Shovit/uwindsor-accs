@@ -29,9 +29,15 @@ export interface NotificationFeed {
   unread_count: number;
   recent_unread_count: number;
   server_time: string;
-  facility_time: string;
-  facility_timezone: string;
+  /** The daily-log cutoff, on the server clock (UTC) rather than the viewer's. */
+  deadline_hour_utc: number;
+  /** null until the generator has completed a pass — not the same as "all clear". */
+  last_generated_at: string | null;
 }
+
+/** e.g. 17 -> "5 PM UTC". The cutoff is a server-clock time, so it is labelled as one. */
+export const formatUtcHour = (hour: number): string =>
+  `${hour % 12 || 12} ${hour < 12 ? 'AM' : 'PM'} UTC`;
 
 /** The one place the full feed lives — both the bell and the sidebar point here. */
 export const notificationsPathForRole = (role?: string | null): string =>
