@@ -106,7 +106,7 @@ export const searchTankHistory = (params: Record<string, any>) =>
 export const getQuarantineExemptions = (params?: { status_filter?: string; page?: number; limit?: number }) =>
   api.get('/quarantine/exemptions', { params });
 export const postExemptionRequest = (data: any) => api.post('/quarantine/exemption-request', data);
-export const decideExemption = (id: string, data: any) => api.post(`/quarantine/exemption/${id}/decide`, data);
+export const decideExemption = (id: string, data: any) => api.patch(`/quarantine/exemption/${id}/decide`, data);
 
 // Audit Logs & Reports
 export const getAuditLogs = (params?: Record<string, any>) => api.get('/audit-logs', { params });
