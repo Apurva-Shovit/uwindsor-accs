@@ -64,6 +64,23 @@ export const QuarantinePage: React.FC = () => {
     });
   }, [tanks]);
 
+  // The backend releases a tank on the next read once its window closes, so pull
+  // fresh data the moment the countdown runs out instead of leaving an "Expired"
+  // card on screen until someone reloads. Keyed on the transition rather than on
+  // `now`, so a tank that fails to release does not retry every second.
+  const hasElapsedWindow = React.useMemo(
+    () => (tanks || []).some((t: any) => {
+      if (!t.is_quarantined) return false;
+      const end = parseApiDate(t.quarantine_end_date);
+      return !!end && end.getTime() <= now.getTime();
+    }),
+    [tanks, now],
+  );
+
+  useEffect(() => {
+    if (hasElapsedWindow) refetchTanks();
+  }, [hasElapsedWindow, refetchTanks]);
+
   // Fetch exemptions history
   const { data: exemptionsResponse, refetch: refetchExemptions } = useQuery({
     queryKey: ['quarantineExemptions', page],
