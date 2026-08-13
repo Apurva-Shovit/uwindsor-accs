@@ -35,6 +35,13 @@ android {
                 keyAlias keystoreProperties['keyAlias']
                 keyPassword keystoreProperties['keyPassword']
             }
+            // AGP drops v1 when minSdk >= 24 and does not always add v3. Sideloaded
+            // APKs get checked by a wider range of installers and OEM verifiers
+            // than Play-delivered ones, so sign with every scheme — it costs a
+            // little size and removes a class of "App not installed" failures.
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
         }
     }
     buildTypes {
