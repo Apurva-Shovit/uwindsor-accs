@@ -101,17 +101,12 @@ for **debug builds only** — the release build stays strict.
    config allowing HTTP to `10.0.2.2`, `localhost`, and the dev machine's LAN
    address. Add your own IP there if it changes (it is DHCP-assigned).
 2. **Mixed content is blocked.** The default `https://localhost` WebView origin
-   is a secure context, so its requests to `http://` are refused. Set
-   `CAP_DEV_HTTP=1` when syncing to serve the bundled assets over
-   `http://localhost` instead:
-
-   ```powershell
-   $env:CAP_DEV_HTTP = "1"
-   npm run android:sync
-   cd android; ./gradlew assembleDebug
-   ```
-
-   Never set `CAP_DEV_HTTP` for a build you hand out.
+   is a secure context, so its requests to `http://` are refused.
+   `capacitor.config.ts` handles this automatically: if `VITE_API_URL` in
+   `.env.mobile` is an `http://` URL, the bundled assets are served over
+   `http://localhost` instead. Nothing to remember — point `.env.mobile` at the
+   production `https://` URL and the secure origin comes back on its own.
+   (`CAP_DEV_HTTP=1` forces it on, but should not be needed.)
 
 Set `VITE_API_URL` in `.env.mobile` to the **LAN address** of the dev machine
 (e.g. `http://10.190.22.209:8000`), not `localhost` — inside the WebView,

@@ -1,12 +1,30 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import type { CapacitorConfig } from '@capacitor/cli';
 
-// Builds pointed at a plain-HTTP dev backend must set CAP_DEV_HTTP=1. A
-// https://localhost page is a secure context, so the WebView blocks its requests
-// to http:// as mixed content; serving the bundled assets over http://localhost
-// instead avoids that. Both origins match the API's CORS allow-list, and
-// http://localhost is still a trustworthy origin to Chromium, so nothing else
-// about the app changes. Never set it for a distributable build.
-const devHttp = process.env.CAP_DEV_HTTP === '1';
+/**
+ * A https://localhost page is a secure context, so the WebView refuses its
+ * requests to a plain-HTTP API as mixed content. Builds pointed at an http://
+ * dev backend therefore have to serve the bundled assets over http://localhost
+ * instead.
+ *
+ * That is derived from VITE_API_URL rather than left to a flag someone has to
+ * remember: getting it wrong produces an app that launches fine and then fails
+ * every request. Both origins match the API's CORS allow-list, and
+ * http://localhost is still a trustworthy origin to Chromium, so nothing else
+ * about the app changes. CAP_DEV_HTTP=1 forces it on if ever needed.
+ */
+function usesHttpBackend(): boolean {
+  if (process.env.CAP_DEV_HTTP === '1') return true;
+  try {
+    const env = readFileSync(join(__dirname, '.env.mobile'), 'utf8');
+    return /^\s*VITE_API_URL\s*=\s*http:\/\//m.test(env);
+  } catch {
+    return false; // No .env.mobile — assume the production https API.
+  }
+}
+
+const devHttp = usesHttpBackend();
 
 const config: CapacitorConfig = {
   appId: 'ca.uwindsor.acare',
