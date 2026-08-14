@@ -686,11 +686,13 @@ class NotificationService:
 
     @staticmethod
     def _aged_out(doc: Notification, snap: FacilitySnapshot) -> bool:
-        oldest = min(snap.days) if snap.days else snap.today
+        lookback_days = max(1, settings.WATER_QUALITY_MISSING_LOOKBACK_DAYS)
+        cutoff_date = (snap.today - timedelta(days=lookback_days)).isoformat()
         day = (doc.meta or {}).get("date")
-        if not day:
-            return True
-        return day < oldest.isoformat()
+        if day:
+            return day < cutoff_date
+        created = as_utc(doc.created_at)
+        return created < (snap.now - timedelta(days=lookback_days))
 
     @staticmethod
     async def _prune_orphans(active_user_ids: set) -> int:
@@ -728,7 +730,22 @@ class NotificationService:
     @staticmethod
     async def list_notifications(current_user: User, window: str = "all") -> Dict[str, Any]:
         now = now_utc()
+        deadline = await NotificationSettingsStore.deadline()
+        lookback_days = max(1, settings.WATER_QUALITY_MISSING_LOOKBACK_DAYS)
+        cutoff_time = now - timedelta(days=lookback_days)
+        cutoff_date = (local_date(now, deadline.zone) - timedelta(days=lookback_days)).isoformat()
+
         docs = await Notification.find({"user_id": str(current_user.id)}).to_list()
+        valid_docs = []
+        for d in docs:
+            if as_utc(d.created_at) < cutoff_time:
+                await d.delete()
+                continue
+            day = (d.meta or {}).get("date")
+            if day and day < cutoff_date:
+                await d.delete()
+                continue
+            valid_docs.append(d)
 
         items = [
             {
@@ -742,7 +759,7 @@ class NotificationService:
                 "read": d.read,
                 "created_at": as_utc(d.created_at),
             }
-            for d in docs
+            for d in valid_docs
         ]
         items.sort(key=lambda i: (_SEVERITY_RANK.get(i["severity"], 9), -i["created_at"].timestamp()))
 

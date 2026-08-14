@@ -161,11 +161,14 @@ export const NotificationsPanel: React.FC = () => {
     );
   }, [items, todayDateStr]);
 
-  // Filter remaining items for historical feed
+  // Filter remaining items for historical feed (strictly 7 days max lookback)
   const historyItems = useMemo(() => {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     return items.filter((item) => {
       // Exclude today's missing WQ log since it's presented prominently in the top section
       if (todayWQItem && item.key === todayWQItem.key) return false;
+      // Enforce 7-day max limit
+      if (new Date(item.created_at) < sevenDaysAgo) return false;
       if (filter !== 'all' && item.type !== filter) return false;
       if (unreadOnly && item.read) return false;
       return true;
