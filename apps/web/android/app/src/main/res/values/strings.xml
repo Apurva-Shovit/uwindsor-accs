@@ -4,4 +4,8 @@
     <string name="title_activity_main">ACARE</string>
     <string name="package_name">ca.uwindsor.acare</string>
     <string name="custom_url_scheme">ca.uwindsor.acare</string>
+    <!-- Must match CHANNEL_ID in src/lib/push.ts and FCM_ANDROID_CHANNEL_ID on
+         the API. All three name the same Android channel; if they drift, the
+         messages are dropped silently. -->
+    <string name="default_notification_channel_id">acare-alerts</string>
 </resources>

@@ -122,6 +122,14 @@ export const getNotificationSettings = () => api.get('/notifications/settings');
 export const updateNotificationSettings = (body: { hour: number; minute: number; timezone: string }) =>
   api.put('/notifications/settings', body);
 
+// Android push registration. The token identifies a device install, so the API
+// reassigns it rather than duplicating when a second user signs in on a shared
+// tablet — which is also why sign-out has to unregister explicitly.
+export const registerPushDevice = (body: { token: string; platform?: string }) =>
+  api.post('/notifications/devices', body);
+export const unregisterPushDevice = (token: string) =>
+  api.delete('/notifications/devices', { params: { token } });
+
 // Dashboard
 export const getDashboardSummary = () => api.get('/dashboard/summary');
 export const getWaterQualityAnalytics = (params?: Record<string, any>) => api.get('/dashboard/water-quality-analytics', { params });

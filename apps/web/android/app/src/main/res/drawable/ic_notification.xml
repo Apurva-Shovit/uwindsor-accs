@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Status-bar icon for pushed alerts.
+
+  Android 5+ discards colour in a notification's small icon and renders only the
+  alpha channel, tinting the result. Handing it the launcher icon (which is what
+  happens when no default is declared) therefore produces a solid white blob, so
+  this is drawn as a white-on-transparent silhouette from the start. The accent
+  colour beside it in the manifest is what actually tints it.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,22c1.1,0 2,-0.9 2,-2h-4c0,1.1 0.89,2 2,2zM18,16v-5c0,-3.07 -1.64,-5.64 -4.5,-6.32L13.5,4c0,-0.83 -0.67,-1.5 -1.5,-1.5s-1.5,0.67 -1.5,1.5v0.68C7.63,5.36 6,7.92 6,11v5l-2,2v1h16v-1l-2,-2z" />
+</vector>

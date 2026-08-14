@@ -10,6 +10,7 @@ import { StaffLayout } from './routes/staff/StaffLayout';
 import { AdminLayout } from './routes/admin/AdminLayout';
 import { ErrorToast } from './components/ui/ErrorToast';
 import { NativeBackHandler } from './components/native/NativeBackHandler';
+import { PushRegistrar } from './components/native/PushRegistrar';
 
 import { SidebarProvider } from './context/SidebarContext';
 
@@ -20,6 +21,7 @@ export function App() {
       <SidebarProvider>
         <Router>
           <NativeBackHandler />
+          <PushRegistrar />
           <Routes>
             {/* The bare site URL has to resolve against the session, not jump
                 straight to the login form — a signed-in user landing here was
