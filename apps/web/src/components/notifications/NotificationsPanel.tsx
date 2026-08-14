@@ -196,85 +196,79 @@ export const NotificationsPanel: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* TODAY'S WATER QUALITY STATUS CARD (ONLY SHOWN IF TANKS ARE MISSING LOGS AFTER CUTOFF) */}
+      {/* TODAY'S MISSING WATER QUALITY LOGS CARD (CARD GRID LAYOUT, NO TABLES) */}
       {todayTanks.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-amber-200 bg-white shadow-sm transition-all">
-          <div className="border-b border-amber-100 bg-amber-50/60 px-5 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+        <div className="overflow-hidden rounded-xl border border-l-4 border-amber-500 border-slate-200 bg-amber-50/30 p-5 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
                 <AlertTriangle className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-slate-900">
-                  Today's Missing Water Quality Logs
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Daily cutoff was <strong className="text-slate-700">{data?.deadline?.label || '5:00 PM EDT'}</strong>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-base font-bold text-slate-900">
+                    Today's Water Quality Log Missing for {todayTanks.length} {todayTanks.length === 1 ? 'Tank' : 'Tanks'}
+                  </h3>
+                  <span className="rounded bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-800 uppercase tracking-wide">
+                    Urgent Action Required
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-slate-600">
+                  The daily cutoff was <strong className="text-slate-800">{data?.deadline?.label || '5:00 PM EDT'}</strong>. Below are the assigned frontline staff responsible for each tank:
                 </p>
               </div>
             </div>
 
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800 border border-amber-200">
-              <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
-              {todayTanks.length} {todayTanks.length === 1 ? 'Tank' : 'Tanks'} Missing Log Today
-            </span>
+            <Link
+              to="/staff/log-entry"
+              className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-[#005596] px-4 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#003A66]"
+            >
+              Log Entry →
+            </Link>
           </div>
 
-          <div className="p-5">
-            <p className="text-xs font-medium text-slate-600 mb-3">
-              The daily cutoff time has passed. The following tanks have no water quality log recorded for today. Below are the assigned frontline staff responsible for each tank:
-            </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+            {todayTanks.map((tank: any) => {
+              const staff = filterFrontlineStaff(tank.assignees);
+              return (
+                <div
+                  key={tank.id || tank.tank_number}
+                  className="flex flex-col justify-between rounded-lg border border-slate-200 bg-white p-3.5 shadow-2xs transition-all hover:border-slate-300"
+                >
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <span className="text-xs font-bold text-slate-900">
+                      Tank {tank.tank_number}
+                    </span>
+                    <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                      Missing Log
+                    </span>
+                  </div>
 
-            <div className="overflow-x-auto rounded-lg border border-slate-200">
-              <table className="w-full text-left text-xs text-slate-700">
-                <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">
-                  <tr>
-                    <th className="px-4 py-2.5">Tank</th>
-                    <th className="px-4 py-2.5">Assigned Frontline Staff</th>
-                    <th className="px-4 py-2.5 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 bg-white">
-                  {todayTanks.map((tank: any) => {
-                    const staff = filterFrontlineStaff(tank.assignees);
-                    return (
-                      <tr key={tank.id || tank.tank_number} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="px-4 py-3 font-bold text-slate-900 whitespace-nowrap">
-                          Tank {tank.tank_number}
-                        </td>
-                        <td className="px-4 py-3">
-                          {staff.length > 0 ? (
-                            <div className="flex flex-wrap gap-1.5">
-                              {staff.map((name) => (
-                                <span
-                                  key={name}
-                                  className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700 border border-blue-200/60"
-                                >
-                                  <UserCheck className="h-3 w-3 text-blue-500" />
-                                  {name}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-[11px] italic text-slate-400">
-                              Unassigned
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-right whitespace-nowrap">
-                          <Link
-                            to="/staff/log-entry"
-                            className="inline-flex items-center gap-1 rounded-md bg-[#005596] px-2.5 py-1 text-[11px] font-bold text-white shadow-sm hover:bg-[#003A66] transition-colors"
+                  <div className="mt-2.5 text-[11px] text-slate-500">
+                    <span className="font-semibold text-slate-600 block text-[10px] uppercase tracking-wider mb-1">
+                      Assigned Staff:
+                    </span>
+                    {staff.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {staff.map((name) => (
+                          <span
+                            key={name}
+                            className="inline-flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 border border-blue-200/60"
                           >
-                            Log Entry →
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                            <UserCheck className="h-2.5 w-2.5 text-blue-500" />
+                            {name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="italic text-slate-400 text-[11px]">
+                        Unassigned
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
