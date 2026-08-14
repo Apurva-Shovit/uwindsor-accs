@@ -1,13 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  AlertTriangle,
-  Bell,
-  CheckCheck,
-  ChevronDown,
-  ChevronUp,
-  Inbox,
-} from 'lucide-react';
+import { AlertTriangle, Bell, CheckCheck, Inbox } from 'lucide-react';
 import { formatDate } from '../../utils/formatters';
 import {
   formatRelativeTime,
@@ -133,7 +126,6 @@ const NotificationDetail: React.FC<{ item: NotificationItem }> = ({ item }) => {
 export const NotificationsPanel: React.FC = () => {
   const [filter, setFilter] = useState<Filter>('all');
   const [unreadOnly, setUnreadOnly] = useState(false);
-  const [historyExpanded, setHistoryExpanded] = useState(true);
 
   const { data, isLoading, isError } = useNotificationFeed('all');
   const markRead = useMarkNotificationsRead();
@@ -182,14 +174,20 @@ export const NotificationsPanel: React.FC = () => {
     });
   }, [items, todayWQItem, filter, unreadOnly, highlighted]);
 
-  const counts = useMemo(() => {
-    const byType: Record<string, number> = {};
+  // Compute unread counts per notification type (plus total unread for history feed)
+  const unreadCountsByType = useMemo(() => {
+    const counts: Record<string, number> = {};
+    let totalHistoryUnread = 0;
     for (const item of items) {
       if (todayWQItem && item.key === todayWQItem.key) continue;
-      byType[item.type] = (byType[item.type] ?? 0) + 1;
+      const isUnread = highlighted.has(item.key) || !item.read;
+      if (isUnread) {
+        totalHistoryUnread += 1;
+        counts[item.type] = (counts[item.type] ?? 0) + 1;
+      }
     }
-    return byType;
-  }, [items, todayWQItem]);
+    return { byType: counts, total: totalHistoryUnread };
+  }, [items, todayWQItem, highlighted]);
 
   const todayTanks = useMemo(() => todayWQItem?.meta?.tanks || [], [todayWQItem]);
 
@@ -268,136 +266,125 @@ export const NotificationsPanel: React.FC = () => {
               <CheckCheck className="h-3.5 w-3.5" />
               Mark all as read
             </button>
-
-            <button
-              onClick={() => setHistoryExpanded(!historyExpanded)}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
-            >
-              {historyExpanded ? (
-                <>
-                  <ChevronUp className="h-4 w-4" /> Collapse
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="h-4 w-4" /> Expand ({historyItems.length})
-                </>
-              )}
-            </button>
           </div>
         </div>
 
-        {historyExpanded && (
-          <>
-            <div className="flex flex-wrap items-center gap-2">
-              {FILTERS.map((f) => {
-                const count = f.id === 'all' ? historyItems.length : counts[f.id] ?? 0;
-                return (
-                  <button
-                    key={f.id}
-                    onClick={() => setFilter(f.id)}
-                    className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-                      filter === f.id
-                        ? 'bg-[#005596] text-white'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+        <div className="flex flex-wrap items-center gap-2">
+          {FILTERS.map((f) => {
+            const unreadInCat =
+              f.id === 'all' ? unreadCountsByType.total : unreadCountsByType.byType[f.id] ?? 0;
+            return (
+              <button
+                key={f.id}
+                onClick={() => setFilter(f.id)}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                  filter === f.id
+                    ? 'bg-[#005596] text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <span>{f.label}</span>
+                {unreadInCat > 0 && (
+                  <span
+                    className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold ${
+                      filter === f.id ? 'bg-white text-[#005596]' : 'bg-red-500 text-white'
                     }`}
                   >
-                    {f.label} ({count})
-                  </button>
-                );
-              })}
-              <label className="ml-auto inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={unreadOnly}
-                  onChange={(e) => setUnreadOnly(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-slate-300 text-[#005596] focus:ring-[#005596]"
-                />
-                Unread only
-              </label>
-            </div>
-
-            {isLoading ? (
-              <div className="py-10 text-center text-xs text-slate-400">Loading notifications…</div>
-            ) : isError ? (
-              <div className="rounded-lg border border-red-200 bg-red-50 py-8 text-center text-xs font-semibold text-red-700">
-                Notifications could not be loaded.
-              </div>
-            ) : historyItems.length === 0 ? (
-              <div className="py-10 text-center text-slate-400">
-                <Inbox className="mx-auto mb-2 h-8 w-8 text-slate-300" />
-                <p className="text-xs font-semibold">
-                  {items.length > 0
-                    ? 'No historical notifications match this filter.'
-                    : data?.last_generated_at
-                    ? 'All clear — no historical alerts found.'
-                    : 'Waiting for notification check.'}
-                </p>
-                {data?.last_generated_at && (
-                  <p className="mt-1 text-[11px]">
-                    Last checked {formatRelativeTime(data.last_generated_at)}.
-                  </p>
+                    {unreadInCat}
+                  </span>
                 )}
-              </div>
-            ) : (
-              <ul className="space-y-2.5">
-                {historyItems.map((item) => {
-                  const styles = styleForSeverity(item.severity);
-                  const Icon = typeIcons[item.type] ?? Bell;
-                  const isNew = highlighted.has(item.key) || !item.read;
+              </button>
+            );
+          })}
+          <label className="ml-auto inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-slate-600">
+            <input
+              type="checkbox"
+              checked={unreadOnly}
+              onChange={(e) => setUnreadOnly(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-slate-300 text-[#005596] focus:ring-[#005596]"
+            />
+            Unread only
+          </label>
+        </div>
 
-                  return (
-                    <li
-                      key={item.key}
-                      className={`rounded-lg border border-l-4 border-slate-200 p-3.5 transition-colors ${styles.border} ${
-                        isNew ? 'bg-blue-50/40' : 'bg-white'
-                      }`}
-                    >
-                      <div className="flex gap-3">
-                        <span
-                          className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${styles.iconWrap}`}
-                        >
-                          <Icon className="h-4 w-4" />
-                        </span>
-
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h4 className="text-sm font-bold text-slate-900">{item.title}</h4>
-                            {isNew && (
-                              <span
-                                className={`h-2 w-2 rounded-full ${styles.dot}`}
-                                aria-label="Unread"
-                              />
-                            )}
-                            <span
-                              className={`rounded border px-1.5 py-0.5 text-[10px] font-bold ${styles.chip}`}
-                            >
-                              {typeLabels[item.type]}
-                            </span>
-                            <span className="ml-auto text-[11px] font-semibold text-slate-400">
-                              {formatRelativeTime(item.created_at)}
-                            </span>
-                          </div>
-
-                          <p className="mt-1 text-xs leading-relaxed text-slate-600">
-                            {item.message}
-                          </p>
-
-                          <NotificationDetail item={item} />
-
-                          <Link
-                            to={item.link}
-                            className="mt-2.5 inline-block text-[11px] font-bold text-brandBlue hover:underline"
-                          >
-                            Take action →
-                          </Link>
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+        {isLoading ? (
+          <div className="py-10 text-center text-xs text-slate-400">Loading notifications…</div>
+        ) : isError ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 py-8 text-center text-xs font-semibold text-red-700">
+            Notifications could not be loaded.
+          </div>
+        ) : historyItems.length === 0 ? (
+          <div className="py-10 text-center text-slate-400">
+            <Inbox className="mx-auto mb-2 h-8 w-8 text-slate-300" />
+            <p className="text-xs font-semibold">
+              {items.length > 0
+                ? 'No historical notifications match this filter.'
+                : data?.last_generated_at
+                ? 'All clear — no historical alerts found.'
+                : 'Waiting for notification check.'}
+            </p>
+            {data?.last_generated_at && (
+              <p className="mt-1 text-[11px]">
+                Last checked {formatRelativeTime(data.last_generated_at)}.
+              </p>
             )}
-          </>
+          </div>
+        ) : (
+          <ul className="space-y-2.5">
+            {historyItems.map((item) => {
+              const styles = styleForSeverity(item.severity);
+              const Icon = typeIcons[item.type] ?? Bell;
+              const isNew = highlighted.has(item.key) || !item.read;
+
+              return (
+                <li
+                  key={item.key}
+                  className={`rounded-lg border border-l-4 border-slate-200 p-3.5 transition-colors ${styles.border} ${
+                    isNew ? 'bg-blue-50/40' : 'bg-white'
+                  }`}
+                >
+                  <div className="flex gap-3">
+                    <span
+                      className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${styles.iconWrap}`}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </span>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="text-sm font-bold text-slate-900">{item.title}</h4>
+                        {isNew && (
+                          <span
+                            className={`h-2 w-2 rounded-full ${styles.dot}`}
+                            aria-label="Unread"
+                          />
+                        )}
+                        <span
+                          className={`rounded border px-1.5 py-0.5 text-[10px] font-bold ${styles.chip}`}
+                        >
+                          {typeLabels[item.type]}
+                        </span>
+                        <span className="ml-auto text-[11px] font-semibold text-slate-400">
+                          {formatRelativeTime(item.created_at)}
+                        </span>
+                      </div>
+
+                      <p className="mt-1 text-xs leading-relaxed text-slate-600">{item.message}</p>
+
+                      <NotificationDetail item={item} />
+
+                      <Link
+                        to={item.link}
+                        className="mt-2.5 inline-block text-[11px] font-bold text-brandBlue hover:underline"
+                      >
+                        Take action →
+                      </Link>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
     </div>
