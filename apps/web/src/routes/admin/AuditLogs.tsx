@@ -10,12 +10,13 @@ export const AuditLogs: React.FC = () => {
   const [dateFrom, setDateFrom] = React.useState('');
   const [dateTo, setDateTo] = React.useState('');
   const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(20);
   const [selectedLog, setSelectedLog] = React.useState<any | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['auditLogs', dateFrom, dateTo, page],
+    queryKey: ['auditLogs', dateFrom, dateTo, page, pageSize],
     queryFn: async () => {
-      const params: Record<string, any> = { page, page_size: 20 };
+      const params: Record<string, any> = { page, page_size: pageSize };
       if (dateFrom) params.date_from = new Date(dateFrom).toISOString();
       if (dateTo) params.date_to = new Date(dateTo).toISOString();
       const res = await getAuditLogs(params);
@@ -170,8 +171,13 @@ export const AuditLogs: React.FC = () => {
                 page={page}
                 totalPages={totalPages}
                 total={total}
-                limit={20}
+                limit={pageSize}
                 onPageChange={(p) => setPage(p)}
+                onLimitChange={(l) => {
+                  setPageSize(l);
+                  setPage(1);
+                }}
+                limitOptions={[20, 50, 100]}
               />
             </div>
           )}
