@@ -1024,7 +1024,7 @@ class TestDeadlineSettings:
         admin = await User.find_one({"email": "superadmin@uwindsor.ca"})
         await NotificationService.update_settings(16, 15, "America/Toronto", admin)
 
-        entry = await AuditLog.find({"entity_type": "notification_settings"}).sort("-created_at").first_or_none()
+        entry = await AuditLog.find({"entity_type": {"$in": ["water_quality_cutoff", "notification_settings"]}}).sort("-created_at").first_or_none()
         assert entry is not None
         assert entry.actor_id == str(admin.id)
         assert entry.after["water_quality_deadline_hour"] == 16

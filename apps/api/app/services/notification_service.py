@@ -568,12 +568,15 @@ class NotificationService:
         record.updated_by = str(current_user.id)
         await record.save()
 
+        deadline = Deadline(hour, minute, timezone_name)
+        cutoff_label = deadline.label()
+
         await AuditRepository.insert(AuditLog(
             actor_id=str(current_user.id),
             actor_role=current_user.role.value if current_user.role else "none",
             action="update",
-            entity_type="notification_settings",
-            entity_id=str(record.id),
+            entity_type="water_quality_cutoff",
+            entity_id=f"Daily Cutoff ({cutoff_label})",
             before=before,
             after=record.model_dump(mode="json"),
         ))

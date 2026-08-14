@@ -64,7 +64,18 @@ class AuditService:
                 actor_name = snapshot_name or "Unknown User"
 
             display_id = str(log.entity_id) if log.entity_id else ""
-            if log.entity_type != "user":
+            if log.entity_type in ["water_quality_cutoff", "notification_settings", "notification_cutoff"]:
+                if log.entity_id and not ObjectId.is_valid(str(log.entity_id)):
+                    display_id = str(log.entity_id)
+                else:
+                    payload = log.after or log.before or {}
+                    h = payload.get("water_quality_deadline_hour", 17)
+                    m = payload.get("water_quality_deadline_minute", 0)
+                    tz = payload.get("timezone", "America/Toronto")
+                    from .notification_settings import Deadline
+                    label = Deadline(h, m, tz).label()
+                    display_id = f"Daily Cutoff ({label})"
+            elif log.entity_type != "user":
                 display_id = entity_display_map.get((log.entity_type, str(log.entity_id))) or f"Unknown {log.entity_type.replace('_', ' ').title()}"
             else:
                 resolved_id = actor_map.get(str(log.entity_id))

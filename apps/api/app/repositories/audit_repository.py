@@ -81,6 +81,10 @@ class AuditRepository:
                 from ..models.species import Species
                 sp = await Species.get(entity_id)
                 return f"Species '{sp.name}'" if sp else "Unknown Species"
+            elif entity_type in ["notification_settings", "water_quality_cutoff", "notification_cutoff"]:
+                if entity_id and not ObjectId.is_valid(entity_id):
+                    return entity_id
+                return "Water Quality Cutoff"
             elif entity_type == "user":
                 from ..models.user import User
                 u = await User.get(entity_id)
