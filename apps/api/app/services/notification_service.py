@@ -537,7 +537,7 @@ class NotificationService:
 
     @staticmethod
     async def update_settings(
-        hour: int, minute: int, timezone_name: str, current_user: User
+        hour: int, minute: int, timezone_name: str, current_user: User, now: Optional[datetime] = None
     ) -> Dict[str, Any]:
         """
         Move the daily deadline, then rebuild anything that was measured against
@@ -585,7 +585,7 @@ class NotificationService:
         for doc in stale:
             await doc.delete()
 
-        swept = await NotificationService.sweep()
+        swept = await NotificationService.sweep(now=now, force=True)
         return {
             **await NotificationService.get_settings(),
             "changed": True,
@@ -595,50 +595,121 @@ class NotificationService:
     # ------------------------------------------------------------- generation
 
     @staticmethod
-    async def sweep(now: Optional[datetime] = None) -> Dict[str, Any]:
+    async def acquire_lock(instance_id: str = "default", timeout_seconds: int = 300) -> bool:
+        """
+        Attempt to atomically claim the sweep lock using PyMongo/Motor find_one_and_update.
+        If locked_at is None or older than timeout_seconds (stale lock recovery), claim it.
+        """
+        from pymongo.errors import DuplicateKeyError
+
+        now = now_utc()
+        stale_cutoff = now - timedelta(seconds=timeout_seconds)
+
+        collection = NotificationSweepState.get_motor_collection()
+        filter_doc = {
+            "singleton": "notification-sweep",
+            "$or": [
+                {"locked_at": None},
+                {"locked_at": {"$lt": stale_cutoff}},
+            ],
+        }
+        update_doc = {
+            "$set": {
+                "locked_at": now,
+                "locked_by": instance_id,
+            },
+            "$setOnInsert": {
+                "singleton": "notification-sweep",
+                "last_run_at": now,
+                "duration_ms": 0,
+                "created": 0,
+                "updated": 0,
+                "removed": 0,
+            },
+        }
+        try:
+            await collection.find_one_and_update(
+                filter_doc,
+                update_doc,
+                upsert=True,
+            )
+            return True
+        except DuplicateKeyError:
+            return False
+
+    @staticmethod
+    async def release_lock(instance_id: Optional[str] = None) -> None:
+        """Release the sweep lock so subsequent passes can run immediately."""
+        collection = NotificationSweepState.get_motor_collection()
+        filter_doc: Dict[str, Any] = {"singleton": "notification-sweep"}
+        if instance_id:
+            filter_doc["locked_by"] = instance_id
+        await collection.update_one(
+            filter_doc,
+            {"$set": {"locked_at": None, "locked_by": None}},
+        )
+
+    @staticmethod
+    async def sweep(
+        now: Optional[datetime] = None,
+        force: bool = False,
+        instance_id: str = "default",
+    ) -> Dict[str, Any]:
         """
         Bring stored notifications in line with live data, for every active user.
 
         Safe to run at any cadence and safe to run twice: keys are deterministic,
-        so a second pass over unchanged data writes nothing.
-
-        Releasing expired quarantines first is what puts that release on a clock.
-        The read paths that surface tank state also release, but those only fire
-        when somebody happens to look; a tank whose window closes overnight would
-        otherwise stay flagged until morning. Doing it here also means the
-        snapshot taken next already reflects the releases, so the same pass
-        raises the notice.
+        so a second pass over unchanged data writes nothing. Uses atomic locking to
+        prevent concurrent sweeps across multi-replica deployments.
         """
-        started = now_utc()
-        released = await lift_expired_quarantines(now)
-        snap = await FacilitySnapshot.capture(now)
-        users = await User.find({"status": StatusEnum.active.value}).to_list()
+        if not force:
+            acquired = await NotificationService.acquire_lock(instance_id)
+            if not acquired:
+                return {
+                    "users": 0,
+                    "created": 0,
+                    "updated": 0,
+                    "removed": 0,
+                    "released": 0,
+                    "duration_ms": 0,
+                    "swept_at": now_utc().isoformat(),
+                    "status": "skipped",
+                    "reason": "sweep_in_progress",
+                }
 
-        created = updated = removed = 0
-        for user in users:
-            c, u, r = await NotificationService._reconcile_user(user, snap)
-            created += c
-            updated += u
-            removed += r
+        try:
+            started = now_utc()
+            released = await lift_expired_quarantines(now)
+            snap = await FacilitySnapshot.capture(now)
+            users = await User.find({"status": StatusEnum.active.value}).to_list()
 
-        # Notifications belonging to users who have since been deactivated or
-        # deleted would otherwise linger unreachable but counted.
-        removed += await NotificationService._prune_orphans({str(u.id) for u in users})
+            created = updated = removed = 0
+            for user in users:
+                c, u, r = await NotificationService._reconcile_user(user, snap)
+                created += c
+                updated += u
+                removed += r
 
-        duration_ms = int((now_utc() - started).total_seconds() * 1000)
-        await NotificationService._record_sweep(
-            last_run_at=started, duration_ms=duration_ms,
-            created=created, updated=updated, removed=removed,
-        )
-        return {
-            "users": len(users),
-            "created": created,
-            "updated": updated,
-            "removed": removed,
-            "released": released,
-            "duration_ms": duration_ms,
-            "swept_at": started.isoformat(),
-        }
+            removed += await NotificationService._prune_orphans({str(u.id) for u in users})
+
+            duration_ms = int((now_utc() - started).total_seconds() * 1000)
+            await NotificationService._record_sweep(
+                last_run_at=started, duration_ms=duration_ms,
+                created=created, updated=updated, removed=removed,
+            )
+            return {
+                "users": len(users),
+                "created": created,
+                "updated": updated,
+                "removed": removed,
+                "released": released,
+                "duration_ms": duration_ms,
+                "swept_at": started.isoformat(),
+                "status": "completed",
+            }
+        finally:
+            if not force:
+                await NotificationService.release_lock(instance_id)
 
     @staticmethod
     async def _reconcile_user(user: User, snap: FacilitySnapshot) -> tuple:

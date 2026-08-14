@@ -90,6 +90,8 @@ class NotificationSweepState(Document):
     updated: int = 0
     removed: int = 0
     error: Optional[str] = None
+    locked_at: Optional[datetime] = None
+    locked_by: Optional[str] = None
 
     class Settings:
         name = "notification_sweep_state"

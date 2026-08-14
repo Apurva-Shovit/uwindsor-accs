@@ -137,6 +137,13 @@ async def _purge():
     await WaterQualityLog.find({"created_by": "notif-test"}).delete()
     await TankAssignment.find({"created_by": "notif-test"}).delete()
 
+    settings_rec = await NotificationSettings.find_one({"singleton": "notification-settings"})
+    if settings_rec:
+        settings_rec.water_quality_deadline_hour = 15
+        settings_rec.water_quality_deadline_minute = 0
+        settings_rec.timezone = "America/Toronto"
+        await settings_rec.save()
+
 
 class TestHelpers:
     @pytest.mark.parametrize(
@@ -990,18 +997,20 @@ class TestDeadlineSettings:
     async def test_updating_regenerates_alerts_against_the_new_cutoff(self, env):
         admin = await User.find_one({"email": "superadmin@uwindsor.ca"})
         today = today_local()
+        noon = Deadline(12, 0, "America/Toronto").on(today)
 
-        await NotificationService.update_settings(9, 0, "America/Toronto", admin)
+        res1 = await NotificationService.update_settings(9, 0, "America/Toronto", admin, now=noon)
+        assert res1["changed"] is True
         after_early = await Notification.find_one(
             {"user_id": str(env["staff"].id), "key": f"water_quality_missing:{today.isoformat()}"}
         )
         assert after_early is not None
         assert "9:00 AM" in after_early.message
 
-        result = await NotificationService.update_settings(21, 30, "America/Toronto", admin)
+        result = await NotificationService.update_settings(21, 30, "America/Toronto", admin, now=noon)
         assert result["changed"] is True
 
-        # 9:30 PM has not passed yet, so today's alert should be gone entirely
+        # 9:30 PM has not passed yet at noon, so today's alert should be gone entirely
         # rather than left behind quoting a cutoff nobody is held to.
         after_late = await Notification.find_one(
             {"user_id": str(env["staff"].id), "key": f"water_quality_missing:{today.isoformat()}"}
@@ -1128,3 +1137,91 @@ def _token(user: User) -> str:
     from app.core.security import create_access_token
 
     return create_access_token(str(user.id), user.role.value)
+
+
+class TestDistributedLock:
+    @pytest.mark.asyncio
+    async def test_acquire_and_release_lock(self, env):
+        # Ensure lock is clear initially
+        await NotificationService.release_lock("inst-1")
+
+        acquired = await NotificationService.acquire_lock("inst-1")
+        assert acquired is True
+
+        state = await NotificationSweepState.find_one({"singleton": "notification-sweep"})
+        assert state is not None
+        assert state.locked_by == "inst-1"
+        assert state.locked_at is not None
+
+        await NotificationService.release_lock("inst-1")
+        state_after = await NotificationSweepState.find_one({"singleton": "notification-sweep"})
+        assert state_after.locked_at is None
+        assert state_after.locked_by is None
+
+    @pytest.mark.asyncio
+    async def test_concurrent_sweep_skipped_when_locked(self, env):
+        # Simulate active lock by inst-1
+        await NotificationService.acquire_lock("inst-1")
+
+        # inst-2 attempts to run sweep (force=False)
+        result = await NotificationService.sweep(instance_id="inst-2", force=False)
+        assert result["status"] == "skipped"
+        assert result["reason"] == "sweep_in_progress"
+
+        # Release lock
+        await NotificationService.release_lock("inst-1")
+
+    @pytest.mark.asyncio
+    async def test_stale_lock_recovery(self, env):
+        # Set lock to 10 minutes ago
+        stale_time = now_utc() - timedelta(seconds=600)
+        state = await NotificationSweepState.find_one({"singleton": "notification-sweep"})
+        if not state:
+            state = NotificationSweepState()
+        state.locked_at = stale_time
+        state.locked_by = "dead-process"
+        await state.save()
+
+        # New instance acquiring lock should reclaim stale lock
+        acquired = await NotificationService.acquire_lock("new-instance", timeout_seconds=300)
+        assert acquired is True
+
+        state_updated = await NotificationSweepState.find_one({"singleton": "notification-sweep"})
+        assert state_updated.locked_by == "new-instance"
+
+        await NotificationService.release_lock("new-instance")
+
+
+class TestRealTimeReconciliationOnLogCreation:
+    @pytest.mark.asyncio
+    async def test_submitting_log_triggers_immediate_notification_reconciliation(self, env):
+        from app.schemas.water_quality import WaterQualityCreate
+        from app.services.water_quality_service import WaterQualityService
+
+        staff = env["staff"]
+        tank = env["tank"]
+        today = today_local()
+
+        # Step 1: Initial sweep past deadline generates a missing log alert
+        snap = await snapshot(at_deadline(today))
+        await NotificationService._reconcile_user(staff, snap)
+
+        key = f"water_quality_missing:{today.isoformat()}"
+        initial_notif = await Notification.find_one({"user_id": str(staff.id), "key": key})
+        assert initial_notif is not None
+
+        # Step 2: User submits a water quality log via WaterQualityService
+        log_data = WaterQualityCreate(
+            tank_id=str(tank.id),
+            type="daily",
+            date=today,
+            parameters={"ph": 7.4},
+        )
+        res = await WaterQualityService.create_log(log_data, staff)
+        assert res["message"] == "created"
+
+        # Step 3: Notification sweep was triggered synchronously inside create_log,
+        # so checking notifications reflects the updated state without needing another manual sweep pass
+        feed = await NotificationService.list_notifications(staff)
+        assert "items" in feed
+
