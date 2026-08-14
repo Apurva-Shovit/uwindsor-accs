@@ -36,6 +36,19 @@ class Settings(BaseSettings):
     # service was spun down is backfilled by the next one.
     NOTIFICATION_SWEEP_INTERVAL_MINUTES: int = 15
 
+    # --- Firebase Cloud Messaging -------------------------------------------
+    # Push delivery to the Android app. Leave all of this unset and push is a
+    # no-op: the in-app feed is unaffected, so an unconfigured deployment behaves
+    # exactly as it did before push existed.
+    #
+    # Supply the service-account credentials one way or the other. Inline JSON is
+    # what Render can actually hold; the file path is the sane option locally.
+    FCM_SERVICE_ACCOUNT_JSON: str = ""
+    FCM_SERVICE_ACCOUNT_FILE: str = ""
+    # Must match the channel the Android app creates at startup — Android 8+
+    # silently drops a message naming a channel that does not exist.
+    FCM_ANDROID_CHANNEL_ID: str = "acare-alerts"
+
     CORS_ORIGINS: str = ""  # comma-separated extra allowed origins, e.g. "https://acare-mvp.vercel.app"
 
     model_config = ConfigDict(env_file=".env", extra="ignore")

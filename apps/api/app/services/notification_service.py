@@ -30,6 +30,7 @@ The sweep releases expired quarantines before it reads anything, which is what
 makes the release happen on a timer rather than only when somebody opens a page
 that touches tank state — and means the same pass reports what it just did.
 """
+import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Sequence
@@ -51,7 +52,10 @@ from ..utils.quarantine_utils import (
     lift_expired_quarantines,
     snapshot_datetime,
 )
+from . import push_service
 from .notification_settings import Deadline, NotificationSettingsStore
+
+logger = logging.getLogger(__name__)
 
 MANAGER_PLUS = {RoleEnum.manager, RoleEnum.chair, RoleEnum.admin, RoleEnum.super_admin}
 
@@ -684,13 +688,16 @@ class NotificationService:
             users = await User.find({"status": StatusEnum.active.value}).to_list()
 
             created = updated = removed = 0
+            new_alerts: List[Dict[str, Any]] = []
             for user in users:
-                c, u, r = await NotificationService._reconcile_user(user, snap)
+                c, u, r = await NotificationService._reconcile_user(user, snap, new_alerts)
                 created += c
                 updated += u
                 removed += r
 
             removed += await NotificationService._prune_orphans({str(u.id) for u in users})
+
+            pushed = await NotificationService._dispatch_push(new_alerts)
 
             duration_ms = int((now_utc() - started).total_seconds() * 1000)
             await NotificationService._record_sweep(
@@ -706,13 +713,56 @@ class NotificationService:
                 "duration_ms": duration_ms,
                 "swept_at": started.isoformat(),
                 "status": "completed",
+                "pushed": pushed,
             }
         finally:
             if not force:
                 await NotificationService.release_lock(instance_id)
 
     @staticmethod
-    async def _reconcile_user(user: User, snap: FacilitySnapshot) -> tuple:
+    async def _dispatch_push(new_alerts: List[Dict[str, Any]]) -> Dict[str, int]:
+        """
+        Send the alerts this pass created to the users' registered devices.
+
+        Only newly inserted rows go out. A sweep re-words an existing alert on
+        most passes — the countdown in a quarantine notice changes every quarter
+        hour — and pushing those would turn one condition into a stream of
+        buzzes for something the user has already seen.
+
+        Failures here never fail the sweep. The feed row is already written, so
+        the alert is not lost; it is only the phone that missed it, and the next
+        pass will not retry a row it no longer considers new. That is the right
+        trade: a sweep that aborted on an FCM outage would leave the feed itself
+        half-reconciled, which is the more visible breakage.
+        """
+        if not new_alerts:
+            return {"sent": 0, "failed": 0, "devices": 0, "disabled": 0}
+
+        try:
+            by_user: Dict[str, List[Dict[str, Any]]] = {}
+            for alert in new_alerts:
+                by_user.setdefault(alert["user_id"], []).append(alert)
+            return await push_service.send_to_users(by_user)
+        except Exception:
+            logger.exception("push dispatch failed; feed rows were still written")
+            return {"sent": 0, "failed": len(new_alerts), "devices": 0, "disabled": 0}
+
+    @staticmethod
+    async def _reconcile_user(
+        user: User,
+        snap: FacilitySnapshot,
+        new_alerts: Optional[List[Dict[str, Any]]] = None,
+    ) -> tuple:
+        """
+        Bring one user's stored alerts in line with the snapshot.
+
+        `new_alerts`, when given, collects the specs this pass inserted. Push
+        delivery needs to know which rows are genuinely new — an alert whose
+        wording was merely refreshed must not wake a phone a second time — and
+        the counters alone cannot say which those were. It is an out-parameter
+        rather than a fourth return value because the return arity is asserted
+        on directly by the reconciliation tests.
+        """
         user_id = str(user.id)
         desired = {d["key"]: d for d in NotificationRules.for_user(user, snap)}
         existing = await Notification.find({"user_id": user_id}).to_list()
@@ -725,6 +775,8 @@ class NotificationService:
             if current is None:
                 await Notification(user_id=user_id, **spec).insert()
                 created += 1
+                if new_alerts is not None:
+                    new_alerts.append({**spec, "user_id": user_id})
             elif current.type not in STICKY_TYPES and NotificationService._apply(current, spec):
                 current.generated_at = now_utc()
                 await current.save()
