@@ -50,7 +50,58 @@ from the device — inside the WebView, `localhost` is the app's own bundled
 assets, not your machine. For an emulator pointed at a local API, use
 `http://10.0.2.2:8000` (and see "Local API" below).
 
-### 4. Release keystore
+### 4. Firebase, for push notifications
+
+Skip this and everything still builds and runs — the app just never raises a
+system notification, and the in-app bell behaves exactly as it always did.
+Registration fails at startup, the failure is logged to the WebView console, and
+nothing else changes. Do it and staff get alerted with the app closed.
+
+Two artefacts come out of one Firebase project, and they go to different places:
+
+| Artefact | Goes to | Secret? |
+|---|---|---|
+| `google-services.json` | `apps/web/android/app/` | No — it ships inside every APK |
+| Service-account JSON | the **API's** environment | **Yes** — it can send as your project |
+
+1. Create a project at [console.firebase.google.com](https://console.firebase.google.com).
+2. **Add an Android app** with package name **`ca.uwindsor.acare`** — it must
+   match `applicationId` in `android/app/build.gradle` exactly, or FCM will
+   refuse the token. Download `google-services.json` and drop it in
+   `apps/web/android/app/`. The Gradle plugin is already wired to apply itself
+   only when that file is present (bottom of `android/app/build.gradle`).
+3. **Project settings → Service accounts → Generate new private key.** This is
+   the credential the API sends with. Give it to the backend one of two ways:
+
+   ```bash
+   # Local: point at the downloaded file
+   FCM_SERVICE_ACCOUNT_FILE=C:\path\to\acare-firebase-adminsdk.json
+
+   # Render: paste the whole JSON as one env var value
+   FCM_SERVICE_ACCOUNT_JSON={"type":"service_account","project_id":"…"}
+   ```
+
+   Set either one in `apps/api/.env` (gitignored) or the Render dashboard. Never
+   commit it, and never ship it in the APK — it is not a client credential.
+4. Rebuild the APK (`npm run android:sync`, then assemble). `google-services.json`
+   is only read at build time.
+
+Confirm the API picked it up — `GET /notifications/push-status` as a manager or
+above returns `{"enabled": true, "project_id": "…"}`. A device that registered
+successfully also gets `push_enabled: true` back from `POST /notifications/devices`,
+which is how you tell "the server has my token" apart from "push will never
+arrive because the server has no credentials".
+
+Three places name the same Android channel and must agree, or Android 8+ drops
+every message **without an error anywhere**:
+
+| Where | Value |
+|---|---|
+| `apps/web/src/lib/push.ts` | `CHANNEL_ID` |
+| `android/app/src/main/res/values/strings.xml` | `default_notification_channel_id` |
+| `apps/api/app/config.py` | `FCM_ANDROID_CHANNEL_ID` |
+
+### 5. Release keystore
 
 Generate **once**, and back it up somewhere outside the repo. If it is lost, the
 app can never be updated in place — every user has to uninstall and reinstall.
@@ -158,18 +209,54 @@ nothing inside a WebView. The web path is unchanged in every case.
 | Print report (`src/lib/printer.ts`) | `window.print()` | Android `PrintManager` over the live WebView, via the local `PrinterPlugin` |
 | Anti-DevTools loop (`ProtectedView.tsx`) | 1s `debugger` interval | Disabled — pure battery drain, and it blocks `chrome://inspect` |
 | Session token (`src/lib/session.ts`) | `localStorage` only | Mirrored to SharedPreferences and restored at startup |
+| Notifications (`src/lib/push.ts`) | In-app bell only, polled once a minute | Bell **plus** system notifications over FCM, which arrive with the app closed |
 
 Plus the Android hardware back button, handled by
 `src/components/native/NativeBackHandler.tsx`: it walks the router history and
 only exits the app from a landing screen, after a confirm tap.
 
+### How push fits together
+
+`src/components/native/PushRegistrar.tsx` ties the FCM registration to the
+session — registering on sign-in and unregistering on sign-out — because the
+token is stored against a *user* on the server. Registering at startup would have
+nobody to attach it to, and leaving it attached after sign-out would deliver one
+person's alerts to whoever picks the tablet up next.
+
+The API pushes only alerts a sweep newly inserted, never ones it merely
+re-worded. A quarantine countdown is rewritten every pass, and pushing those
+would turn one condition into a buzz every fifteen minutes. Several new alerts
+for the same user collapse into one digest entry.
+
+Android splits the delivery job in half, and both halves are handled:
+
+- **App backgrounded or closed** — FCM delivers, and Android posts the tray entry
+  itself. No app code runs; having registered the token earlier is the whole
+  contribution.
+- **App foregrounded** — Android deliberately does *not* post a tray entry, and
+  hands the message to the app instead. `pushNotificationReceived` re-posts it as
+  a local notification, so the user is not left to notice the bell up to a
+  minute later.
+
+**Debugging a device that stays silent**, in the order worth checking:
+
+1. `GET /notifications/push-status` — is the server configured at all?
+2. Android Settings → Apps → ACARE → Notifications — was the runtime permission
+   refused? The app asks once and does not nag.
+3. `chrome://inspect` console — look for `FCM registration failed`, which almost
+   always means `google-services.json` is missing or names the wrong package.
+4. `db.device_tokens.find()` — a row with `disabled_at` set was rejected by FCM
+   as permanently dead; `last_error` says why. Signing in again revives it.
+
 ### Notes for future work
 
-- **No backend change was needed.** With `androidScheme: 'https'` the WebView
-  origin is `https://localhost`, which already matches the CORS regex in
+- **Transport needed no backend change.** With `androidScheme: 'https'` the
+  WebView origin is `https://localhost`, which already matches the CORS regex in
   `apps/api/app/main.py`. Do not enable Capacitor's `CapacitorHttp` bridge — it
   patches `fetch`/`XHR` globally and breaks the `responseType: 'blob'` the
-  export endpoint depends on.
+  export endpoint depends on. (Push is the one feature that *did* need server
+  work — it has to address a device that is not running anything. See the
+  Firebase section above.)
 - **Do not add `viewport-fit=cover`** to `index.html`. Apps targeting SDK 35+
   cannot opt out of edge-to-edge, and Capacitor's `SystemBars` plugin only pads
   the WebView for the status/gesture bars while that meta value is absent. The
