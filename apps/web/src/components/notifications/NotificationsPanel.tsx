@@ -133,7 +133,6 @@ export const NotificationsPanel: React.FC = () => {
   const items = useMemo(() => data?.items ?? [], [data]);
   const unreadCount = data?.unread_count ?? 0;
 
-  const [highlighted, setHighlighted] = useState<Set<string>>(new Set());
   const autoReadDone = useRef(false);
 
   useEffect(() => {
@@ -142,7 +141,6 @@ export const NotificationsPanel: React.FC = () => {
     const unreadKeys = items.filter((i) => !i.read).map((i) => i.key);
     if (unreadKeys.length === 0) return;
 
-    setHighlighted((prev) => new Set([...prev, ...unreadKeys]));
     const timer = setTimeout(() => {
       autoReadDone.current = true;
       markRead.mutate({ keys: unreadKeys });
@@ -169,10 +167,10 @@ export const NotificationsPanel: React.FC = () => {
       // Exclude today's missing WQ log since it's presented prominently in the top section
       if (todayWQItem && item.key === todayWQItem.key) return false;
       if (filter !== 'all' && item.type !== filter) return false;
-      if (unreadOnly && !(highlighted.has(item.key) || !item.read)) return false;
+      if (unreadOnly && item.read) return false;
       return true;
     });
-  }, [items, todayWQItem, filter, unreadOnly, highlighted]);
+  }, [items, todayWQItem, filter, unreadOnly]);
 
   // Compute unread counts per notification type (plus total unread for history feed)
   const unreadCountsByType = useMemo(() => {
@@ -180,14 +178,13 @@ export const NotificationsPanel: React.FC = () => {
     let totalHistoryUnread = 0;
     for (const item of items) {
       if (todayWQItem && item.key === todayWQItem.key) continue;
-      const isUnread = highlighted.has(item.key) || !item.read;
-      if (isUnread) {
+      if (!item.read) {
         totalHistoryUnread += 1;
         counts[item.type] = (counts[item.type] ?? 0) + 1;
       }
     }
     return { byType: counts, total: totalHistoryUnread };
-  }, [items, todayWQItem, highlighted]);
+  }, [items, todayWQItem]);
 
   const todayTanks = useMemo(() => todayWQItem?.meta?.tanks || [], [todayWQItem]);
 
@@ -334,7 +331,7 @@ export const NotificationsPanel: React.FC = () => {
             {historyItems.map((item) => {
               const styles = styleForSeverity(item.severity);
               const Icon = typeIcons[item.type] ?? Bell;
-              const isNew = highlighted.has(item.key) || !item.read;
+              const isNew = !item.read;
 
               return (
                 <li
