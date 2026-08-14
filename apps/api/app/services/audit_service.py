@@ -1,3 +1,4 @@
+import math
 from typing import Dict, Any, List
 from datetime import datetime
 from ..repositories.audit_repository import AuditRepository
@@ -15,7 +16,7 @@ class AuditService:
         date_to: datetime | None,
         page: int,
         page_size: int
-    ) -> List[Dict[str, Any]]:
+    ) -> Dict[str, Any]:
         # 1. Build Query
         query: Dict[str, Any] = {}
         if actor_id: query["actor_id"] = actor_id
@@ -29,7 +30,10 @@ class AuditService:
             
         skip = (page - 1) * page_size
 
-        # 2. Fetch logs from Repository
+        # 2. Count total records for pagination metadata
+        total_count = await AuditRepository.count_logs(query)
+
+        # 3. Fetch logs from Repository
         logs = await AuditRepository.get_logs_with_pagination(query, skip, page_size)
 
         # 3. Extract all unique Actor IDs and Non-User Entity IDs for bulk resolution
@@ -106,12 +110,20 @@ class AuditService:
                 "timestamp": log.created_at.isoformat(),
             })
             
-        return result
+        total_pages = math.ceil(total_count / page_size) if page_size > 0 else 1
+
+        return {
+            "items": result,
+            "total": total_count,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": max(1, total_pages),
+        }
 
     @staticmethod
     async def get_audit_logs(skip: int = 0, limit: int = 20) -> List[Dict[str, Any]]:
         page = (skip // limit) + 1 if limit > 0 else 1
-        return await AuditService.get_paginated_logs(
+        res = await AuditService.get_paginated_logs(
             actor_id=None,
             entity_type=None,
             action=None,
@@ -120,4 +132,5 @@ class AuditService:
             page=page,
             page_size=limit
         )
+        return res.get("items", [])
 

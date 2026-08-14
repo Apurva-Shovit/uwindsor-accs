@@ -22,6 +22,10 @@ class AuditRepository:
         return await AuditLog.find(query).sort("-created_at").skip(skip).limit(limit).to_list()
 
     @staticmethod
+    async def count_logs(query: Dict[str, Any]) -> int:
+        return await AuditLog.find(query).count()
+
+    @staticmethod
     async def insert(log: AuditLog) -> AuditLog:
         await log.insert()
         return log
