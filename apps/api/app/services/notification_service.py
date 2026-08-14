@@ -179,8 +179,9 @@ class FacilitySnapshot:
 
         assignees: Dict[str, List[str]] = {}
         for u in users:
-            for tank_id in (u.assigned_tank_ids or []):
-                assignees.setdefault(tank_id, []).append(f"{u.first_name} {u.last_name}".strip())
+            if u.role not in MANAGER_PLUS:
+                for tank_id in (u.assigned_tank_ids or []):
+                    assignees.setdefault(tank_id, []).append(f"{u.first_name} {u.last_name}".strip())
 
         # The `before` payload is the only place the closed window survives, so
         # the tank number and both dates are read back off the audit entry
