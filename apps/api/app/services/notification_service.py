@@ -8,7 +8,7 @@ live data rather than only looking at "what changed since last time", which mean
 a pass missed while the service was spun down is silently backfilled by the next
 one instead of leaving a permanent hole.
 
-Three rules are implemented:
+Four rules are implemented:
 
 * `water_quality_missing` — past the daily deadline with no water quality log
   for a tank on that day. The deadline is a wall-clock time in the facility's
@@ -16,11 +16,19 @@ Three rules are implemented:
   record rather than hardcoded. Addressed to the staff the tank is assigned to;
   managers and above see every tank plus who owns it.
 * `quarantine_expiring`   — a tank's quarantine window closes within a day.
+* `quarantine_lifted`     — a window closed and the system released the tank.
 * `aupp_expiring`         — an active project's AUPP lapses within a month.
 
-The first records a fact about a moment that has passed, so it is written once
-and never rewritten. The other two describe a live countdown, so they are
-refreshed every pass and deleted the moment the condition clears.
+`water_quality_missing` records a fact about a moment that has passed, so it is
+written once and never rewritten. `quarantine_expiring` and `aupp_expiring`
+describe a live countdown, so they are refreshed every pass and deleted the
+moment the condition clears. `quarantine_lifted` is a past fact too, but one the
+audit trail still holds, so it is rebuilt from that trail on every pass and
+simply falls out when it ages past the notice window.
+
+The sweep releases expired quarantines before it reads anything, which is what
+makes the release happen on a timer rather than only when somebody opens a page
+that touches tank state — and means the same pass reports what it just did.
 """
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -37,13 +45,25 @@ from ..models.water_quality_log import WaterQualityLog
 from ..repositories.audit_repository import AuditRepository
 from ..utils.clock import as_utc, day_bounds, local_date, now_utc
 from ..utils.entity_resolver import EntityResolver
+from ..utils.quarantine_utils import (
+    SYSTEM_ACTOR_ID,
+    format_duration,
+    lift_expired_quarantines,
+    snapshot_datetime,
+)
 from .notification_settings import Deadline, NotificationSettingsStore
 
 MANAGER_PLUS = {RoleEnum.manager, RoleEnum.chair, RoleEnum.admin, RoleEnum.super_admin}
 
 WATER_QUALITY_MISSING = "water_quality_missing"
 QUARANTINE_EXPIRING = "quarantine_expiring"
+QUARANTINE_LIFTED = "quarantine_lifted"
 AUPP_EXPIRING = "aupp_expiring"
+
+# How long a completed release stays in the panel. It is a courtesy notice that
+# something has already been handled, not a task waiting to be actioned, so it
+# ages out on its own rather than sitting there until someone dismisses it.
+QUARANTINE_LIFTED_WINDOW = timedelta(days=7)
 
 # Written once, then left alone: the alert states what was true at a deadline
 # that has already passed, so logging a tank late does not un-miss the deadline
@@ -109,6 +129,10 @@ class FacilitySnapshot:
     projects: List[Project] = field(default_factory=list)
     project_tanks: Dict[str, set] = field(default_factory=dict)
     assignees: Dict[str, List[str]] = field(default_factory=dict)
+    # Releases the system performed itself, read from the audit trail: once a
+    # tank is released its quarantine dates are cleared, so the tank row no
+    # longer remembers that any of this happened.
+    auto_lifts: List[Dict[str, Any]] = field(default_factory=list)
 
     @property
     def today(self) -> date:
@@ -158,6 +182,31 @@ class FacilitySnapshot:
             for tank_id in (u.assigned_tank_ids or []):
                 assignees.setdefault(tank_id, []).append(f"{u.first_name} {u.last_name}".strip())
 
+        # The `before` payload is the only place the closed window survives, so
+        # the tank number and both dates are read back off the audit entry
+        # rather than the (now cleared) tank row.
+        lift_entries = await AuditLog.find({
+            "action": "lifted_quarantine",
+            "actor_id": SYSTEM_ACTOR_ID,
+            "created_at": {"$gte": now - QUARANTINE_LIFTED_WINDOW},
+        }).to_list()
+
+        auto_lifts = [
+            {
+                "tank_id": entry.entity_id,
+                "tank_number": (entry.before or {}).get("tank_number") or "?",
+                "lifted_at": as_utc(entry.created_at),
+                "started": snapshot_datetime(entry.before, "quarantine_start_date"),
+                "ended": snapshot_datetime(entry.before, "quarantine_end_date"),
+            }
+            for entry in lift_entries
+        ]
+        # One notice per tank per day, so a tank released twice in a day collapses
+        # to a single key. Oldest first means the newest release is the one that
+        # survives the collapse, rather than whichever Mongo happened to return
+        # last.
+        auto_lifts.sort(key=lambda lift: lift["lifted_at"] or now)
+
         return cls(
             now=now,
             deadline=deadline,
@@ -167,6 +216,7 @@ class FacilitySnapshot:
             projects=projects,
             project_tanks=project_tanks,
             assignees=assignees,
+            auto_lifts=auto_lifts,
         )
 
 
@@ -178,6 +228,7 @@ class NotificationRules:
         return [
             *NotificationRules.water_quality(user, snap),
             *NotificationRules.quarantine(user, snap),
+            *NotificationRules.quarantine_lifted(user, snap),
             *NotificationRules.aupp(user, snap),
         ]
 
@@ -324,6 +375,72 @@ class NotificationRules:
             })
 
         return notifications
+
+    # -------------------------------------------------- rule: quarantine lifted
+
+    @staticmethod
+    def quarantine_lifted(user: User, snap: FacilitySnapshot) -> List[Dict[str, Any]]:
+        """
+        Tanks the system released when their window ran out.
+
+        The release happens without anyone asking for it, so it has to be
+        announced — otherwise a tank silently becomes transferable and the only
+        record is an audit row nobody is watching. Informational rather than a
+        warning: the thing it describes is already done and correct.
+        """
+        manager_view = _is_manager_plus(user)
+
+        lifts = snap.auto_lifts
+        if not manager_view:
+            assigned = set(user.assigned_tank_ids or [])
+            lifts = [lift for lift in lifts if lift["tank_id"] in assigned]
+
+        # One notice per tank per day. `snap.auto_lifts` is oldest-first, so a
+        # tank released twice in a day keeps the later release rather than
+        # reporting a superseded one.
+        by_key: Dict[str, Dict[str, Any]] = {}
+        for lift in lifts:
+            lifted_at = lift["lifted_at"]
+            if not lifted_at:
+                continue
+
+            lifted_day = local_date(lifted_at, snap.deadline.zone)
+            started, ended = lift["started"], lift["ended"]
+            served = (
+                f"completed its {format_duration(ended - started)} of quarantine"
+                if started and ended
+                else "completed quarantine"
+            )
+
+            key = f"{QUARANTINE_LIFTED}:{lift['tank_id']}:{lifted_day.isoformat()}"
+            by_key[key] = {
+                "key": key,
+                "type": QUARANTINE_LIFTED,
+                "severity": "info",
+                "title": f"Quarantine lifted on Tank {lift['tank_number']}",
+                "message": (
+                    f"Tank {lift['tank_number']} {served} on {_format_day(lifted_day)} "
+                    f"and was released automatically by the system."
+                ),
+                "created_at": lifted_at,
+                "link": "/staff/quarantine",
+                "meta": {
+                    "tank_id": lift["tank_id"],
+                    "tank_number": lift["tank_number"],
+                    "lifted_at": lifted_at.isoformat(),
+                    "automatic": True,
+                    **({"quarantine_end_date": ended.isoformat()} if ended else {}),
+                    # As with the countdown, when the window opened is history a
+                    # manager reviews rather than something staff act on.
+                    **(
+                        {"quarantine_start_date": started.isoformat()}
+                        if manager_view and started
+                        else {}
+                    ),
+                },
+            }
+
+        return list(by_key.values())
 
     # --------------------------------------------------------------- rule: AUPP
 
@@ -480,8 +597,16 @@ class NotificationService:
 
         Safe to run at any cadence and safe to run twice: keys are deterministic,
         so a second pass over unchanged data writes nothing.
+
+        Releasing expired quarantines first is what puts that release on a clock.
+        The read paths that surface tank state also release, but those only fire
+        when somebody happens to look; a tank whose window closes overnight would
+        otherwise stay flagged until morning. Doing it here also means the
+        snapshot taken next already reflects the releases, so the same pass
+        raises the notice.
         """
         started = now_utc()
+        released = await lift_expired_quarantines(now)
         snap = await FacilitySnapshot.capture(now)
         users = await User.find({"status": StatusEnum.active.value}).to_list()
 
@@ -506,6 +631,7 @@ class NotificationService:
             "created": created,
             "updated": updated,
             "removed": removed,
+            "released": released,
             "duration_ms": duration_ms,
             "swept_at": started.isoformat(),
         }

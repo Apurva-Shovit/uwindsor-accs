@@ -30,7 +30,8 @@ async def run_once() -> dict:
     result = await NotificationService.sweep()
     logger.info(
         "notification sweep: %(created)s created, %(updated)s updated, "
-        "%(removed)s removed across %(users)s users in %(duration_ms)sms",
+        "%(removed)s removed across %(users)s users, %(released)s quarantine(s) "
+        "released, in %(duration_ms)sms",
         result,
     )
     return result

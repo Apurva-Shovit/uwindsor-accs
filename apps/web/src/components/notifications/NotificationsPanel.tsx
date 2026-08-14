@@ -19,6 +19,7 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'water_quality_missing', label: typeLabels.water_quality_missing },
   { id: 'quarantine_expiring', label: typeLabels.quarantine_expiring },
+  { id: 'quarantine_lifted', label: typeLabels.quarantine_lifted },
   { id: 'aupp_expiring', label: typeLabels.aupp_expiring },
 ];
 
@@ -74,6 +75,19 @@ const NotificationDetail: React.FC<{ item: NotificationItem }> = ({ item }) => {
           value={meta.quarantine_start_date ? formatDate(meta.quarantine_start_date) : null}
         />
         <MetaRow label="Ends" value={formatDate(meta.quarantine_end_date)} />
+      </div>
+    );
+  }
+
+  if (item.type === 'quarantine_lifted') {
+    return (
+      <div className="mt-2 space-y-0.5">
+        <MetaRow
+          label="Started"
+          value={meta.quarantine_start_date ? formatDate(meta.quarantine_start_date) : null}
+        />
+        <MetaRow label="Window closed" value={formatDate(meta.quarantine_end_date)} />
+        <MetaRow label="Released" value={formatDate(meta.lifted_at)} />
       </div>
     );
   }

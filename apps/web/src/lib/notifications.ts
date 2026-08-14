@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarClock, Droplets, ShieldAlert, type LucideIcon } from 'lucide-react';
+import { CalendarClock, Droplets, ShieldAlert, ShieldCheck, type LucideIcon } from 'lucide-react';
 import {
   getNotificationSettings,
   getNotifications,
@@ -14,6 +14,7 @@ export type NotificationSeverity = 'critical' | 'warning' | 'info';
 export type NotificationType =
   | 'water_quality_missing'
   | 'quarantine_expiring'
+  | 'quarantine_lifted'
   | 'aupp_expiring';
 
 export interface NotificationItem {
@@ -178,11 +179,15 @@ export const styleForSeverity = (severity: NotificationSeverity): SeverityStyle 
 export const typeLabels: Record<NotificationType, string> = {
   water_quality_missing: 'Water Quality',
   quarantine_expiring: 'Quarantine',
+  quarantine_lifted: 'Quarantine Lifted',
   aupp_expiring: 'AUPP Expiry',
 };
 
 export const typeIcons: Record<NotificationType, LucideIcon> = {
   water_quality_missing: Droplets,
   quarantine_expiring: ShieldAlert,
+  // Deliberately the reassuring twin of the countdown's icon: the window closed
+  // and the tank was cleared, which is the good outcome, not another alarm.
+  quarantine_lifted: ShieldCheck,
   aupp_expiring: CalendarClock,
 };
