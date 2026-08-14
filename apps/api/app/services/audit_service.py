@@ -47,7 +47,7 @@ class AuditService:
 
         from bson import ObjectId
 
-        def _extract_user_from_snapshot(payload: Dict[str, Any] | None) -> str | None:
+        async def _extract_user_from_snapshot(payload: Dict[str, Any] | None) -> str | None:
             if not payload or not isinstance(payload, dict):
                 return None
             fn = payload.get("first_name")
@@ -57,6 +57,11 @@ class AuditService:
             email = payload.get("email")
             if email:
                 return email
+            cb = payload.get("created_by") or payload.get("actor_id") or payload.get("updated_by")
+            if cb:
+                name = await EntityResolver.resolve_user_name(str(cb))
+                if name and name != "Unknown User" and not ObjectId.is_valid(name):
+                    return name
             return None
 
         # 4. Map the response
@@ -64,7 +69,7 @@ class AuditService:
         for log in logs:
             actor_name = actor_map.get(str(log.actor_id))
             if not actor_name or actor_name == "Unknown User" or (isinstance(actor_name, str) and ObjectId.is_valid(actor_name)):
-                snapshot_name = _extract_user_from_snapshot(log.after) or _extract_user_from_snapshot(log.before)
+                snapshot_name = (await _extract_user_from_snapshot(log.after)) or (await _extract_user_from_snapshot(log.before))
                 actor_name = snapshot_name or "Unknown User"
 
             display_id = str(log.entity_id) if log.entity_id else ""
@@ -81,10 +86,27 @@ class AuditService:
                     display_id = f"Daily Cutoff ({label})"
             elif log.entity_type != "user":
                 display_id = entity_display_map.get((log.entity_type, str(log.entity_id))) or f"Unknown {log.entity_type.replace('_', ' ').title()}"
+                if "Unknown" in display_id:
+                    payload = log.after or log.before or {}
+                    tank_ref = payload.get("tank_id") or payload.get("tank_number")
+                    if tank_ref:
+                        resolved_tank = await EntityResolver.resolve_tank_number(str(tank_ref))
+                        if resolved_tank and "Unknown" not in resolved_tank:
+                            if log.entity_type == "water_quality_log":
+                                display_id = f"Water Quality for {resolved_tank}"
+                            elif log.entity_type == "tank":
+                                display_id = resolved_tank
+                            elif log.entity_type == "tank_assignment":
+                                display_id = f"Assignment on {resolved_tank}"
+                            elif log.entity_type == "incident_report":
+                                display_id = f"Incident on {resolved_tank}"
+                        elif not ObjectId.is_valid(str(tank_ref)):
+                            if log.entity_type == "water_quality_log":
+                                display_id = f"Water Quality for Tank {tank_ref}"
             else:
                 resolved_id = actor_map.get(str(log.entity_id))
                 if not resolved_id or resolved_id == "Unknown User" or (isinstance(resolved_id, str) and ObjectId.is_valid(resolved_id)):
-                    snapshot_name = _extract_user_from_snapshot(log.after) or _extract_user_from_snapshot(log.before)
+                    snapshot_name = (await _extract_user_from_snapshot(log.after)) or (await _extract_user_from_snapshot(log.before))
                     display_id = snapshot_name or "Unknown User"
                 else:
                     display_id = resolved_id

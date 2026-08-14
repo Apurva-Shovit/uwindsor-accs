@@ -166,12 +166,16 @@ class AuditRepository:
 
         if "water_quality_log" in grouped and grouped["water_quality_log"]:
             wqls = await WaterQualityLog.find({"_id": {"$in": [ObjectId(i) for i in grouped["water_quality_log"]]}}).to_list()
-            tank_ids = [wql.tank_id for wql in wqls if wql.tank_id and ObjectId.is_valid(wql.tank_id)]
-            tanks = await Tank.find({"_id": {"$in": [ObjectId(i) for i in tank_ids]}}).to_list() if tank_ids else []
-            t_map = {str(t.id): t.tank_number for t in tanks}
+            valid_tank_ids = [ObjectId(wql.tank_id) for wql in wqls if wql.tank_id and ObjectId.is_valid(wql.tank_id)]
+            tanks = await Tank.find({"_id": {"$in": valid_tank_ids}}).to_list() if valid_tank_ids else []
+            t_map = {str(t.id): f"Tank {t.tank_number}" for t in tanks}
             for wql in wqls:
-                t_num = t_map.get(wql.tank_id, "Unknown")
-                result[("water_quality_log", str(wql.id))] = f"Water Quality for Tank {t_num}"
+                if wql.tank_id in t_map:
+                    result[("water_quality_log", str(wql.id))] = f"Water Quality for {t_map[wql.tank_id]}"
+                elif wql.tank_id and not ObjectId.is_valid(wql.tank_id):
+                    result[("water_quality_log", str(wql.id))] = f"Water Quality for Tank {wql.tank_id}"
+                else:
+                    result[("water_quality_log", str(wql.id))] = "Water Quality for Tank Unknown"
 
         if "incident_report" in grouped and grouped["incident_report"]:
             incs = await IncidentReport.find({"_id": {"$in": [ObjectId(i) for i in grouped["incident_report"]]}}).to_list()
