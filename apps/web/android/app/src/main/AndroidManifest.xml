@@ -20,6 +20,27 @@
             </intent-filter>
         </activity>
 
+        <!--
+          Without these two, FCM falls back to the launcher icon — which Android
+          renders as a solid white blob, since it keeps only the alpha channel of
+          a small icon. The colour tints that silhouette.
+        -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/brandBlue" />
+        <!--
+          Fallback channel for any message that arrives without one named. The
+          app creates this same channel at startup (see src/lib/push.ts); on
+          Android 8+ a message naming a channel that does not exist is dropped
+          without an error anywhere.
+        -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="@string/default_notification_channel_id" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -32,4 +53,9 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Android 13+ requires this to be granted at runtime before any
+         notification is shown; on earlier releases it is ignored. The app
+         requests it on first sign-in (src/lib/push.ts). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

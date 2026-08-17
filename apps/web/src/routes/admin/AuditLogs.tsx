@@ -10,12 +10,13 @@ export const AuditLogs: React.FC = () => {
   const [dateFrom, setDateFrom] = React.useState('');
   const [dateTo, setDateTo] = React.useState('');
   const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(20);
   const [selectedLog, setSelectedLog] = React.useState<any | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['auditLogs', dateFrom, dateTo, page],
+    queryKey: ['auditLogs', dateFrom, dateTo, page, pageSize],
     queryFn: async () => {
-      const params: Record<string, any> = { page, page_size: 20 };
+      const params: Record<string, any> = { page, page_size: pageSize };
       if (dateFrom) params.date_from = new Date(dateFrom).toISOString();
       if (dateTo) params.date_to = new Date(dateTo).toISOString();
       const res = await getAuditLogs(params);
@@ -45,7 +46,7 @@ export const AuditLogs: React.FC = () => {
             <input
               type="date"
               value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
+              onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#005596] focus:border-transparent transition-all"
             />
           </div>
@@ -54,14 +55,14 @@ export const AuditLogs: React.FC = () => {
             <input
               type="date"
               value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
+              onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#005596] focus:border-transparent transition-all"
             />
           </div>
           <div className="flex items-end">
             {(dateFrom || dateTo) && (
               <button
-                onClick={() => { setDateFrom(''); setDateTo(''); }}
+                onClick={() => { setDateFrom(''); setDateTo(''); setPage(1); }}
                 className="w-full border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-semibold py-2 rounded-lg transition-colors"
               >
                 Clear Filters
@@ -170,8 +171,13 @@ export const AuditLogs: React.FC = () => {
                 page={page}
                 totalPages={totalPages}
                 total={total}
-                limit={20}
+                limit={pageSize}
                 onPageChange={(p) => setPage(p)}
+                onLimitChange={(l) => {
+                  setPageSize(l);
+                  setPage(1);
+                }}
+                limitOptions={[20, 50, 100]}
               />
             </div>
           )}

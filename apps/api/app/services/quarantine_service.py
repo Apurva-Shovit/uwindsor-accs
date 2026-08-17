@@ -2,7 +2,7 @@ import uuid
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, date
 from fastapi import HTTPException
-from pydantic import BaseModel
+from pydantic import AliasChoices, BaseModel, Field
 from ..models.user import User, RoleEnum
 from ..models.audit_log import AuditLog
 from ..models.facility import Tank
@@ -14,7 +14,9 @@ from ..repositories.audit_repository import AuditRepository
 class ExemptionRequestCreate(BaseModel):
     tank_id: str
     target_tank_id: str
-    count: int
+    # Named to match the stored document and the list response; "count" stays
+    # accepted so already-deployed clients keep working.
+    fish_count: int = Field(gt=0, validation_alias=AliasChoices("fish_count", "count"))
     reason: str
     urgency: str = "normal"
 
@@ -38,7 +40,7 @@ class QuarantineService:
         exemption = QuarantineExemption(
             tank_id=body.tank_id,
             target_tank_id=body.target_tank_id,
-            fish_count=body.count,
+            fish_count=body.fish_count,
             reason=body.reason,
             urgency=body.urgency,
             requested_by=str(current_user.id),

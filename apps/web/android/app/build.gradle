@@ -18,8 +18,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Bump versionCode on every APK handed out — Android refuses to install
         // over an equal or higher version, so staff would be stuck otherwise.
-        versionCode 2
-        versionName "1.1.0"
+        versionCode 4
+        versionName "1.2.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

@@ -12,6 +12,8 @@ from .models.tank_assignment import TankAssignment
 from .models.census_event import CensusEvent
 from .models.individual_fish import IndividualFish
 from .models.quarantine import QuarantineExemption
+from .models.notification import Notification, NotificationSettings, NotificationSweepState
+from .models.device_token import DeviceToken
 
 import certifi
 
@@ -26,7 +28,9 @@ async def init_db():
             User, AuditLog, Facility, Room, Tank,
             WaterQualityLog, IncidentReport, Project,
             TankAssignment, CensusEvent, Species,
-            IndividualFish, QuarantineExemption
+            IndividualFish, QuarantineExemption,
+            Notification, NotificationSettings, NotificationSweepState,
+            DeviceToken,
         ],
     )
     # Ensure superadmin account exists with known password

@@ -2,6 +2,7 @@ import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useSidebar } from '../../context/SidebarContext';
 import { LogOut, Shield, User as UserIcon, Menu } from 'lucide-react';
+import { NotificationBell } from '../notifications/NotificationBell';
 
 export const Topbar: React.FC = () => {
   const { user, logout } = useAuth();
@@ -41,6 +42,7 @@ export const Topbar: React.FC = () => {
               <UserIcon className="mr-1.5 h-4 w-4 text-brandGrey" />
               {user.first_name} {user.last_name}
             </div>
+            <NotificationBell />
             <button
               onClick={logout}
               className="inline-flex items-center rounded-md p-2 text-brandGrey hover:bg-surface hover:text-danger sm:p-1.5"

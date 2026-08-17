@@ -1,35 +1,101 @@
 import React from 'react';
 
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Parses a timestamp as the API sends it.
+ *
+ * The API serialises datetimes with a bare `.isoformat()` on values Mongo hands
+ * back as naive UTC, so they arrive with no trailing 'Z' and no offset. Passing
+ * those straight to `new Date()` makes the browser read them as local time and
+ * silently skews every value by the viewer's UTC offset, so stamp them as UTC
+ * before parsing. Date-only strings stay local — they carry no time to skew.
+ */
+export const parseApiDate = (dateStr: string | null | undefined): Date | null => {
+  if (!dateStr) return null;
+  let str = String(dateStr).trim();
+  if (DATE_ONLY.test(str)) {
+    const [y, m, d] = str.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(str) && !/[Z+-]\d{2}:?\d{2}$/.test(str) && !str.endsWith('Z')) {
+    str = str.replace(' ', 'T') + 'Z';
+  }
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
+};
+
 export const formatDate = (dateStr: string | null | undefined): string => {
   if (!dateStr) return '-';
-  try {
-    let str = String(dateStr).trim();
-    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
-      const [y, m, d] = str.split('-').map(Number);
-      const dt = new Date(y, m - 1, d);
-      return dt.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
-    }
-    if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(str) && !/[Z+-]\d{2}:?\d{2}$/.test(str) && !str.endsWith('Z')) {
-      str = str.replace(' ', 'T') + 'Z';
-    }
-    const d = new Date(str);
-    if (isNaN(d.getTime())) return String(dateStr);
-    return d.toLocaleString('en-US', { 
-      weekday: 'short', 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric', 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: true
-    });
-  } catch {
-    return String(dateStr);
+  const d = parseApiDate(dateStr);
+  if (!d) return String(dateStr);
+  if (DATE_ONLY.test(String(dateStr).trim())) {
+    return d.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
   }
+  return d.toLocaleString('en-US', {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
 };
 
 export const isMongoObjectId = (str: string): boolean => {
   return typeof str === 'string' && /^[0-9a-fA-F]{24}$/.test(str);
+};
+
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+
+export type QuarantineTone = 'steady' | 'soon' | 'urgent' | 'critical' | 'expired';
+
+export interface QuarantineRemaining {
+  label: string;
+  tone: QuarantineTone;
+}
+
+/**
+ * How much of a quarantine window is left, stepped down through days -> hours ->
+ * minutes so the badge stays honest as the window closes. Reporting whole days
+ * throughout is misleading at the end: a tank five minutes from release and a
+ * tank a full day from release both read as "1 day".
+ *
+ * Anything from 23h up reads as whole days; below that the hour tier takes over,
+ * then the minute tier inside the last hour. The final five minutes and the last
+ * minute get their own tone so the badge escalates visually as release nears.
+ */
+export const formatQuarantineRemaining = (
+  endDate: Date | null,
+  now: Date = new Date(),
+): QuarantineRemaining => {
+  if (!endDate) return { label: 'No end date', tone: 'expired' };
+
+  const remainingMs = endDate.getTime() - now.getTime();
+  if (remainingMs <= 0) return { label: 'Expired', tone: 'expired' };
+
+  if (remainingMs >= 23 * HOUR_MS) {
+    const days = Math.max(1, Math.round(remainingMs / DAY_MS));
+    return { label: `${days} ${days === 1 ? 'day' : 'days'} left`, tone: 'steady' };
+  }
+
+  if (remainingMs >= HOUR_MS) {
+    const hrs = Math.floor(remainingMs / HOUR_MS);
+    return { label: `${hrs} ${hrs === 1 ? 'hr' : 'hrs'} left`, tone: 'soon' };
+  }
+
+  if (remainingMs >= MINUTE_MS) {
+    const mins = Math.floor(remainingMs / MINUTE_MS);
+    return {
+      label: `${mins} ${mins === 1 ? 'min' : 'mins'} left`,
+      tone: mins < 5 ? 'critical' : 'urgent',
+    };
+  }
+
+  return { label: '< 1 min left', tone: 'critical' };
 };
 
 export const formatBooleanBadge = (val: boolean): React.ReactNode => {

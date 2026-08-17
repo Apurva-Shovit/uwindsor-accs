@@ -1,3 +1,4 @@
+import math
 from typing import Dict, Any, List
 from datetime import datetime
 from ..repositories.audit_repository import AuditRepository
@@ -15,7 +16,7 @@ class AuditService:
         date_to: datetime | None,
         page: int,
         page_size: int
-    ) -> List[Dict[str, Any]]:
+    ) -> Dict[str, Any]:
         # 1. Build Query
         query: Dict[str, Any] = {}
         if actor_id: query["actor_id"] = actor_id
@@ -29,7 +30,10 @@ class AuditService:
             
         skip = (page - 1) * page_size
 
-        # 2. Fetch logs from Repository
+        # 2. Count total records for pagination metadata
+        total_count = await AuditRepository.count_logs(query)
+
+        # 3. Fetch logs from Repository
         logs = await AuditRepository.get_logs_with_pagination(query, skip, page_size)
 
         # 3. Extract all unique Actor IDs and Non-User Entity IDs for bulk resolution
@@ -43,7 +47,7 @@ class AuditService:
 
         from bson import ObjectId
 
-        def _extract_user_from_snapshot(payload: Dict[str, Any] | None) -> str | None:
+        async def _extract_user_from_snapshot(payload: Dict[str, Any] | None) -> str | None:
             if not payload or not isinstance(payload, dict):
                 return None
             fn = payload.get("first_name")
@@ -53,6 +57,11 @@ class AuditService:
             email = payload.get("email")
             if email:
                 return email
+            cb = payload.get("created_by") or payload.get("actor_id") or payload.get("updated_by")
+            if cb:
+                name = await EntityResolver.resolve_user_name(str(cb))
+                if name and name != "Unknown User" and not ObjectId.is_valid(name):
+                    return name
             return None
 
         # 4. Map the response
@@ -60,16 +69,44 @@ class AuditService:
         for log in logs:
             actor_name = actor_map.get(str(log.actor_id))
             if not actor_name or actor_name == "Unknown User" or (isinstance(actor_name, str) and ObjectId.is_valid(actor_name)):
-                snapshot_name = _extract_user_from_snapshot(log.after) or _extract_user_from_snapshot(log.before)
+                snapshot_name = (await _extract_user_from_snapshot(log.after)) or (await _extract_user_from_snapshot(log.before))
                 actor_name = snapshot_name or "Unknown User"
 
             display_id = str(log.entity_id) if log.entity_id else ""
-            if log.entity_type != "user":
+            if log.entity_type in ["water_quality_cutoff", "notification_settings", "notification_cutoff"]:
+                if log.entity_id and not ObjectId.is_valid(str(log.entity_id)):
+                    display_id = str(log.entity_id)
+                else:
+                    payload = log.after or log.before or {}
+                    h = payload.get("water_quality_deadline_hour", 17)
+                    m = payload.get("water_quality_deadline_minute", 0)
+                    tz = payload.get("timezone", "America/Toronto")
+                    from .notification_settings import Deadline
+                    label = Deadline(h, m, tz).label()
+                    display_id = f"Daily Cutoff ({label})"
+            elif log.entity_type != "user":
                 display_id = entity_display_map.get((log.entity_type, str(log.entity_id))) or f"Unknown {log.entity_type.replace('_', ' ').title()}"
+                if "Unknown" in display_id:
+                    payload = log.after or log.before or {}
+                    tank_ref = payload.get("tank_id") or payload.get("tank_number")
+                    if tank_ref:
+                        resolved_tank = await EntityResolver.resolve_tank_number(str(tank_ref))
+                        if resolved_tank and "Unknown" not in resolved_tank:
+                            if log.entity_type == "water_quality_log":
+                                display_id = f"Water Quality for {resolved_tank}"
+                            elif log.entity_type == "tank":
+                                display_id = resolved_tank
+                            elif log.entity_type == "tank_assignment":
+                                display_id = f"Assignment on {resolved_tank}"
+                            elif log.entity_type == "incident_report":
+                                display_id = f"Incident on {resolved_tank}"
+                        elif not ObjectId.is_valid(str(tank_ref)):
+                            if log.entity_type == "water_quality_log":
+                                display_id = f"Water Quality for Tank {tank_ref}"
             else:
                 resolved_id = actor_map.get(str(log.entity_id))
                 if not resolved_id or resolved_id == "Unknown User" or (isinstance(resolved_id, str) and ObjectId.is_valid(resolved_id)):
-                    snapshot_name = _extract_user_from_snapshot(log.after) or _extract_user_from_snapshot(log.before)
+                    snapshot_name = (await _extract_user_from_snapshot(log.after)) or (await _extract_user_from_snapshot(log.before))
                     display_id = snapshot_name or "Unknown User"
                 else:
                     display_id = resolved_id
@@ -95,12 +132,20 @@ class AuditService:
                 "timestamp": log.created_at.isoformat(),
             })
             
-        return result
+        total_pages = math.ceil(total_count / page_size) if page_size > 0 else 1
+
+        return {
+            "items": result,
+            "total": total_count,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": max(1, total_pages),
+        }
 
     @staticmethod
     async def get_audit_logs(skip: int = 0, limit: int = 20) -> List[Dict[str, Any]]:
         page = (skip // limit) + 1 if limit > 0 else 1
-        return await AuditService.get_paginated_logs(
+        res = await AuditService.get_paginated_logs(
             actor_id=None,
             entity_type=None,
             action=None,
@@ -109,4 +154,5 @@ class AuditService:
             page=page,
             page_size=limit
         )
+        return res.get("items", [])
 

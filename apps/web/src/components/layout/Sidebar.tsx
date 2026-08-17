@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Users, LayoutDashboard, Database, Activity, ClipboardList, TrendingUp, RefreshCw, BookOpen, FileText, ChevronDown, Fish, Download } from 'lucide-react';
+import { Users, LayoutDashboard, Database, Activity, ClipboardList, TrendingUp, RefreshCw, BookOpen, FileText, ChevronDown, Fish, Download, Bell } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSidebar } from '../../context/SidebarContext';
 import { useIsDesktop } from '../../hooks/useMediaQuery';
+import { notificationsPathForRole, useNotificationFeed } from '../../lib/notifications';
 
 export const Sidebar: React.FC = () => {
   const { user } = useAuth();
@@ -13,6 +14,8 @@ export const Sidebar: React.FC = () => {
   const asideRef = useRef<HTMLElement>(null);
   const isManagerPlus = ['super_admin', 'chair', 'admin', 'manager'].includes(user?.role || '');
   const [isFishMgmtOpen, setIsFishMgmtOpen] = useState(true);
+  const { data: notifications } = useNotificationFeed('all');
+  const unreadCount = notifications?.unread_count ?? 0;
 
   const isDrawerOpen = !isDesktop && isSidebarOpen;
   const isDrawerShut = !isDesktop && !isSidebarOpen;
@@ -103,6 +106,31 @@ export const Sidebar: React.FC = () => {
             {showLabels && <span>Dashboard</span>}
           </NavLink>
         )}
+
+        {/* Notifications */}
+        <NavLink
+          end
+          to={notificationsPathForRole(user?.role)}
+          title="Notifications"
+          className={({ isActive }) => linkClass(isActive)}
+        >
+          <span className="relative flex-shrink-0">
+            <Bell className={`h-5 w-5 text-amber-600 ${showLabels ? 'mr-3' : ''}`} />
+            {unreadCount > 0 && !showLabels && (
+              <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border border-white bg-red-500" />
+            )}
+          </span>
+          {showLabels && (
+            <>
+              <span>Notifications</span>
+              {unreadCount > 0 && (
+                <span className="ml-auto rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                  {unreadCount}
+                </span>
+              )}
+            </>
+          )}
+        </NavLink>
 
         {/* Fish Management Collapsible Group */}
         {isManagerPlus ? (

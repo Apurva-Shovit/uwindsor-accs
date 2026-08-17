@@ -106,12 +106,29 @@ export const searchTankHistory = (params: Record<string, any>) =>
 export const getQuarantineExemptions = (params?: { status_filter?: string; page?: number; limit?: number }) =>
   api.get('/quarantine/exemptions', { params });
 export const postExemptionRequest = (data: any) => api.post('/quarantine/exemption-request', data);
-export const decideExemption = (id: string, data: any) => api.post(`/quarantine/exemption/${id}/decide`, data);
+export const decideExemption = (id: string, data: any) => api.patch(`/quarantine/exemption/${id}/decide`, data);
 
 // Audit Logs & Reports
 export const getAuditLogs = (params?: Record<string, any>) => api.get('/audit-logs', { params });
 export const getReportsSummary = (params?: Record<string, any>) => api.get('/reports/summary', { params });
 export const getExecutiveSummary = (params?: Record<string, any>) => api.get('/reports/executive-facility-summary', { params });
+
+// Notifications
+export const getNotifications = (window: 'all' | 'recent' = 'all') =>
+  api.get('/notifications', { params: { window } });
+export const markNotificationsRead = (body: { keys?: string[]; all?: boolean }) =>
+  api.post('/notifications/mark-read', body);
+export const getNotificationSettings = () => api.get('/notifications/settings');
+export const updateNotificationSettings = (body: { hour: number; minute: number; timezone: string }) =>
+  api.put('/notifications/settings', body);
+
+// Android push registration. The token identifies a device install, so the API
+// reassigns it rather than duplicating when a second user signs in on a shared
+// tablet — which is also why sign-out has to unregister explicitly.
+export const registerPushDevice = (body: { token: string; platform?: string }) =>
+  api.post('/notifications/devices', body);
+export const unregisterPushDevice = (token: string) =>
+  api.delete('/notifications/devices', { params: { token } });
 
 // Dashboard
 export const getDashboardSummary = () => api.get('/dashboard/summary');

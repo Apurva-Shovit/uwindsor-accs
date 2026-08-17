@@ -11,6 +11,7 @@ import { ProjectReportPage } from '../ProjectReportPage';
 import { TankHistoryPage } from './TankHistoryPage';
 import { UserManagement } from './UserManagement';
 import { ExportPage } from './ExportPage';
+import { NotificationsPage } from '../NotificationsPage';
 
 
 
@@ -39,6 +40,7 @@ export const AdminLayout: React.FC = () => {
             <Route path="reports" element={<Reports />} />
             <Route path="audit-logs" element={<AuditLogs />} />
             <Route path="export" element={<ExportPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
             <Route path="*" element={<Navigate to="/admin" replace />} />
           </Routes>
         </main>

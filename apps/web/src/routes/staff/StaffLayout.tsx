@@ -11,6 +11,7 @@ import { CensusPage } from './CensusPage';
 import { TransferPage } from './TransferPage';
 import { QuarantinePage } from './QuarantinePage';
 import { TankHistoryPage } from '../admin/TankHistoryPage';
+import { NotificationsPage } from '../NotificationsPage';
 
 export const StaffLayout: React.FC = () => {
   return (
@@ -28,6 +29,7 @@ export const StaffLayout: React.FC = () => {
             <Route path="census" element={<CensusPage />} />
             <Route path="transfers" element={<TransferPage />} />
             <Route path="quarantine" element={<QuarantinePage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
 
             <Route path="/" element={<Navigate to="tanks" replace />} />
             <Route path="dashboard" element={<Navigate to="tanks" replace />} />

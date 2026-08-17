@@ -7,6 +7,7 @@ from ..models.tank_assignment import TankAssignment
 from ..schemas.water_quality import WaterQualityCreate, WaterQualityBatchCreate
 from ..repositories.audit_repository import AuditRepository
 from ..constants.water_quality import validate_parameters
+from .notification_service import NotificationService
 
 MANAGER_PLUS = {RoleEnum.manager, RoleEnum.chair, RoleEnum.admin, RoleEnum.super_admin}
 
@@ -52,6 +53,12 @@ class WaterQualityService:
             after=after,
         ))
 
+        # Immediately reconcile notifications when a log is submitted
+        try:
+            await NotificationService.sweep(force=True)
+        except Exception:
+            pass
+
         validation = validate_parameters(body.type, body.parameters)
         return {"message": "created", "log": after, "validation": validation}
 
@@ -90,6 +97,13 @@ class WaterQualityService:
             created_logs.append(after)
 
         validation = validate_parameters(body.type, body.parameters)
+
+        # Immediately reconcile notifications when batch logs are submitted
+        try:
+            await NotificationService.sweep(force=True)
+        except Exception:
+            pass
+
         return {"created": len(created_logs), "logs": created_logs, "validation": validation}
 
     @staticmethod

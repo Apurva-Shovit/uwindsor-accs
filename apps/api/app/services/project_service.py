@@ -12,6 +12,7 @@ from ..models.facility import Tank
 from ..schemas.project import ProjectCreate, ProjectClose
 from ..repositories.base_repository import BaseRepository
 from ..repositories.audit_repository import AuditRepository
+from ..utils.quarantine_utils import lift_expired_quarantines
 
 class ProjectService:
     """Service layer for Project Management."""
@@ -54,6 +55,7 @@ class ProjectService:
 
     @staticmethod
     async def get_project_details(project_id: str) -> Dict[str, Any]:
+        await lift_expired_quarantines()
         p = await Project.get(project_id)
         if not p:
             raise HTTPException(404, "Project not found")
@@ -111,6 +113,7 @@ class ProjectService:
         page: int = 1,
         limit: int = 10
     ) -> Dict[str, Any]:
+        await lift_expired_quarantines()
         p = await Project.get(project_id)
         if not p:
             raise HTTPException(404, "Project not found")

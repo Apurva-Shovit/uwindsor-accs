@@ -12,6 +12,7 @@ from ..models.incident_report import IncidentReport
 from ..repositories.base_repository import BaseRepository
 from ..repositories.audit_repository import AuditRepository
 from ..utils.entity_resolver import EntityResolver
+from ..utils.quarantine_utils import lift_quarantine, lift_expired_quarantines
 
 class FacilityService:
     """Service layer for Facility, Room, and Tank Management."""
@@ -61,6 +62,7 @@ class FacilityService:
 
     @staticmethod
     async def list_tanks(room_id: Optional[str], current_user: User) -> List[Tank]:
+        await lift_expired_quarantines()
         query = {"deleted": False}
         if room_id:
             query["room_id"] = room_id
@@ -146,24 +148,33 @@ class FacilityService:
         t = await Tank.get(tank_id)
         if not t or t.deleted:
             raise HTTPException(404, "Tank not found")
-            
+
+        actor_role = current_user.role.value if current_user.role else "none"
+        actor_name = f"{current_user.first_name} {current_user.last_name}".strip()
+
+        if not is_quarantined:
+            # Delegated so a manual release records how much of the window was
+            # forfeited, in the same wording the expiry sweep uses.
+            await lift_quarantine(
+                t,
+                actor_id=str(current_user.id),
+                actor_role=actor_role,
+                actor_name=actor_name,
+            )
+            return t
+
         before = t.model_dump(mode="json")
-        
-        t.is_quarantined = is_quarantined
-        if is_quarantined:
-            t.quarantine_start_date = datetime.now(timezone.utc)
-            t.quarantine_end_date = t.quarantine_start_date + timedelta(days=days)
-        else:
-            t.quarantine_start_date = None
-            t.quarantine_end_date = None
-            
+
+        t.is_quarantined = True
+        t.quarantine_start_date = datetime.now(timezone.utc)
+        t.quarantine_end_date = t.quarantine_start_date + timedelta(days=days)
+
         await t.save()
-        
-        action_str = "placed_in_quarantine" if is_quarantined else "lifted_quarantine"
+
         await AuditRepository.insert(AuditLog(
             actor_id=str(current_user.id),
-            actor_role=current_user.role.value if current_user.role else "none",
-            action=action_str,
+            actor_role=actor_role,
+            action="placed_in_quarantine",
             entity_type="tank",
             entity_id=str(t.id),
             before=before,
@@ -174,25 +185,26 @@ class FacilityService:
         ta = await TankAssignment.find_one({"tank_id": tank_id, "current_count": {"$gt": 0}})
         if not ta:
             ta = await TankAssignment.find_one({"tank_id": tank_id})
-        
+
         if ta and ta.project_id:
             q_ev = CensusEvent(
                 project_id=ta.project_id,
                 tank_assignment_id=str(ta.id),
                 tank_id=tank_id,
                 date=date.today(),
-                event_type="quarantine_placed" if is_quarantined else "quarantine_lifted",
+                event_type="quarantine_placed",
                 change=0,
-                reason="Manual Biosecurity Quarantine Initiated" if is_quarantined else "Manually Lifted Prior to Expiration",
-                notes=f"Quarantine {'manually initiated' if is_quarantined else 'manually lifted'} by {current_user.first_name} {current_user.last_name}",
+                reason="Manual Biosecurity Quarantine Initiated",
+                notes=f"Quarantine manually initiated by {actor_name}",
                 created_by=str(current_user.id),
             )
             await q_ev.insert()
-        
+
         return t
 
     @staticmethod
     async def get_tanks_summary(current_user: User) -> List[Dict[str, Any]]:
+        await lift_expired_quarantines()
         tanks = await Tank.find({"deleted": False}).to_list()
         if current_user.role == RoleEnum.staff:
             tanks = [t for t in tanks if str(t.id) in current_user.assigned_tank_ids]
