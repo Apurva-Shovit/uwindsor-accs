@@ -47,6 +47,15 @@ let listeners: PluginListenerHandle[] = [];
 let currentToken: string | null = null;
 let starting = false;
 
+/**
+ * Bumped by every teardown. `startPush` awaits several native round-trips, and a
+ * sign-out landing partway through would otherwise let the rest of the setup
+ * finish afterwards — attaching listeners and registering a device that nothing
+ * will ever unregister. Each setup captures the value on entry and abandons its
+ * work the moment it no longer matches.
+ */
+let generation = 0;
+
 /** Where a tapped notification should land, defaulting to the full feed. */
 const linkFromData = (data: unknown): string => {
   const link = (data as Record<string, unknown> | undefined)?.link;
@@ -76,20 +85,25 @@ const showForeground = async (notification: PushNotificationSchema): Promise<voi
 };
 
 /**
- * Ask for notification permission, register with FCM, and hand the token to the API.
+ * Create the notification channel and get the OS permission settled.
  *
- * Safe to call repeatedly: Capacitor issues the same token on every launch and
- * the API treats registration as idempotent. `onOpen` is invoked with the target
- * route when the user taps a notification.
+ * Split out from `startPush` and called at app startup, before anyone has
+ * signed in, so the permission sheet is part of first launch rather than
+ * something that appears later attached to signing in. Registration still waits
+ * for a session — the token has to be stored against a user — but the prompt no
+ * longer does.
+ *
+ * Returns whether notifications may actually be shown. Safe to call repeatedly:
+ * once the choice is made, `checkPermissions` answers from it and no sheet is
+ * raised again.
  */
-export const startPush = async (onOpen: (link: string) => void): Promise<void> => {
-  if (!isNative() || starting || listeners.length > 0) return;
-  starting = true;
+export const primeNotifications = async (): Promise<boolean> => {
+  if (!isNative()) return false;
 
   try {
-    // Create the channel before requesting permission: the permission sheet on
-    // Android 13+ is per-app, but a message naming a missing channel is dropped
-    // without any error, which is far harder to diagnose than a refused prompt.
+    // The channel comes first: the permission sheet on Android 13+ is per-app,
+    // but a message naming a channel that does not exist is dropped without any
+    // error at all, which is far harder to diagnose than a refused prompt.
     await PushNotifications.createChannel({
       id: CHANNEL_ID,
       name: 'Facility alerts',
@@ -108,8 +122,7 @@ export const startPush = async (onOpen: (link: string) => void): Promise<void> =
     if (permission.receive !== 'granted') {
       // The user said no. The in-app feed is unaffected, so there is nothing to
       // recover from and nothing worth nagging about.
-      starting = false;
-      return;
+      return false;
     }
 
     // The local-notifications plugin keeps its own permission state on some
@@ -118,9 +131,38 @@ export const startPush = async (onOpen: (link: string) => void): Promise<void> =
     if (localPermission.display !== 'granted') {
       await LocalNotifications.requestPermissions();
     }
+    return true;
+  } catch (err) {
+    console.error('Could not set up notifications', err);
+    return false;
+  }
+};
+
+/**
+ * Register with FCM and hand the token to the API.
+ *
+ * Safe to call repeatedly: Capacitor issues the same token on every launch and
+ * the API treats registration as idempotent. `onOpen` is invoked with the target
+ * route when the user taps a notification.
+ */
+export const startPush = async (onOpen: (link: string) => void): Promise<void> => {
+  if (!isNative() || starting || listeners.length > 0) return;
+  starting = true;
+
+  const mine = generation;
+  const superseded = () => generation !== mine;
+
+  try {
+    // Idempotent — startup already ran this, so it only re-checks the answer
+    // rather than prompting again. Repeated here because a session can begin
+    // without startup having completed, and registering into a revoked
+    // permission would leave a device the server pushes to for nothing.
+    const allowed = await primeNotifications();
+    if (superseded() || !allowed) return;
 
     listeners.push(
       await PushNotifications.addListener('registration', async (token) => {
+        if (superseded()) return;
         currentToken = token.value;
         try {
           await registerPushDevice({ token: token.value, platform: 'android' });
@@ -155,11 +197,15 @@ export const startPush = async (onOpen: (link: string) => void): Promise<void> =
       }),
     );
 
+    if (superseded()) return;
     await PushNotifications.register();
   } catch (err) {
     console.error('Push setup failed', err);
   } finally {
     starting = false;
+    // A teardown that raced this setup found nothing to detach, so whatever was
+    // attached in the meantime has to be cleared up here instead.
+    if (superseded() && listeners.length > 0) void stopPush();
   }
 };
 
@@ -171,6 +217,9 @@ export const startPush = async (onOpen: (link: string) => void): Promise<void> =
  */
 export const stopPush = async (): Promise<void> => {
   if (!isNative()) return;
+
+  // Invalidates any setup still in flight before anything else is touched.
+  generation += 1;
 
   const token = currentToken;
   currentToken = null;
