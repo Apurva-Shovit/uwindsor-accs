@@ -1,9 +1,9 @@
 import asyncio
-from app.db import init_db
+from app.db import init_db, ensure_baseline_facility
 from app.models.user import User, RoleEnum, StatusEnum
 from app.core.security import hash_password
 
-from app.models.facility import Facility, Room, Tank
+from app.models.facility import Tank
 
 async def seed():
     await init_db()
@@ -27,37 +27,16 @@ async def seed():
         await existing.save()
         print("Super admin password reset to ChangeMe123!")
 
-    # 2. Seed Facility
-    fac = await Facility.find_one({"name": "LaSalle Freshwater Restoration Ecology Centre"})
-    if not fac:
-        fac = Facility(name="LaSalle Freshwater Restoration Ecology Centre", address="LaSalle, ON", description="Main restoration ecology facility")
-        await fac.insert()
-        print(f"Facility created: {fac.name} ({fac.id})")
-    else:
-        print("Facility already exists.")
-
-    # 3. Seed Room
-    room = await Room.find_one({"facility_id": str(fac.id), "room_number": "301"})
-    if not room:
-        room = Room(facility_id=str(fac.id), room_number="301", description="Main aquatic holding room")
-        await room.insert()
-        print(f"Room created: {room.room_number} ({room.id})")
-    else:
-        print("Room already exists.")
-
-    # 4. Seed 14 Tanks
-    tanks_created = 0
-    for i in range(1, 15):
-        t_num = str(i)
-        t = await Tank.find_one({"room_id": str(room.id), "tank_number": t_num})
-        if not t:
-            t = Tank(room_id=str(room.id), tank_number=t_num, status="active", notes=f"Seeded Tank {t_num}")
-            await t.insert()
-            tanks_created += 1
-    if tanks_created > 0:
-        print(f"Seeded {tanks_created} new tanks.")
-    else:
-        print("All 14 pilot tanks already exist.")
+    # 2. Seed the baseline facility, room, and 14 tanks.
+    # Shared with init_db so there is a single definition of the baseline: the
+    # copy that used to live here still looked the pilot room up by number
+    # ("301"), so once the room was renamed to "1" every boot seeded a second
+    # room and a duplicate set of 14 tanks.
+    fac, room = await ensure_baseline_facility()
+    print(f"Facility ready: {fac.name} ({fac.id})")
+    print(f"Room ready: {room.room_number} ({room.id})")
+    tank_count = await Tank.find({"room_id": str(room.id), "deleted": False}).count()
+    print(f"Room {room.room_number} has {tank_count} active tanks.")
 
 if __name__ == "__main__":
     asyncio.run(seed())

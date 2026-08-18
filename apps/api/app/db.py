@@ -60,30 +60,62 @@ async def init_db():
         if changed:
             await su.save()
 
-    # Ensure baseline facility, room, and 14 tanks exist
-    fac = await Facility.find_one({"name": "LaSalle Freshwater Restoration Ecology Centre"})
+    await ensure_baseline_facility()
+
+
+BASELINE_FACILITY_NAME = "LaSalle Freshwater Restoration Ecology Centre"
+BASELINE_ROOM_NUMBER = "1"
+BASELINE_TANK_COUNT = 14
+
+
+async def ensure_baseline_facility() -> tuple[Facility, Room]:
+    """Ensure the pilot facility, its holding room, and its 14 tanks exist.
+
+    This runs on every boot, so it matches the room by facility rather than by
+    room number: the pilot room has been renamed once already (from "301" to
+    "1"), and a number-only lookup treats a renamed room as missing and seeds a
+    second room plus a second set of 14 tanks. Anything that needs the baseline
+    room must come through here for the same reason.
+    """
+    fac = await Facility.find_one({"name": BASELINE_FACILITY_NAME})
     if not fac:
-        fac = Facility(name="LaSalle Freshwater Restoration Ecology Centre", address="LaSalle, ON", description="Main restoration ecology facility")
+        fac = Facility(
+            name=BASELINE_FACILITY_NAME,
+            address="LaSalle, ON",
+            description="Main restoration ecology facility",
+        )
         await fac.insert()
-        
-    room = await Room.find_one({"facility_id": str(fac.id), "room_number": "1"})
+
+    room = await Room.find_one(
+        {"facility_id": str(fac.id), "room_number": BASELINE_ROOM_NUMBER, "deleted": False}
+    )
     if not room:
-        room = await Room.find_one({"facility_id": str(fac.id)})
+        # Oldest surviving room wins, so repeated boots always settle on the
+        # same room no matter what it has been renamed to.
+        rooms = await Room.find({"facility_id": str(fac.id), "deleted": False}).sort("+_id").limit(1).to_list()
+        room = rooms[0] if rooms else None
     if not room:
-        room = Room(facility_id=str(fac.id), room_number="1", description="Main aquatic holding room")
+        room = Room(
+            facility_id=str(fac.id),
+            room_number=BASELINE_ROOM_NUMBER,
+            description="Main aquatic holding room",
+        )
         await room.insert()
-    elif room.room_number != "1":
-        room.room_number = "1"
-        await room.save()
 
-    existing_tanks = await Tank.find({"room_id": str(room.id)}).to_list()
-    if len(existing_tanks) < 14:
-        for i in range(1, 15):
+    # Soft-deleted tanks count as present: they were retired on purpose and
+    # must not be resurrected on the next boot.
+    existing = await Tank.find({"room_id": str(room.id)}).to_list()
+    if len(existing) < BASELINE_TANK_COUNT:
+        present = {t.tank_number for t in existing}
+        for i in range(1, BASELINE_TANK_COUNT + 1):
             t_num = str(i)
-            t = await Tank.find_one({"room_id": str(room.id), "tank_number": t_num})
-            if not t:
-                t = Tank(room_id=str(room.id), tank_number=t_num, status="active", notes=f"Seeded Tank {t_num}")
-                await t.insert()
+            if t_num in present:
+                continue
+            await Tank(
+                room_id=str(room.id),
+                tank_number=t_num,
+                status="active",
+                notes=f"Seeded Tank {t_num}",
+            ).insert()
 
-
-
+    return fac, room
