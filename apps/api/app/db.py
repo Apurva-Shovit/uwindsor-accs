@@ -14,6 +14,7 @@ from .models.individual_fish import IndividualFish
 from .models.quarantine import QuarantineExemption
 from .models.notification import Notification, NotificationSettings, NotificationSweepState
 from .models.device_token import DeviceToken
+from .models.app_bundle import AppBundle
 
 import certifi
 
@@ -30,7 +31,7 @@ async def init_db():
             TankAssignment, CensusEvent, Species,
             IndividualFish, QuarantineExemption,
             Notification, NotificationSettings, NotificationSweepState,
-            DeviceToken,
+            DeviceToken, AppBundle,
         ],
     )
     # Ensure superadmin account exists with known password

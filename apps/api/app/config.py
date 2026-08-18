@@ -49,6 +49,21 @@ class Settings(BaseSettings):
     # silently drops a message naming a channel that does not exist.
     FCM_ANDROID_CHANNEL_ID: str = "acare-alerts"
 
+    # --- Over-the-air web bundles -------------------------------------------
+    # The Android app is a WebView around the same frontend the browser gets, so
+    # a new bundle can be swapped in without reinstalling the APK. See
+    # app/routers/app_updates.py.
+    #
+    # Publishing is closed until APP_UPDATE_TOKEN is set, and the whole channel
+    # can be halted with APP_UPDATE_ENABLED=false without a redeploy of the app.
+    APP_UPDATE_ENABLED: bool = True
+    # Shared secret CI presents as X-Update-Token to register a bundle. Unset
+    # means nobody can publish, which is the safe default for a fresh deploy.
+    APP_UPDATE_TOKEN: str = ""
+    # Every device checks on launch and on resume, so this is per-IP and a whole
+    # facility can sit behind one NAT address.
+    RATE_LIMIT_APP_UPDATE_CHECK: str = "120/minute"
+
     CORS_ORIGINS: str = ""  # comma-separated extra allowed origins, e.g. "https://acare-mvp.vercel.app"
 
     model_config = ConfigDict(env_file=".env", extra="ignore")

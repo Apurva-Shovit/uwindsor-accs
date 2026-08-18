@@ -208,6 +208,35 @@ changes — plugins, the manifest, Firebase config, gradle — still need a real
 rebuild. **Never hand out a live-reload APK**: with `server.url` baked in it is
 useless away from this machine.
 
+### Which build is on a tablet
+
+A tablet showing **"web page not available at 127.0.0.1:5173"** has a
+*live-reload debug* APK on it, and is looking for a Vite dev server that is not
+there. That build is only useful tethered to the machine running
+`npm run android:live`. The `DEBUGGABLE` flag is how you tell:
+
+```bash
+adb shell dumpsys package ca.uwindsor.acare | grep -E "versionCode|versionName"
+adb shell pm dump ca.uwindsor.acare | grep "flags=\["
+# DEBUGGABLE present  -> live-reload/debug build, will not work standalone
+# DEBUGGABLE absent   -> release build
+```
+
+Replacing it means uninstalling first — debug and release are signed with
+different keys, so Android will not upgrade one to the other in place. That
+clears app data, which here is only the mirrored session token:
+
+```bash
+adb uninstall ca.uwindsor.acare
+adb install ACARE-<version>.apk
+```
+
+The app does **not** load its UI from Vercel, and never has. The assets are
+bundled inside the APK and served from `https://localhost` in the WebView; only
+the *API* goes over the network, to `VITE_API_URL`. Pointing the WebView at the
+Vercel URL instead would make the app a bookmark — no offline start, no splash,
+and a white screen whenever the network hiccups.
+
 ### Debugging
 
 Connect the device, open `chrome://inspect` in desktop Chrome, and inspect the
@@ -245,7 +274,125 @@ later release-signed build cannot upgrade it in place — uninstall first.
 
 ---
 
+## Shipping without a cable
+
+Almost nothing needs a new APK. The app is a WebView around this same `apps/web`
+build, so a change to `src/` is a **web bundle** the installed app can download
+and swap in by itself — no USB, no reinstall, no "install unknown apps" prompt,
+no asking staff to do anything. Merging to `main` is the whole ritual.
+
+An APK is only required when the *native shell* changes: a new Capacitor plugin,
+a permission, a manifest entry, a Capacitor or Gradle upgrade.
+
+| You changed | What ships | Who acts |
+|---|---|---|
+| `src/`, styles, assets | OTA bundle, applied on next app launch | nobody |
+| plugins, manifest, gradle, `capacitor.config.ts` | signed APK | install once per device |
+
+### How it fits together
+
+```
+merge dev → main
+   ├── Vercel redeploys the web app
+   ├── Render redeploys the API
+   └── .github/workflows/ota-bundle.yml
+         ├── builds apps/web against .env.mobile
+         ├── zips dist/ → GitHub Release asset  (bundle-<date>-<sha>)
+         └── POSTs the pointer to /app-updates/bundles
+                                    │
+   tablet opens the app ────────────┘
+         ├── POST /app-updates/check   {version_name, version_code, …}
+         ├── downloads the zip, verifies SHA-256
+         └── applies it on the next cold start
+```
+
+The zip lives on a **GitHub Release**, not on Render: Render's filesystem does
+not survive the very deploy that would publish the bundle. The API stores only
+the pointer — see `apps/api/app/models/app_bundle.py`. This does mean OTA depends
+on the repo staying **public**, since devices fetch the asset unauthenticated. If
+it ever goes private, switch the storage to a bucket or serve the bytes from the
+API; nothing else changes.
+
+The bundle is not a secret. It is byte-for-byte the frontend already served to
+any browser that opens the Vercel site. What must not be forged is the pointer,
+which is why registering one needs `APP_UPDATE_TOKEN` and delivery is
+checksummed end to end.
+
+### One-time setup
+
+Repository → Settings → Secrets and variables → Actions:
+
+| Secret | Used by | Value |
+|---|---|---|
+| `MOBILE_API_URL` | both workflows | `https://uwindsor-accs.onrender.com` |
+| `APP_UPDATE_TOKEN` | ota-bundle | any long random string; must match the API's env var |
+| `ANDROID_KEYSTORE_BASE64` | release-apk | `base64 -w0 acare-release.jks` |
+| `ANDROID_KEYSTORE_PASSWORD` | release-apk | from `keystore.properties` |
+| `ANDROID_KEY_ALIAS` | release-apk | `acare` |
+| `ANDROID_KEY_PASSWORD` | release-apk | from `keystore.properties` |
+| `GOOGLE_SERVICES_JSON` | release-apk | contents of `android/app/google-services.json` (optional) |
+
+Then set the same token on the Render dashboard as `APP_UPDATE_TOKEN`. Until it
+is set, `/app-updates/bundles` returns 503 and CI cannot publish — a deployment
+nobody has handed the secret to cannot have its update pointer rewritten.
+
+Generate one with:
+
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+### Checking and controlling the channel
+
+```
+GET  /app-updates/status                      # is OTA configured? what is live?
+GET  /app-updates/bundles                     # publish history, newest first
+POST /app-updates/bundles/<version>/activate  # roll forward or back
+POST /app-updates/bundles/deactivate          # halt the channel
+```
+
+`status` and the rest need chair or admin. **Rolling back a bad bundle is
+re-activating the previous one** — every device picks it up on its next launch,
+which is faster than any APK could be rebuilt and handed out. `APP_UPDATE_ENABLED=false`
+on Render halts delivery fleet-wide without touching a bundle; devices keep
+whatever they are running.
+
+### The two ways this bites
+
+- **Forgetting `notifyAppReady()`.** The plugin rolls a bundle back if it is not
+  told the app booted (`appReadyTimeout`, 20s). That safety net is why a bad OTA
+  cannot brick a tablet — and why dropping the call makes *every* update appear
+  never to arrive. It lives in `src/lib/liveUpdate.ts`, called from
+  `src/main.tsx` after the render.
+- **A bundle that needs native code the installed APK lacks.** It white-screens,
+  and a WebView with no working JS cannot fetch its own way out. `min_version_code`
+  on each bundle is the guard: the API withholds a bundle from any APK below it,
+  and an unreadable `versionCode` is treated as too old rather than assumed fine.
+  After a native release, raise it — run the OTA workflow by hand with
+  `min_version_code` set, or let the next push default it to the committed
+  `versionCode`.
+
+### Sanity-checking a device
+
+`chrome://inspect`, or `adb logcat | grep CapgoUpdater`. A healthy cold start:
+
+```
+CapgoUpdater: Check for update via: https://…/app-updates/check
+CapgoUpdater: Current bundle loaded successfully. ['notifyAppReady()' was called]
+```
+
+`Server error: 404` there means the API predates this feature — the app carries
+on with its bundled assets, which is the intended failure mode.
+
+---
+
 ## Cutting a release APK
+
+Normally you do not: `.github/workflows/release-apk.yml` builds and signs this on
+any push to `main` that touches `android/` or `capacitor.config.ts`, and attaches
+it to a GitHub Release. It refuses to build if `versionCode` was not bumped past
+the last release, so the "Android will not install over an equal version" failure
+surfaces in CI rather than on a tablet. To build by hand anyway:
 
 1. Bump `versionCode` (and usually `versionName`) in
    `android/app/build.gradle`. **`versionCode` must increase on every APK you
@@ -333,8 +480,6 @@ Android splits the delivery job in half, and both halves are handled:
   the WebView for the status/gesture bars while that meta value is absent. The
   app has no `env(safe-area-inset-*)` handling, so adding it would push content
   under the status bar.
-- **Over-the-air updates** can be layered on later without rework: bundled
-  assets are exactly the baseline that Capacitor Live Updates / capgo patch.
-  It is a plugin, a config block, and an upload step — no React or native
-  restructuring. The `versionCode` discipline above is what such a channel keys
-  off, which is why it matters now.
+- **Over-the-air updates are implemented** — see "Shipping without a cable"
+  above. The `versionCode` discipline is what that channel keys off, via each
+  bundle's `min_version_code`.

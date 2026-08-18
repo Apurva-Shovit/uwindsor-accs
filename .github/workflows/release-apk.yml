@@ -1,0 +1,181 @@
+# Builds a signed release APK.
+#
+# Most changes never need this — the OTA workflow ships frontend work to
+# installed apps without a reinstall. An APK is only required when the native
+# shell itself changes: a new Capacitor plugin, a permission, a manifest entry,
+# a Capacitor or Gradle upgrade. Those are also the changes an OTA bundle must
+# NOT be allowed to precede, which is why this workflow runs on android/ paths
+# and the OTA one deliberately does not.
+#
+# The output is attached to a GitHub Release so it can be handed out by link
+# instead of by USB cable.
+name: Release APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/android/**'
+      - 'apps/web/capacitor.config.ts'
+      - '.github/workflows/release-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-apk
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      # JDK 21: Capacitor 8 / AGP 8.13 pins that major version and rejects
+      # anything else rather than falling back. See apps/web/ANDROID.md.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Write .env.mobile
+        working-directory: apps/web
+        run: echo "VITE_API_URL=${{ secrets.MOBILE_API_URL }}" > .env.mobile
+
+      - name: Restore signing material
+        working-directory: apps/web/android
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # Signing with the same key as every previously installed APK is what
+          # makes this an in-place upgrade instead of an uninstall-first. A build
+          # that would silently produce an unsigned APK is worse than no build,
+          # so fail loudly when the secret is absent.
+          test -n "$KEYSTORE_B64" || { echo "::error::ANDROID_KEYSTORE_BASE64 not set"; exit 1; }
+
+          echo "$KEYSTORE_B64" | base64 -d > acare-release.jks
+          cat > keystore.properties <<EOF
+          storeFile=$(pwd)/acare-release.jks
+          storePassword=$STORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      - name: Restore google-services.json
+        working-directory: apps/web/android/app
+        env:
+          GOOGLE_SERVICES: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        # Optional: without it the build still succeeds and push notifications
+        # are simply inert, which is the documented behaviour.
+        run: |
+          if [ -n "$GOOGLE_SERVICES" ]; then
+            echo "$GOOGLE_SERVICES" > google-services.json
+          else
+            echo "No GOOGLE_SERVICES_JSON secret; push will be inert in this build."
+          fi
+
+      - name: Read version
+        id: version
+        working-directory: apps/web/android/app
+        run: |
+          set -euo pipefail
+          CODE="$(grep -oP 'versionCode\s+\K[0-9]+' build.gradle | head -1)"
+          NAME="$(grep -oP 'versionName\s+"\K[^"]+' build.gradle | head -1)"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Fail if versionCode was not bumped
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Android refuses to install over an equal or higher versionCode, so a
+          # forgotten bump produces an APK that staff simply cannot install —
+          # and the failure shows up on the tablet, not here. Catch it here.
+          PREV="$(gh release list --limit 100 --json tagName \
+                    --jq '[.[] | select(.tagName | startswith("apk-v")) | .tagName]
+                          | map(sub("^apk-v"; "") | split("-")[0] | tonumber)
+                          | max // 0')"
+          NOW="${{ steps.version.outputs.code }}"
+          echo "previous released versionCode: $PREV; this build: $NOW"
+          if [ "$NOW" -le "$PREV" ]; then
+            echo "::error::versionCode $NOW is not greater than the released $PREV. Bump it in apps/web/android/app/build.gradle."
+            exit 1
+          fi
+
+      - name: Build signed APK
+        working-directory: apps/web
+        run: |
+          set -euo pipefail
+          npm run android:sync
+          cd android
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Verify signature
+        working-directory: apps/web/android
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/release/app-release.apk
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)"
+          # An unsigned APK builds successfully by design (see build.gradle), so
+          # the only thing standing between that and a fleet-wide "App not
+          # installed" is this check.
+          "$APKSIGNER" verify --print-certs -v "$APK"
+
+      - name: Rename and publish
+        id: publish
+        working-directory: apps/web/android
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          NAME="ACARE-${{ steps.version.outputs.name }}-vc${{ steps.version.outputs.code }}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$NAME"
+          SUM="$(sha256sum "$NAME" | cut -d' ' -f1)"
+
+          gh release create "apk-v${{ steps.version.outputs.code }}" "$NAME" \
+            --title "ACARE ${{ steps.version.outputs.name }} (build ${{ steps.version.outputs.code }})" \
+            --notes "Signed release APK for sideloading.
+
+          Version: ${{ steps.version.outputs.name }} (versionCode ${{ steps.version.outputs.code }})
+          Commit: ${{ github.sha }}
+          SHA-256: \`$SUM\`
+
+          Install over the previous version — same signing key, so app data is kept.
+          Frontend-only changes do not need this file; they arrive over the air."
+
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SUM" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Release APK"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| File | \`${{ steps.publish.outputs.name }}\` |"
+            echo "| versionCode | ${{ steps.version.outputs.code }} |"
+            echo "| SHA-256 | \`${{ steps.publish.outputs.sha256 }}\` |"
+            echo ""
+            echo "Remember to raise \`min_version_code\` on the next OTA bundle if it depends on native changes in this build."
+          } >> "$GITHUB_STEP_SUMMARY"

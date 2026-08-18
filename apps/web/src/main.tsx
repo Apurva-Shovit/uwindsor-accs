@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import './index.css'
 import App from './App.tsx'
 import { restoreSession } from './lib/session'
+import { notifyAppReady } from './lib/liveUpdate'
 
 const queryClient = new QueryClient()
 
@@ -18,4 +19,9 @@ restoreSession().finally(() => {
       </QueryClientProvider>
     </StrictMode>,
   )
+  // Confirms to the OTA updater that this bundle booted. Must happen after the
+  // render call, and must happen at all: an unconfirmed bundle is rolled back
+  // automatically, which would make every update look like it never arrived.
+  // See src/lib/liveUpdate.ts.
+  void notifyAppReady()
 })

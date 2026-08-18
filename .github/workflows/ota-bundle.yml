@@ -1,0 +1,206 @@
+# Ships the frontend to Android tablets that are already in the field.
+#
+# The APK is a WebView around apps/web, so a change to src/ needs no new APK and
+# no USB cable — this builds the same bundle the browser gets, attaches it to a
+# GitHub Release, and points the API at it. Devices pick it up on their next
+# launch.
+#
+# The zip is hosted on the Release rather than on Render because Render's
+# filesystem does not survive the deploy that would publish it. The API only
+# ever stores the pointer. See apps/api/app/models/app_bundle.py.
+name: OTA bundle
+
+on:
+  push:
+    branches: [main]
+    # Native code cannot ship this way — a bundle needing a new plugin would
+    # white-screen every APK that lacks it. Changes under android/ therefore go
+    # through the APK workflow instead.
+    paths:
+      - 'apps/web/src/**'
+      - 'apps/web/index.html'
+      - 'apps/web/package.json'
+      - 'apps/web/package-lock.json'
+      - 'apps/web/vite.config.ts'
+      - 'apps/web/tailwind.config.js'
+      - 'apps/web/postcss.config.js'
+      - 'apps/web/public/**'
+  # Lets you re-publish, or publish after a native release, by hand.
+  workflow_dispatch:
+    inputs:
+      min_version_code:
+        description: 'Lowest APK versionCode allowed to take this bundle'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  # A second push while one is publishing would race on which bundle ends up
+  # active. Queue instead of cancelling, so an in-flight release still finishes
+  # uploading the asset its database row will point at.
+  group: ota-bundle
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Write .env.mobile
+        working-directory: apps/web
+        # The APK bakes its API URL at build time and .env.mobile is gitignored,
+        # so CI has to supply it. It must match what the installed APKs already
+        # point at, or the new bundle would talk to a different backend than the
+        # shell that loaded it.
+        run: echo "VITE_API_URL=${{ secrets.MOBILE_API_URL }}" > .env.mobile
+
+      - name: Build bundle
+        working-directory: apps/web
+        run: npm run build:mobile
+
+      - name: Package and checksum
+        id: pkg
+        working-directory: apps/web
+        run: |
+          set -euo pipefail
+          # Version has to change on every publish or the plugin, which caches
+          # by version string, will not treat it as new. Date plus short SHA is
+          # unique, ordered, and traceable back to a commit.
+          VERSION="$(date -u +%Y.%m.%d)-${GITHUB_SHA::7}"
+
+          # index.html at the zip root. The plugin also accepts a single wrapper
+          # folder, but flat is what it expects first.
+          ( cd dist && zip -qr "../bundle-$VERSION.zip" . )
+
+          CHECKSUM="$(sha256sum "bundle-$VERSION.zip" | cut -d' ' -f1)"
+          SIZE="$(stat -c%s "bundle-$VERSION.zip")"
+
+          {
+            echo "version=$VERSION"
+            echo "checksum=$CHECKSUM"
+            echo "size=$SIZE"
+            echo "zip=apps/web/bundle-$VERSION.zip"
+            echo "tag=bundle-$VERSION"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "${{ steps.pkg.outputs.tag }}" \
+            "${{ steps.pkg.outputs.zip }}" \
+            --title "Web bundle ${{ steps.pkg.outputs.version }}" \
+            --notes "OTA bundle for the ACARE Android app.
+
+          Commit: ${{ github.sha }}
+          SHA-256: \`${{ steps.pkg.outputs.checksum }}\`
+
+          Applied automatically by installed apps on next launch."
+
+      - name: Resolve bundle URL
+        id: url
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # browser_download_url, not the API `url` field: devices fetch this
+          # unauthenticated, and the API URL would need an Accept header and a
+          # token. Asked for rather than assembled by hand so a rename cannot
+          # leave the fleet fetching a 404.
+          URL="$(gh release view "${{ steps.pkg.outputs.tag }}" \
+                   --json assets \
+                   --jq '.assets[0].browser_download_url')"
+          test -n "$URL"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the asset is publicly fetchable
+        run: |
+          set -euo pipefail
+          # Devices download this unauthenticated. Catching a private or broken
+          # asset here is the difference between a failed workflow and a fleet
+          # of tablets silently failing their update check.
+          CODE="$(curl -sSL -o /tmp/check.zip -w '%{http_code}' "${{ steps.url.outputs.url }}")"
+          test "$CODE" = "200" || { echo "Asset not public (HTTP $CODE)"; exit 1; }
+
+          GOT="$(sha256sum /tmp/check.zip | cut -d' ' -f1)"
+          test "$GOT" = "${{ steps.pkg.outputs.checksum }}" \
+            || { echo "Checksum mismatch: $GOT"; exit 1; }
+
+      - name: Register with the API
+        env:
+          API_URL: ${{ secrets.MOBILE_API_URL }}
+          UPDATE_TOKEN: ${{ secrets.APP_UPDATE_TOKEN }}
+          MIN_CODE: ${{ github.event.inputs.min_version_code }}
+        run: |
+          set -euo pipefail
+          # Defaults to the versionCode in the committed gradle file: the bundle
+          # is built from the same tree as that APK, so that is the oldest shell
+          # it has been seen to work with.
+          if [ -z "${MIN_CODE}" ]; then
+            MIN_CODE="$(grep -oP 'versionCode\s+\K[0-9]+' apps/web/android/app/build.gradle | head -1)"
+          fi
+
+          # Two things make the first call unreliable, and both resolve on their
+          # own: Render free instances sleep and have to wake, and on the deploy
+          # that first introduces this endpoint the API may still be rolling out
+          # when we get here (a 404 until it lands). The budget below is ~12
+          # minutes, which covers a cold Python deploy; without it the very
+          # first run of this workflow fails despite having done its job.
+          for attempt in 1 2 3 4 5 6 7 8; do
+            CODE="$(curl -sS -o /tmp/reg.json -w '%{http_code}' \
+              -X POST "${API_URL}/app-updates/bundles" \
+              -H 'Content-Type: application/json' \
+              -H "X-Update-Token: ${UPDATE_TOKEN}" \
+              -d "{
+                    \"version\":  \"${{ steps.pkg.outputs.version }}\",
+                    \"url\":      \"${{ steps.url.outputs.url }}\",
+                    \"checksum\": \"${{ steps.pkg.outputs.checksum }}\",
+                    \"platform\": \"android\",
+                    \"min_version_code\": ${MIN_CODE},
+                    \"commit_sha\": \"${GITHUB_SHA}\",
+                    \"size_bytes\": ${{ steps.pkg.outputs.size }},
+                    \"activate\": true
+                  }")" || true
+
+            if [ "$CODE" = "200" ]; then
+              echo "Registered and activated."
+              cat /tmp/reg.json
+              exit 0
+            fi
+
+            echo "Attempt $attempt failed (HTTP $CODE):"; cat /tmp/reg.json || true
+            # Settled answers - the secret is wrong, the version is taken, or
+            # publishing is switched off. Retrying only wastes minutes.
+            case "$CODE" in 401|409|503) break ;; esac
+            sleep $((attempt * 20))
+          done
+
+          echo "::error::Bundle uploaded but not registered - devices will not receive it."
+          exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### OTA bundle"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Version | \`${{ steps.pkg.outputs.version }}\` |"
+            echo "| SHA-256 | \`${{ steps.pkg.outputs.checksum }}\` |"
+            echo "| Commit | \`${{ github.sha }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -14,14 +14,19 @@ import type { CapacitorConfig } from '@capacitor/cli';
  * http://localhost is still a trustworthy origin to Chromium, so nothing else
  * about the app changes. CAP_DEV_HTTP=1 forces it on if ever needed.
  */
-function usesHttpBackend(): boolean {
-  if (process.env.CAP_DEV_HTTP === '1') return true;
+function apiUrl(): string {
   try {
     const env = readFileSync(join(__dirname, '.env.mobile'), 'utf8');
-    return /^\s*VITE_API_URL\s*=\s*http:\/\//m.test(env);
+    const match = env.match(/^\s*VITE_API_URL\s*=\s*(.+)$/m);
+    return match ? match[1].trim().replace(/\/+$/, '') : '';
   } catch {
-    return false; // No .env.mobile — assume the production https API.
+    return ''; // No .env.mobile — see the callers for what each does about it.
   }
+}
+
+function usesHttpBackend(): boolean {
+  if (process.env.CAP_DEV_HTTP === '1') return true;
+  return /^http:\/\//.test(apiUrl());
 }
 
 const devHttp = usesHttpBackend();
@@ -62,6 +67,37 @@ const config: CapacitorConfig = {
     allowMixedContent: false,
   },
   plugins: {
+    /**
+     * Over-the-air web-bundle updates, served by our own API rather than a
+     * hosted service — apps/api/app/routers/app_updates.py speaks the protocol
+     * this plugin expects. The bundle is the same frontend the browser gets, so
+     * shipping one needs no APK and no USB cable.
+     *
+     * The URL is derived from .env.mobile rather than hardcoded, so an APK
+     * built against a local or staging backend checks *that* backend for
+     * updates instead of silently pulling production bundles onto a test
+     * device. An empty updateUrl disables the check entirely, which is the
+     * right outcome when .env.mobile is missing.
+     *
+     * `autoUpdate` downloads in the background and applies on the next cold
+     * start, so a bundle never swaps out from under someone mid-shift. The
+     * matching notifyAppReady() call is in src/lib/liveUpdate.ts — without it
+     * every update rolls itself back.
+     */
+    CapacitorUpdater: {
+      autoUpdate: true,
+      updateUrl: apiUrl() ? `${apiUrl()}/app-updates/check` : '',
+      // We publish no stats or channel endpoints; leaving these pointed at
+      // Capgo's defaults would send device telemetry to a third party we are
+      // deliberately not using.
+      statsUrl: '',
+      channelUrl: '',
+      // Roll back if a freshly applied bundle does not report ready within this
+      // many milliseconds. Generous, because a cold WebView on an older tablet
+      // is slow, and a needless rollback is worse than a slow first paint.
+      appReadyTimeout: 20000,
+      resetWhenUpdate: true,
+    },
     // LIGHT = dark icons, to sit on the white window background set in
     // android/app/src/main/res/values/styles.xml. Leaving insetsHandling at its
     // default keeps Capacitor padding the WebView natively for the status and
