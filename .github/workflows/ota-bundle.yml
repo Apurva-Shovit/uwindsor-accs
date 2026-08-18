@@ -154,9 +154,13 @@ jobs:
             MIN_CODE="$(grep -oP 'versionCode\s+\K[0-9]+' apps/web/android/app/build.gradle | head -1)"
           fi
 
-          # Render free instances sleep; the first call can wake one. Retry so a
-          # cold start does not orphan a bundle that is already uploaded.
-          for attempt in 1 2 3 4 5; do
+          # Two things make the first call unreliable, and both resolve on their
+          # own: Render free instances sleep and have to wake, and on the deploy
+          # that first introduces this endpoint the API may still be rolling out
+          # when we get here (a 404 until it lands). The budget below is ~12
+          # minutes, which covers a cold Python deploy; without it the very
+          # first run of this workflow fails despite having done its job.
+          for attempt in 1 2 3 4 5 6 7 8; do
             CODE="$(curl -sS -o /tmp/reg.json -w '%{http_code}' \
               -X POST "${API_URL}/app-updates/bundles" \
               -H 'Content-Type: application/json' \
@@ -179,9 +183,10 @@ jobs:
             fi
 
             echo "Attempt $attempt failed (HTTP $CODE):"; cat /tmp/reg.json || true
-            # 401/409 are settled answers; retrying only wastes minutes.
+            # Settled answers - the secret is wrong, the version is taken, or
+            # publishing is switched off. Retrying only wastes minutes.
             case "$CODE" in 401|409|503) break ;; esac
-            sleep $((attempt * 15))
+            sleep $((attempt * 20))
           done
 
           echo "::error::Bundle uploaded but not registered - devices will not receive it."
