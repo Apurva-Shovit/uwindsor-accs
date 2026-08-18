@@ -263,6 +263,7 @@ export const QuarantinePage: React.FC = () => {
                 ) : (
                   exemptions.map((ex: any) => {
                     const exId = ex.id || ex._id;
+                    const decidingThis = deciding && deciding.id === exId ? deciding : null;
                     return (
                       <tr key={exId} className="hover:bg-slate-50 transition-colors">
                         <td className="p-3 font-medium text-slate-900 whitespace-nowrap">
@@ -316,7 +317,7 @@ export const QuarantinePage: React.FC = () => {
                                 disabled={!!deciding}
                                 className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-xs shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-600"
                               >
-                                {deciding?.id === exId && deciding.approved ? (
+                                {decidingThis?.approved === true ? (
                                   <>
                                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                     Transferring...
@@ -330,7 +331,7 @@ export const QuarantinePage: React.FC = () => {
                                 disabled={!!deciding}
                                 className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded text-xs shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-600"
                               >
-                                {deciding?.id === exId && !deciding.approved ? (
+                                {decidingThis?.approved === false ? (
                                   <>
                                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                     Rejecting...
