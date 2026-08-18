@@ -43,6 +43,38 @@ export const Sidebar: React.FC = () => {
     if (isDrawerOpen) asideRef.current?.focus();
   }, [isDrawerOpen]);
 
+  // Auto-close the sidebar when main screen or anywhere outside the sidebar is touched or clicked on non-desktop screens
+  useEffect(() => {
+    if (isDesktop || !isSidebarOpen) return;
+
+    const handleOutsideTouchOrClick = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+
+      // Ignore touches/clicks inside the sidebar itself
+      if (asideRef.current && asideRef.current.contains(target)) {
+        return;
+      }
+
+      // Ignore touches/clicks on the sidebar toggle hamburger button
+      const toggleBtn = document.querySelector('[aria-controls="app-sidebar"]');
+      if (toggleBtn && toggleBtn.contains(target)) {
+        return;
+      }
+
+      // Any touch or click on the main screen or outside sidebar auto-closes the sidebar
+      setIsSidebarOpen(false);
+    };
+
+    document.addEventListener('touchstart', handleOutsideTouchOrClick, { passive: true });
+    document.addEventListener('mousedown', handleOutsideTouchOrClick);
+
+    return () => {
+      document.removeEventListener('touchstart', handleOutsideTouchOrClick);
+      document.removeEventListener('mousedown', handleOutsideTouchOrClick);
+    };
+  }, [isDesktop, isSidebarOpen, setIsSidebarOpen]);
+
   const linkClass = (isActive: boolean) =>
     `flex items-center rounded-md text-sm font-medium transition-colors ${
       showLabels ? 'px-3 py-2' : 'p-2 justify-center'
@@ -67,7 +99,8 @@ export const Sidebar: React.FC = () => {
           data-sidebar-backdrop
           aria-hidden="true"
           onClick={() => setIsSidebarOpen(false)}
-          className="fixed inset-x-0 bottom-0 top-16 z-30 bg-black/40"
+          onTouchStart={() => setIsSidebarOpen(false)}
+          className="fixed inset-0 z-30 bg-black/40"
         />
       )}
     <aside
