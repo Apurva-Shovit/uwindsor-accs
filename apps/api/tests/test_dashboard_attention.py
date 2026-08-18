@@ -17,27 +17,33 @@ async def test_dashboard_attention_count_incidents_and_deaths():
     room = Room(facility_id=str(fac.id), room_number="R101", active=True)
     await room.insert()
 
+    # tank1: active, non-quarantined, incident
     tank1 = Tank(room_id=str(room.id), tank_number="991", status="active", is_quarantined=False)
     await tank1.insert()
 
+    # tank2: active, non-quarantined, death
     tank2 = Tank(room_id=str(room.id), tank_number="992", status="active", is_quarantined=False)
     await tank2.insert()
+
+    # tank3: active, quarantined AND incident (should increment BOTH quarantine and attention)
+    tank3 = Tank(room_id=str(room.id), tank_number="993", status="active", is_quarantined=True)
+    await tank3.insert()
 
     now = datetime.now(timezone.utc)
     today = now.date()
 
     # Incident report for tank1 in last 24h
-    inc = IncidentReport(
+    inc1 = IncidentReport(
         tank_id=str(tank1.id),
         date=today,
         problem="Filter blockage",
         created_by="test@uwindsor.ca",
         created_at=now
     )
-    await inc.insert()
+    await inc1.insert()
 
     # Death census event for tank2 in last 24h
-    death = CensusEvent(
+    death2 = CensusEvent(
         project_id="p123",
         tank_assignment_id="ta123",
         tank_id=str(tank2.id),
@@ -47,15 +53,28 @@ async def test_dashboard_attention_count_incidents_and_deaths():
         created_by="test@uwindsor.ca",
         created_at=now
     )
-    await death.insert()
+    await death2.insert()
+
+    # Incident report for quarantined tank3 in last 24h
+    inc3 = IncidentReport(
+        tank_id=str(tank3.id),
+        date=today,
+        problem="Water level low",
+        created_by="test@uwindsor.ca",
+        created_at=now
+    )
+    await inc3.insert()
 
     summary = await DashboardService.get_dashboard_summary()
-    assert summary["tank_status"]["attention"] >= 2
+    assert summary["tank_status"]["attention"] >= 3
+    assert summary["tank_status"]["quarantine"] >= 1
 
     # Cleanup
-    await inc.delete()
-    await death.delete()
+    await inc1.delete()
+    await death2.delete()
+    await inc3.delete()
     await tank1.delete()
     await tank2.delete()
+    await tank3.delete()
     await room.delete()
     await fac.delete()

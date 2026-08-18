@@ -66,11 +66,16 @@ class DashboardService:
         for t in tanks:
             if t.status == "inactive":
                 continue
-            elif t.is_quarantined:
+            
+            t_id_str = str(t.id)
+            t_num_str = str(t.tank_number) if hasattr(t, "tank_number") and t.tank_number else None
+            needs_att = t_id_str in attention_tank_ids or (t_num_str and t_num_str in attention_tank_ids)
+
+            if t.is_quarantined:
                 quarantine += 1
-            elif str(t.id) in attention_tank_ids or (hasattr(t, "tank_number") and str(t.tank_number) in attention_tank_ids):
+            if needs_att:
                 attention += 1
-            else:
+            if not t.is_quarantined and not needs_att:
                 healthy += 1
                 
         # Recent incidents (last 7 days)
