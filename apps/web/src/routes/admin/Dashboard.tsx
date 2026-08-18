@@ -463,6 +463,21 @@ export const Dashboard: React.FC = () => {
             <h2 className="text-base font-bold text-slate-800">Active Tank Distribution</h2>
             <span className="text-[11px] font-medium text-slate-400">Hover or tap card for details</span>
           </div>
+          {/* Transparent Backdrop Overlay for Mobile Touch Close */}
+          {tappedCard && (
+            <div 
+              className="fixed inset-0 z-20 bg-black/10" 
+              onClick={(e) => {
+                e.stopPropagation();
+                setTappedCard(null);
+              }}
+              onTouchEnd={(e) => {
+                e.stopPropagation();
+                setTappedCard(null);
+              }}
+            />
+          )}
+
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-2 relative">
             {/* Card 1: Healthy / Assigned */}
             <div 
@@ -473,12 +488,22 @@ export const Dashboard: React.FC = () => {
               <span className="text-3xl font-extrabold text-emerald-600 mt-2">{summary?.tank_status?.healthy || 0}</span>
               
               {/* Tooltip / Popover */}
-              <div className={`absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-30 w-56 p-3 bg-slate-900/95 text-white text-xs rounded-xl shadow-xl border border-slate-700 backdrop-blur-sm transition-all duration-200 ${
+              <div 
+                onClick={(e) => e.stopPropagation()}
+                className={`absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-30 w-56 p-3 bg-slate-900/95 text-white text-xs rounded-xl shadow-xl border border-slate-700 backdrop-blur-sm transition-all duration-200 ${
                 tappedCard === 'healthy' ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto pointer-events-none'
               }`}>
                 <div className="font-semibold text-emerald-400 mb-1 border-b border-slate-700/60 pb-1 flex items-center justify-between">
                   <span>Active Tanks</span>
-                  <span className="text-[9px] text-slate-400 font-normal">Tap to close</span>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTappedCard(null);
+                    }}
+                    className="w-5 h-5 flex items-center justify-center rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold transition-colors ml-2"
+                  >
+                    ✕
+                  </button>
                 </div>
                 <p className="text-slate-200 leading-snug">
                   {summary?.tank_status?.healthy || summary?.tank_status?.total_active || 0} tanks currently active in facility.
@@ -496,12 +521,22 @@ export const Dashboard: React.FC = () => {
               <span className="text-3xl font-extrabold text-amber-600 mt-2">{summary?.tank_status?.quarantine || 0}</span>
               
               {/* Tooltip / Popover */}
-              <div className={`absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-30 w-60 p-3 bg-slate-900/95 text-white text-xs rounded-xl shadow-xl border border-slate-700 backdrop-blur-sm transition-all duration-200 ${
+              <div 
+                onClick={(e) => e.stopPropagation()}
+                className={`absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-30 w-60 p-3 bg-slate-900/95 text-white text-xs rounded-xl shadow-xl border border-slate-700 backdrop-blur-sm transition-all duration-200 ${
                 tappedCard === 'quarantine' ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto pointer-events-none'
               }`}>
                 <div className="font-semibold text-amber-400 mb-1 border-b border-slate-700/60 pb-1 flex items-center justify-between">
                   <span>Quarantine Status</span>
-                  <span className="text-[9px] text-slate-400 font-normal">Tap to close</span>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTappedCard(null);
+                    }}
+                    className="w-5 h-5 flex items-center justify-center rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold transition-colors ml-2"
+                  >
+                    ✕
+                  </button>
                 </div>
                 <p className="text-slate-200 leading-snug">
                   {summary?.tank_status?.quarantine_tanks?.length
@@ -521,12 +556,22 @@ export const Dashboard: React.FC = () => {
               <span className="text-3xl font-extrabold text-red-600 mt-2">{summary?.tank_status?.attention || 0}</span>
               
               {/* Tooltip / Popover */}
-              <div className={`absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-30 w-64 p-3 bg-slate-900/95 text-white text-xs rounded-xl shadow-xl border border-slate-700 backdrop-blur-sm transition-all duration-200 ${
+              <div 
+                onClick={(e) => e.stopPropagation()}
+                className={`absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-30 w-64 p-3 bg-slate-900/95 text-white text-xs rounded-xl shadow-xl border border-slate-700 backdrop-blur-sm transition-all duration-200 ${
                 tappedCard === 'attention' ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto pointer-events-none'
               }`}>
                 <div className="font-semibold text-red-400 mb-1 border-b border-slate-700/60 pb-1 flex items-center justify-between">
                   <span>Needs Attention (24h)</span>
-                  <span className="text-[9px] text-slate-400 font-normal">Tap to close</span>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTappedCard(null);
+                    }}
+                    className="w-5 h-5 flex items-center justify-center rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold transition-colors ml-2"
+                  >
+                    ✕
+                  </button>
                 </div>
                 {summary?.tank_status?.attention_details?.length ? (
                   <ul className="space-y-1.5 text-slate-200 max-h-36 overflow-y-auto pr-1">

@@ -11,18 +11,24 @@ from beanie import init_beanie
 from app.models.facility import Facility, Room, Tank
 
 async def clean_cloud_db(mongo_uri: str, db_name: str):
-    print(f"Connecting to MongoDB at: {mongo_uri}")
-    print(f"Target Database: {db_name}")
+    print(f"Connecting to MongoDB at: {mongo_uri}", flush=True)
+    print(f"Target Database: {db_name}", flush=True)
     
-    kwargs = {}
+    kwargs = {
+        "serverSelectionTimeoutMS": 10000,
+        "connectTimeoutMS": 10000,
+    }
     if "mongodb+srv://" in mongo_uri or "ssl=true" in mongo_uri.lower() or "tls=true" in mongo_uri.lower():
         import certifi
         kwargs["tlsCAFile"] = certifi.where()
+        kwargs["tlsAllowInvalidCertificates"] = True
 
     client = AsyncIOMotorClient(mongo_uri, **kwargs)
     db = client[db_name]
     
+    print("Initializing Beanie database models...", flush=True)
     await init_beanie(database=db, document_models=[Facility, Room, Tank])
+    print("Beanie initialization complete.", flush=True)
     
     # 1. Ensure primary LaSalle Facility
     fac = await Facility.find_one({"name": "LaSalle Freshwater Restoration Ecology Centre"})
