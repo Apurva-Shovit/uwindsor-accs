@@ -49,3 +49,6 @@ test_close.py
 update_password.py
 
 
+# Built APKs staged for distribution. Large binaries, and CI publishes the
+# canonical signed copy to a GitHub Release — see .github/workflows/release-apk.yml.
+dist-apk/
