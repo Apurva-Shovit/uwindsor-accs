@@ -6,6 +6,7 @@ import { getDashboardSummary, getWaterQualityAnalytics } from '../../lib/api';
 export const Dashboard: React.FC = () => {
   const [selectedTank, setSelectedTank] = useState<string>('all');
   const [timeRangeDays, setTimeRangeDays] = useState<number>(30);
+  const [tappedCard, setTappedCard] = useState<string | null>(null);
 
   const { data: summary, isLoading: loadingSummary } = useQuery({
     queryKey: ['dashboardSummary'],
@@ -341,13 +342,9 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="border-b border-slate-200 pb-4">
-        <h1 className="text-2xl font-bold text-[#005596]">Administrator & Chair Dashboard</h1>
-      </div>
-
       {/* Metric Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {/* Card 1: Active Users */}
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow duration-200 flex items-center gap-4">
           <div className="p-3.5 bg-blue-50 rounded-lg text-[#005596]">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -360,6 +357,20 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
+        {/* Card 2: Pending User Approvals */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow duration-200 flex items-center gap-4">
+          <div className="p-3.5 bg-amber-50 rounded-lg text-amber-600">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Pending User Approvals</p>
+            <p className="text-2xl font-bold text-slate-900 mt-1">{summary?.pending_approvals}</p>
+          </div>
+        </div>
+
+        {/* Card 3: Active Projects */}
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow duration-200 flex items-center gap-4">
           <div className="p-3.5 bg-emerald-50 rounded-lg text-emerald-600">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -369,18 +380,6 @@ export const Dashboard: React.FC = () => {
           <div>
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active Projects</p>
             <p className="text-2xl font-bold text-slate-900 mt-1">{summary?.projects}</p>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow duration-200 flex items-center gap-4">
-          <div className="p-3.5 bg-amber-50 rounded-lg text-amber-600">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Pending Approvals</p>
-            <p className="text-2xl font-bold text-slate-900 mt-1">{summary?.pending_approvals}</p>
           </div>
         </div>
       </div>
@@ -459,20 +458,90 @@ export const Dashboard: React.FC = () => {
 
       {/* Tank Status Distribution */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-          <h2 className="text-base font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2">Active Tank Distribution</h2>
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-2">
-            <div className="flex flex-col items-center justify-center p-4 bg-emerald-50 rounded-xl w-full sm:flex-1 border border-emerald-100">
-              <span className="text-sm font-semibold text-emerald-800 text-center">Healthy / Assigned</span>
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm overflow-visible">
+          <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2">
+            <h2 className="text-base font-bold text-slate-800">Active Tank Distribution</h2>
+            <span className="text-[11px] font-medium text-slate-400">Hover or tap card for details</span>
+          </div>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-2 relative">
+            {/* Card 1: Healthy / Assigned */}
+            <div 
+              onClick={() => setTappedCard(tappedCard === 'healthy' ? null : 'healthy')}
+              className="group relative flex flex-col items-center justify-center p-4 bg-emerald-50 rounded-xl w-full sm:flex-1 border border-emerald-100 cursor-pointer transition-all hover:shadow-md hover:bg-emerald-100/60"
+            >
+              <span className="text-sm font-semibold text-emerald-800 text-center">Active</span>
               <span className="text-3xl font-extrabold text-emerald-600 mt-2">{summary?.tank_status?.healthy || 0}</span>
+              
+              {/* Tooltip / Popover */}
+              <div className={`absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-30 w-56 p-3 bg-slate-900/95 text-white text-xs rounded-xl shadow-xl border border-slate-700 backdrop-blur-sm transition-all duration-200 ${
+                tappedCard === 'healthy' ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto pointer-events-none'
+              }`}>
+                <div className="font-semibold text-emerald-400 mb-1 border-b border-slate-700/60 pb-1 flex items-center justify-between">
+                  <span>Active Tanks</span>
+                  <span className="text-[9px] text-slate-400 font-normal">Tap to close</span>
+                </div>
+                <p className="text-slate-200 leading-snug">
+                  {summary?.tank_status?.healthy || summary?.tank_status?.total_active || 0} tanks currently active in facility.
+                </p>
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-900/95" />
+              </div>
             </div>
-            <div className="flex flex-col items-center justify-center p-4 bg-amber-50 rounded-xl w-full sm:flex-1 border border-amber-100">
+
+            {/* Card 2: Quarantine */}
+            <div 
+              onClick={() => setTappedCard(tappedCard === 'quarantine' ? null : 'quarantine')}
+              className="group relative flex flex-col items-center justify-center p-4 bg-amber-50 rounded-xl w-full sm:flex-1 border border-amber-100 cursor-pointer transition-all hover:shadow-md hover:bg-amber-100/60"
+            >
               <span className="text-sm font-semibold text-amber-800 text-center">Quarantine</span>
               <span className="text-3xl font-extrabold text-amber-600 mt-2">{summary?.tank_status?.quarantine || 0}</span>
+              
+              {/* Tooltip / Popover */}
+              <div className={`absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-30 w-60 p-3 bg-slate-900/95 text-white text-xs rounded-xl shadow-xl border border-slate-700 backdrop-blur-sm transition-all duration-200 ${
+                tappedCard === 'quarantine' ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto pointer-events-none'
+              }`}>
+                <div className="font-semibold text-amber-400 mb-1 border-b border-slate-700/60 pb-1 flex items-center justify-between">
+                  <span>Quarantine Status</span>
+                  <span className="text-[9px] text-slate-400 font-normal">Tap to close</span>
+                </div>
+                <p className="text-slate-200 leading-snug">
+                  {summary?.tank_status?.quarantine_tanks?.length
+                    ? `${summary.tank_status.quarantine_tanks.join(', ')} are in quarantine.`
+                    : 'No tanks currently in quarantine.'}
+                </p>
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-900/95" />
+              </div>
             </div>
-            <div className="flex flex-col items-center justify-center p-4 bg-red-50 rounded-xl w-full sm:flex-1 border border-red-100">
+
+            {/* Card 3: Needs Attention */}
+            <div 
+              onClick={() => setTappedCard(tappedCard === 'attention' ? null : 'attention')}
+              className="group relative flex flex-col items-center justify-center p-4 bg-red-50 rounded-xl w-full sm:flex-1 border border-red-100 cursor-pointer transition-all hover:shadow-md hover:bg-red-100/60"
+            >
               <span className="text-sm font-semibold text-red-800 text-center">Needs Attention</span>
               <span className="text-3xl font-extrabold text-red-600 mt-2">{summary?.tank_status?.attention || 0}</span>
+              
+              {/* Tooltip / Popover */}
+              <div className={`absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-30 w-64 p-3 bg-slate-900/95 text-white text-xs rounded-xl shadow-xl border border-slate-700 backdrop-blur-sm transition-all duration-200 ${
+                tappedCard === 'attention' ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto pointer-events-none'
+              }`}>
+                <div className="font-semibold text-red-400 mb-1 border-b border-slate-700/60 pb-1 flex items-center justify-between">
+                  <span>Needs Attention (24h)</span>
+                  <span className="text-[9px] text-slate-400 font-normal">Tap to close</span>
+                </div>
+                {summary?.tank_status?.attention_details?.length ? (
+                  <ul className="space-y-1.5 text-slate-200 max-h-36 overflow-y-auto pr-1">
+                    {summary.tank_status.attention_details.map((item: any, idx: number) => (
+                      <li key={idx} className="flex justify-between items-center bg-slate-800/90 px-2 py-1 rounded border border-slate-700/60">
+                        <span className="font-medium text-slate-100">{item.tank}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-950/90 text-red-300 font-semibold border border-red-800/60">{item.reason}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-slate-300 italic">No tanks requiring attention in the last 24h.</p>
+                )}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-900/95" />
+              </div>
             </div>
           </div>
         </div>

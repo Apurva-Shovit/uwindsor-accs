@@ -192,7 +192,7 @@ export const Reports: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-4 print:pb-2">
         <div>
-          <h1 className="text-2xl font-bold text-[#005596]">Facility &amp; Audit Reports</h1>
+          <h1 className="text-2xl font-bold text-[#005596]">Facility Reports</h1>
         </div>
 
         <button

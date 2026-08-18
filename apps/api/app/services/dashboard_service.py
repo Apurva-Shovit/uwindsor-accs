@@ -4,6 +4,7 @@ from ..models.user import User, StatusEnum
 from ..models.project import Project
 from ..models.facility import Tank
 from ..models.incident_report import IncidentReport
+from ..models.census_event import CensusEvent
 from ..repositories.base_repository import BaseRepository
 from ..services.audit_service import AuditService
 from ..utils.quarantine_utils import lift_expired_quarantines
@@ -18,6 +19,7 @@ class DashboardService:
         project_repo = BaseRepository(Project)
         tank_repo = BaseRepository(Tank)
         incident_repo = BaseRepository(IncidentReport)
+        census_repo = BaseRepository(CensusEvent)
 
         # Users
         users = await user_repo.find({"status": StatusEnum.active.value})
@@ -30,17 +32,83 @@ class DashboardService:
         # Pending approvals
         pending = await user_repo.find({"status": "pending"})
         pending_approvals = len(pending)
-        
-        # Tank status distribution
+
+        # Identify tanks requiring attention due to incidents or deaths in the last 24 hours
+        twenty_four_hours_ago_dt = datetime.now(timezone.utc) - timedelta(hours=24)
+        twenty_four_hours_ago_date = twenty_four_hours_ago_dt.date()
+
+        recent_24h_incidents = await incident_repo.find({
+            "$or": [
+                {"created_at": {"$gte": twenty_four_hours_ago_dt}},
+                {"date": {"$gte": twenty_four_hours_ago_date}}
+            ]
+        })
+
+        recent_24h_deaths = await census_repo.find({
+            "event_type": "death",
+            "$or": [
+                {"created_at": {"$gte": twenty_four_hours_ago_dt}},
+                {"date": {"$gte": twenty_four_hours_ago_date}}
+            ]
+        })
+
+        # Collect attention details mapping: { tank_identifier: set of reasons }
+        attention_map: Dict[str, set] = {}
+        for inc in recent_24h_incidents:
+            if getattr(inc, "tank_id", None):
+                tid = str(inc.tank_id)
+                if tid not in attention_map:
+                    attention_map[tid] = set()
+                attention_map[tid].add("Incident")
+
+        for death in recent_24h_deaths:
+            if getattr(death, "tank_id", None):
+                tid = str(death.tank_id)
+                if tid not in attention_map:
+                    attention_map[tid] = set()
+                attention_map[tid].add("Mortality")
+
+        # Tank status distribution & detailed breakdowns
         tanks = await tank_repo.find({"deleted": False})
         healthy, quarantine, attention = 0, 0, 0
-        for t in tanks:
+        quarantine_tanks = []
+        attention_details = []
+        total_active = 0
+
+        def _sort_key(t):
+            num = getattr(t, "tank_number", "")
+            return int(num) if str(num).isdigit() else 999
+
+        tanks_sorted = sorted(tanks, key=_sort_key)
+
+        for t in tanks_sorted:
             if t.status == "inactive":
                 continue
-            elif t.is_quarantined:
+
+            total_active += 1
+            healthy += 1
+
+            t_id_str = str(t.id)
+            t_num_str = str(t.tank_number) if hasattr(t, "tank_number") and t.tank_number else t_id_str
+            tank_label = f"Tank {t_num_str}" if t_num_str and not str(t_num_str).lower().startswith("tank") else (t_num_str or "Unknown")
+
+            att_reasons = set()
+            if t_id_str in attention_map:
+                att_reasons.update(attention_map[t_id_str])
+            if t_num_str in attention_map:
+                att_reasons.update(attention_map[t_num_str])
+
+            needs_att = len(att_reasons) > 0
+
+            if t.is_quarantined:
                 quarantine += 1
-            else:
-                healthy += 1
+                quarantine_tanks.append(tank_label)
+            if needs_att:
+                attention += 1
+                attention_details.append({
+                    "tank": tank_label,
+                    "reason": " & ".join(sorted(list(att_reasons)))
+                })
                 
         # Recent incidents (last 7 days)
         seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
@@ -55,6 +123,9 @@ class DashboardService:
                 "healthy": healthy,
                 "quarantine": quarantine,
                 "attention": attention,
+                "total_active": total_active,
+                "quarantine_tanks": quarantine_tanks,
+                "attention_details": attention_details,
             },
             "recent_incidents": recent_incidents,
         }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, UserCheck, UserX, Shield, Database, Search, AlertCircle, X } from 'lucide-react';
+import { UserCheck, UserX, Shield, Database, Search, AlertCircle, X } from 'lucide-react';
 import { formatDate } from '../../utils/formatters';
 import {
   getUsers,
@@ -179,14 +179,6 @@ export const UserManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="border-b border-slate-200 pb-4">
-        <h1 className="text-2xl font-bold text-[#005596] flex items-center gap-2">
-          <Users className="w-7 h-7 text-[#005596]" />
-          User Account &amp; Access Control Management
-        </h1>
-      </div>
-
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
@@ -202,7 +194,7 @@ export const UserManagement: React.FC = () => {
 
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Pending Approvals</span>
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Pending User Approvals</span>
             <span className="text-3xl font-extrabold text-slate-900 mt-1 block">{pendingCount}</span>
           </div>
           <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
