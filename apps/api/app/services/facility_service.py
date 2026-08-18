@@ -227,8 +227,14 @@ class FacilityService:
         
         assignment_map = {str(a.tank_id): a for a in assignments}
         
-        # Bulk query for projects
+        # Bulk query for rooms
         from bson import ObjectId
+        room_ids = [t.room_id for t in tanks if t.room_id]
+        valid_room_oids = [ObjectId(rid) for rid in room_ids if ObjectId.is_valid(rid)]
+        rooms = await Room.find({"_id": {"$in": valid_room_oids}}).to_list() if valid_room_oids else []
+        room_map = {str(r.id): r.room_number for r in rooms}
+
+        # Bulk query for projects
         project_ids = [a.project_id for a in assignments if a.project_id]
         valid_oids = [ObjectId(pid) for pid in project_ids if ObjectId.is_valid(pid)]
         projects = await Project.find({"_id": {"$in": valid_oids}}).to_list() if valid_oids else []
@@ -257,6 +263,8 @@ class FacilityService:
             res.append({
                 "id": str(t.id),
                 "tank_number": t.tank_number,
+                "room_id": t.room_id,
+                "room_number": room_map.get(str(t.room_id), "1"),
                 "status": t.status,
                 "display_status": display_status,
                 "notes": t.notes,

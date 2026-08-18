@@ -47,7 +47,7 @@ export const ProjectDetailsPage: React.FC = () => {
   const [establishedDate, setEstablishedDate] = useState(new Date().toISOString().slice(0, 10));
   const [source, setSource] = useState('');
   const [auppExpiryDate, setAuppExpiryDate] = useState('');
-  const [roomNumber, setRoomNumber] = useState('301');
+  const [roomNumber, setRoomNumber] = useState('1');
   const [rfidTrackingEnabled, setRfidTrackingEnabled] = useState(false);
 
   // Closing form state

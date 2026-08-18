@@ -8,6 +8,7 @@ import { Database, Plus } from 'lucide-react';
 interface TankSummary {
   id: string;
   tank_number: string;
+  room_number?: string;
   status: string;
   display_status: string;
   notes: string;
@@ -141,11 +142,13 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
     }
   };
 
+  const activeRoomNumber = tanks[0]?.room_number || '1';
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-textPrimary">Room 301 — Top-View Grid</h1>
+          <h1 className="text-2xl font-bold text-textPrimary">Room {activeRoomNumber} — Top-View Grid</h1>
         </div>
 
         <div className="flex space-x-2">
