@@ -131,16 +131,6 @@ export const ProjectOverviewPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header Action */}
-      <div className="flex justify-end items-center pb-2">
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="bg-[#005596] hover:bg-[#002B51] text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow transition-colors flex items-center gap-2 whitespace-nowrap"
-        >
-          <Plus className="w-4 h-4" />
-          Create Project
-        </button>
-      </div>
 
       {/* KPI Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-5">
@@ -208,7 +198,7 @@ export const ProjectOverviewPage: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <button
             onClick={() => setStatusFilter('all')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
@@ -216,6 +206,13 @@ export const ProjectOverviewPage: React.FC = () => {
             }`}
           >
             All Projects ({data?.total_projects || projects.length})
+          </button>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="bg-[#005596] hover:bg-[#002B51] text-white px-3 py-1.5 text-xs font-semibold rounded-lg shadow-sm transition-colors flex items-center gap-1.5 whitespace-nowrap"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Create Project
           </button>
           <button
             onClick={() => setStatusFilter('active')}
