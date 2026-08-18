@@ -11,7 +11,9 @@
     "build:mobile": "tsc -b && vite build --mode mobile",
     "android:sync": "npm run build:mobile && cap sync android",
     "android:open": "npm run android:sync && cap open android",
-    "android:run": "npm run android:sync && cap run android"
+    "android:run": "npm run android:sync && cap run android",
+    "android:live": "node scripts/android-live.mjs",
+    "android:live:install": "node scripts/android-live.mjs --install"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",

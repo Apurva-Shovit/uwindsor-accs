@@ -26,6 +26,25 @@ function usesHttpBackend(): boolean {
 
 const devHttp = usesHttpBackend();
 
+/**
+ * Live reload: point the WebView at the Vite dev server instead of the assets
+ * bundled by `cap sync`, so a save in src/ lands in the app immediately and no
+ * reinstall is needed. Off unless CAP_LIVE_RELOAD=1, so ordinary and release
+ * builds are untouched.
+ *
+ * 127.0.0.1 rather than the dev machine's LAN address: uwinsecure isolates
+ * clients, so the device cannot reach this machine over Wi-Fi on campus.
+ * `npm run android:live` tunnels the port over USB with `adb reverse` instead.
+ * It has to be 127.0.0.1 and not localhost — Capacitor serves its own assets
+ * from localhost and would intercept the request. Chromium still treats
+ * 127.0.0.1 as a trustworthy origin, so nothing about the page's capabilities
+ * changes. Only debug builds permit cleartext to it (see
+ * android/app/src/debug/res/xml/network_security_config.xml), which is why the
+ * live-reload APK is a debug one.
+ */
+const liveReload = process.env.CAP_LIVE_RELOAD === '1';
+const liveReloadPort = process.env.CAP_LIVE_RELOAD_PORT ?? '5173';
+
 const config: CapacitorConfig = {
   appId: 'ca.uwindsor.acare',
   appName: 'ACARE',
@@ -35,6 +54,9 @@ const config: CapacitorConfig = {
   // backend change is needed for the Android build.
   server: {
     androidScheme: devHttp ? 'http' : 'https',
+    ...(liveReload
+      ? { url: `http://127.0.0.1:${liveReloadPort}`, cleartext: true }
+      : {}),
   },
   android: {
     allowMixedContent: false,
