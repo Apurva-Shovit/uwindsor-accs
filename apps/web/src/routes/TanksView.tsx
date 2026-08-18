@@ -148,7 +148,7 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-textPrimary">Room {activeRoomNumber} — Top-View Grid</h1>
+          <h1 className="text-2xl font-bold text-textPrimary">Room {activeRoomNumber}</h1>
         </div>
 
         <div className="flex space-x-2">

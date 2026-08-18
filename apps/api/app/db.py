@@ -65,10 +65,15 @@ async def init_db():
         fac = Facility(name="LaSalle Freshwater Restoration Ecology Centre", address="LaSalle, ON", description="Main restoration ecology facility")
         await fac.insert()
         
-    room = await Room.find_one({"facility_id": str(fac.id), "room_number": "301"})
+    room = await Room.find_one({"facility_id": str(fac.id), "room_number": "1"})
     if not room:
-        room = Room(facility_id=str(fac.id), room_number="301", description="Main aquatic holding room")
+        room = await Room.find_one({"facility_id": str(fac.id)})
+    if not room:
+        room = Room(facility_id=str(fac.id), room_number="1", description="Main aquatic holding room")
         await room.insert()
+    elif room.room_number != "1":
+        room.room_number = "1"
+        await room.save()
 
     existing_tanks = await Tank.find({"room_id": str(room.id)}).to_list()
     if len(existing_tanks) < 14:
