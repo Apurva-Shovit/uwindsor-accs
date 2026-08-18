@@ -4,6 +4,7 @@ from ..models.user import User, StatusEnum
 from ..models.project import Project
 from ..models.facility import Tank
 from ..models.incident_report import IncidentReport
+from ..models.census_event import CensusEvent
 from ..repositories.base_repository import BaseRepository
 from ..services.audit_service import AuditService
 from ..utils.quarantine_utils import lift_expired_quarantines
@@ -18,6 +19,7 @@ class DashboardService:
         project_repo = BaseRepository(Project)
         tank_repo = BaseRepository(Tank)
         incident_repo = BaseRepository(IncidentReport)
+        census_repo = BaseRepository(CensusEvent)
 
         # Users
         users = await user_repo.find({"status": StatusEnum.active.value})
@@ -30,7 +32,34 @@ class DashboardService:
         # Pending approvals
         pending = await user_repo.find({"status": "pending"})
         pending_approvals = len(pending)
-        
+
+        # Identify tanks requiring attention due to incidents or deaths in the last 24 hours
+        twenty_four_hours_ago_dt = datetime.now(timezone.utc) - timedelta(hours=24)
+        twenty_four_hours_ago_date = twenty_four_hours_ago_dt.date()
+
+        recent_24h_incidents = await incident_repo.find({
+            "$or": [
+                {"created_at": {"$gte": twenty_four_hours_ago_dt}},
+                {"date": {"$gte": twenty_four_hours_ago_date}}
+            ]
+        })
+
+        recent_24h_deaths = await census_repo.find({
+            "event_type": "death",
+            "$or": [
+                {"created_at": {"$gte": twenty_four_hours_ago_dt}},
+                {"date": {"$gte": twenty_four_hours_ago_date}}
+            ]
+        })
+
+        attention_tank_ids = set()
+        for inc in recent_24h_incidents:
+            if getattr(inc, "tank_id", None):
+                attention_tank_ids.add(str(inc.tank_id))
+        for death in recent_24h_deaths:
+            if getattr(death, "tank_id", None):
+                attention_tank_ids.add(str(death.tank_id))
+
         # Tank status distribution
         tanks = await tank_repo.find({"deleted": False})
         healthy, quarantine, attention = 0, 0, 0
@@ -39,6 +68,8 @@ class DashboardService:
                 continue
             elif t.is_quarantined:
                 quarantine += 1
+            elif str(t.id) in attention_tank_ids or (hasattr(t, "tank_number") and str(t.tank_number) in attention_tank_ids):
+                attention += 1
             else:
                 healthy += 1
                 
