@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Clock, ShieldAlert, CheckCircle2, XCircle } from 'lucide-react';
+import { AlertTriangle, Clock, ShieldAlert, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
 import { parseApiDate, formatQuarantineRemaining } from '../../utils/formatters';
@@ -37,6 +37,10 @@ export const QuarantinePage: React.FC = () => {
 
   const [liftModalTank, setLiftModalTank] = useState<any>(null);
   const [liftVerification, setLiftVerification] = useState('');
+
+  // Approving an exemption moves fish, so the decision has to be in flight only
+  // once: a second click while the first request is open would transfer twice.
+  const [deciding, setDeciding] = useState<{ id: string; approved: boolean } | null>(null);
 
   // The countdown now resolves down to the minute, so it has to tick rather than
   // only recomputing when the tank query happens to refetch.
@@ -134,12 +138,20 @@ export const QuarantinePage: React.FC = () => {
   };
 
   const handleDecideExemption = async (exemptionId: string, approved: boolean) => {
+    if (deciding) return;
+
+    setDeciding({ id: exemptionId, approved });
     try {
       await decideExemption(exemptionId, { approved });
-      refetchExemptions();
-      refetchTanks();
+      // Wait for the refreshed list before releasing the buttons, so the row has
+      // already flipped out of "pending" by the time it becomes clickable again.
+      await Promise.all([refetchExemptions(), refetchTanks()]);
     } catch (err: any) {
+      // The request was rejected before anything moved, so the row stays pending
+      // and both buttons come back for another attempt.
       alert(err.response?.data?.detail || err.message || 'Error deciding exemption');
+    } finally {
+      setDeciding(null);
     }
   };
 
@@ -301,15 +313,31 @@ export const QuarantinePage: React.FC = () => {
                             <div className="inline-flex items-center gap-2">
                               <button
                                 onClick={() => handleDecideExemption(exId, true)}
-                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-xs shadow-sm transition-colors"
+                                disabled={!!deciding}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-xs shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-600"
                               >
-                                Accept &amp; Transfer
+                                {deciding?.id === exId && deciding.approved ? (
+                                  <>
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    Transferring...
+                                  </>
+                                ) : (
+                                  <>Accept &amp; Transfer</>
+                                )}
                               </button>
                               <button
                                 onClick={() => handleDecideExemption(exId, false)}
-                                className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded text-xs shadow-sm transition-colors"
+                                disabled={!!deciding}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded text-xs shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-600"
                               >
-                                Reject
+                                {deciding?.id === exId && !deciding.approved ? (
+                                  <>
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    Rejecting...
+                                  </>
+                                ) : (
+                                  <>Reject</>
+                                )}
                               </button>
                             </div>
                           ) : (
