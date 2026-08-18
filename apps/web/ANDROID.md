@@ -185,6 +185,22 @@ Why it is shaped this way:
 - **The dev server runs in `mobile` mode**, so it reads `VITE_API_URL` from
   `.env.mobile` exactly as the APK does. Point `.env.mobile` at a local backend
   on `http://127.0.0.1:8000` and `android:live` tunnels that port too.
+- **It builds with gradle directly rather than `npx cap run android`.** Capacitor
+  invokes a bare `gradlew`, which does not resolve on a Windows shell that sets
+  `NoDefaultCurrentDirectoryInExePath` (Git Bash does), so the script calls
+  `gradlew.bat` by absolute path instead.
+
+The script also resolves the two things a command-line gradle build needs and
+Android Studio would otherwise have supplied, so neither has to be set up by
+hand:
+
+- `ANDROID_HOME`, from wherever `platform-tools/adb` was found — without it AGP
+  fails with "SDK location not found", since `android/local.properties` is
+  gitignored and only Studio writes one.
+- `JAVA_HOME`, pointed at a **JDK 21** — the toolchain pins that major version
+  and rejects anything else rather than falling back. It prefers the JDK bundled
+  with Android Studio (its `jbr` directory), which is the JVM Studio already
+  builds this project with.
 
 Live reload is off unless `CAP_LIVE_RELOAD=1` is set, which only these two
 scripts do, so ordinary `android:sync` and release builds are unaffected. Native
