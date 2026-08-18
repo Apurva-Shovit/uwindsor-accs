@@ -127,6 +127,13 @@ jobs:
           set -euo pipefail
           npm run android:sync
           cd android
+          # gradlew was committed from Windows, where git does not track the
+          # execute bit, so it arrives here as 0644 and `./gradlew` dies with
+          # exit 126 ("found, not executable") -- which reads like a missing
+          # file but is not. The mode is also fixed in the index, so this is
+          # belt and braces: it keeps the build working even if a future commit
+          # from a Windows checkout resets it again.
+          chmod +x ./gradlew
           ./gradlew assembleRelease --no-daemon
 
       - name: Verify signature

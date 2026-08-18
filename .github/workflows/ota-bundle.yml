@@ -117,14 +117,37 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # browser_download_url, not the API `url` field: devices fetch this
-          # unauthenticated, and the API URL would need an Accept header and a
-          # token. Asked for rather than assembled by hand so a rename cannot
-          # leave the fleet fetching a 404.
-          URL="$(gh release view "${{ steps.pkg.outputs.tag }}" \
-                   --json assets \
-                   --jq '.assets[0].browser_download_url')"
-          test -n "$URL"
+          # `.url`, NOT `.browser_download_url`. Those are two different schemas
+          # and mixing them up yields an empty string rather than an error: the
+          # REST API names the public link browser_download_url, but `gh` hands
+          # back its own normalised object where `url` IS that public link and
+          # `apiUrl` is the API one. Asking for the REST name here gets null,
+          # which is what broke the first run of this workflow.
+          #
+          # The public link is what we want either way: devices fetch it
+          # unauthenticated, whereas apiUrl needs an Accept header and a token.
+          # Asked for rather than assembled by hand so a rename cannot leave the
+          # fleet fetching a 404.
+          #
+          # Retried because a freshly uploaded asset can take a moment to appear
+          # in the release listing, and an empty answer here strands a bundle
+          # that has in fact already uploaded.
+          for attempt in 1 2 3 4 5 6; do
+            URL="$(gh release view "${{ steps.pkg.outputs.tag }}" \
+                     --json assets \
+                     --jq '.assets[] | select(.name | endswith(".zip")) | .url' \
+                   || true)"
+            if [ -n "$URL" ]; then break; fi
+            echo "Asset not listed yet (attempt $attempt); waiting..."
+            sleep $((attempt * 5))
+          done
+
+          if [ -z "$URL" ]; then
+            echo "::error::Could not resolve a .zip asset URL on ${{ steps.pkg.outputs.tag }}"
+            gh release view "${{ steps.pkg.outputs.tag }}" --json assets || true
+            exit 1
+          fi
+          echo "Resolved: $URL"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
 
       - name: Verify the asset is publicly fetchable
