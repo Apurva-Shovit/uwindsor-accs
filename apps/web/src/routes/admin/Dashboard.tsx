@@ -1,12 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, Filter } from 'lucide-react';
+import { Activity, Filter, Maximize2, X } from 'lucide-react';
 import { getDashboardSummary, getWaterQualityAnalytics } from '../../lib/api';
 
 export const Dashboard: React.FC = () => {
   const [selectedTank, setSelectedTank] = useState<string>('all');
   const [timeRangeDays, setTimeRangeDays] = useState<number>(30);
   const [tappedCard, setTappedCard] = useState<string | null>(null);
+  const [enlargedChart, setEnlargedChart] = useState<'ph' | 'temperature' | 'dissolved_oxygen' | null>(null);
+
+  // Keyboard shortcut listener to close enlarged graph on Escape key press
+  useEffect(() => {
+    if (!enlargedChart) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setEnlargedChart(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [enlargedChart]);
 
   const { data: summary, isLoading: loadingSummary } = useQuery({
     queryKey: ['dashboardSummary'],
@@ -54,7 +67,8 @@ export const Dashboard: React.FC = () => {
     strokeColor: string,
     _fillColor: string,
     defaultMin: number,
-    defaultMax: number
+    defaultMax: number,
+    isEnlarged: boolean = false
   ) => {
     const validPoints = series
       .map((item: any, idx: number) => ({ idx, val: item[dataKey], date: item.date }))
@@ -82,12 +96,12 @@ export const Dashboard: React.FC = () => {
 
     const midVal = paramStats?.mid ?? +((maxVal + minVal) / 2).toFixed(1);
 
-    const width = 600;
-    const height = 150;
-    const paddingLeft = 45;
-    const paddingRight = 20;
-    const paddingTop = 20;
-    const paddingBottom = 25;
+    const width = isEnlarged ? 850 : 600;
+    const height = isEnlarged ? 340 : 160;
+    const paddingLeft = isEnlarged ? 55 : 45;
+    const paddingRight = isEnlarged ? 25 : 20;
+    const paddingTop = isEnlarged ? 30 : 20;
+    const paddingBottom = isEnlarged ? 45 : 30;
 
     const range = maxVal - minVal || 1;
     const getX = (index: number) => paddingLeft + (index / (series.length - 1 || 1)) * (width - paddingLeft - paddingRight);
@@ -144,38 +158,69 @@ export const Dashboard: React.FC = () => {
 
     const missingDays = series.filter((item: any) => item.log_count === 0);
 
+    // Generate Y-axis ticks (5 ticks for enlarged mode with parallel gridlines, 3 for standard mode)
+    const yTickCount = isEnlarged ? 5 : 3;
+    const yTicks = Array.from({ length: yTickCount }, (_, i) => {
+      const val = minVal + (range * i) / (yTickCount - 1);
+      return +val.toFixed(1);
+    });
+
     return (
-      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2">
+      <div
+        onClick={() => !isEnlarged && setEnlargedChart(dataKey)}
+        className={`bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2 ${
+          !isEnlarged ? 'cursor-pointer hover:border-slate-300 hover:shadow-md transition-all group/card relative' : ''
+        }`}
+        title={!isEnlarged ? 'Click to enlarge graph' : undefined}
+      >
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-slate-800 flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: strokeColor }} />
             {title} ({unit})
           </span>
-          <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-            Latest: <strong>{latestVal}</strong> {unit}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+              Latest: <strong>{latestVal}</strong> {unit}
+            </span>
+            {!isEnlarged && (
+              <span className="p-1 text-slate-400 group-hover/card:text-[#005596] rounded transition-colors" title="Click to enlarge">
+                <Maximize2 className="w-3.5 h-3.5" />
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="relative w-full overflow-visible pt-1">
-          <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-36 overflow-visible">
-            {/* Y Axis numeric ticks */}
-            <text x={paddingLeft - 8} y={paddingTop + 4} textAnchor="end" className="text-[10px] font-bold fill-slate-400">
-              {maxVal}
-            </text>
-            <text x={paddingLeft - 8} y={(paddingTop + height - paddingBottom) / 2 + 3} textAnchor="end" className="text-[10px] font-bold fill-slate-400">
-              {midVal}
-            </text>
-            <text x={paddingLeft - 8} y={height - paddingBottom + 3} textAnchor="end" className="text-[10px] font-bold fill-slate-400">
-              {minVal}
-            </text>
+          <svg viewBox={`0 0 ${width} ${height}`} className={`w-full ${isEnlarged ? 'h-72' : 'h-40'} overflow-visible`}>
+            {/* Y Axis numeric ticks & horizontal grid lines parallel to X-axis */}
+            {yTicks.map((tickVal, i) => {
+              const yPos = getY(tickVal);
+              const isBottom = i === 0;
+              return (
+                <g key={`y-tick-${i}`}>
+                  <text
+                    x={paddingLeft - 8}
+                    y={yPos + 4}
+                    textAnchor="end"
+                    className={`${isEnlarged ? 'text-[11px]' : 'text-[10px]'} font-bold fill-slate-400`}
+                  >
+                    {tickVal}
+                  </text>
+                  <line
+                    x1={paddingLeft}
+                    y1={yPos}
+                    x2={width - paddingRight}
+                    y2={yPos}
+                    stroke={isBottom ? '#cbd5e1' : '#e2e8f0'}
+                    strokeWidth={isBottom ? '1.5' : '1'}
+                    strokeDasharray={isBottom ? undefined : '3 3'}
+                  />
+                </g>
+              );
+            })}
 
             {/* Y Axis line */}
             <line x1={paddingLeft} y1={paddingTop} x2={paddingLeft} y2={height - paddingBottom} stroke="#cbd5e1" strokeWidth="1.5" />
-
-            {/* Grid lines */}
-            <line x1={paddingLeft} y1={paddingTop} x2={width - paddingRight} y2={paddingTop} stroke="#e2e8f0" strokeDasharray="3 3" />
-            <line x1={paddingLeft} y1={(paddingTop + height - paddingBottom) / 2} x2={width - paddingRight} y2={(paddingTop + height - paddingBottom) / 2} stroke="#e2e8f0" strokeDasharray="3 3" />
-            <line x1={paddingLeft} y1={height - paddingBottom} x2={width - paddingRight} y2={height - paddingBottom} stroke="#cbd5e1" />
 
             {/* Interpolated Gap Dashed Bridge Path */}
             {missingDays.length > 0 && dashedPathD && (
@@ -183,7 +228,7 @@ export const Dashboard: React.FC = () => {
                 d={dashedPathD}
                 fill="none"
                 stroke={strokeColor}
-                strokeWidth="2"
+                strokeWidth={isEnlarged ? '2.5' : '2'}
                 strokeDasharray="4 4"
                 opacity="0.4"
                 strokeLinecap="round"
@@ -197,7 +242,7 @@ export const Dashboard: React.FC = () => {
                 d={solidPathD}
                 fill="none"
                 stroke={strokeColor}
-                strokeWidth="3"
+                strokeWidth={isEnlarged ? '3.5' : '3'}
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
@@ -224,11 +269,11 @@ export const Dashboard: React.FC = () => {
                     />
                     {/* Sleek hollow ring for missing day */}
                     <circle
-                      cx={x} cy={y} r="3"
+                      cx={x} cy={y} r={isEnlarged ? '4' : '3'}
                       fill="#ffffff"
                       stroke="#94a3b8"
                       strokeWidth="1.5"
-                      className="transition-all group-hover:r-5 group-hover:stroke-amber-500 group-hover:stroke-2"
+                      className="transition-all group-hover:r-6 group-hover:stroke-amber-500 group-hover:stroke-2"
                     />
                     {/* SVG Hover Tooltip Badge */}
                     <g className="opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
@@ -271,9 +316,9 @@ export const Dashboard: React.FC = () => {
                   />
                   {/* Point Circle */}
                   <circle
-                    cx={x} cy={y} r="4"
+                    cx={x} cy={y} r={isEnlarged ? '5' : '4'}
                     fill={strokeColor}
-                    className="transition-all group-hover:r-6 group-hover:stroke-white group-hover:stroke-2"
+                    className="transition-all group-hover:r-7 group-hover:stroke-white group-hover:stroke-2"
                   />
                   {/* SVG Hover Tooltip Badge */}
                   <g className="opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
@@ -301,13 +346,49 @@ export const Dashboard: React.FC = () => {
                 </g>
               );
             })}
-          </svg>
-        </div>
+            {/* X-axis tick marks & date labels placed at exact getX(idx) coordinates */}
+            {(() => {
+              const numXTicks = isEnlarged ? Math.min(series.length, 7) : 3;
+              const tickIndices: number[] = [];
+              if (series.length <= numXTicks) {
+                for (let i = 0; i < series.length; i++) tickIndices.push(i);
+              } else {
+                for (let i = 0; i < numXTicks; i++) {
+                  const idx = Math.round((i / (numXTicks - 1)) * (series.length - 1));
+                  if (!tickIndices.includes(idx)) tickIndices.push(idx);
+                }
+              }
 
-        <div className="flex justify-between text-[9px] text-slate-400 font-semibold pt-1 pl-10">
-          <span>{series[0]?.date || ''}</span>
-          <span>{series[Math.floor(series.length / 2)]?.date || ''}</span>
-          <span>{series[series.length - 1]?.date || ''}</span>
+              return tickIndices.map((idx, i) => {
+                const x = getX(idx);
+                const dateStr = series[idx]?.date || '';
+                let textAnchor: 'start' | 'middle' | 'end' = 'middle';
+                if (i === 0) textAnchor = 'start';
+                else if (i === tickIndices.length - 1) textAnchor = 'end';
+
+                return (
+                  <g key={`x-tick-${idx}`}>
+                    <line
+                      x1={x}
+                      y1={height - paddingBottom}
+                      x2={x}
+                      y2={height - paddingBottom + 5}
+                      stroke="#94a3b8"
+                      strokeWidth="1"
+                    />
+                    <text
+                      x={x}
+                      y={height - paddingBottom + (isEnlarged ? 18 : 14)}
+                      textAnchor={textAnchor}
+                      className={`${isEnlarged ? 'text-[11px]' : 'text-[9.5px]'} font-bold fill-slate-500`}
+                    >
+                      {dateStr}
+                    </text>
+                  </g>
+                );
+              });
+            })()}
+          </svg>
         </div>
 
         {/* Sleek Legend & Gap Summary Footer */}
@@ -614,6 +695,64 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Enlarged Telemetry Graph Modal Overlay */}
+      {enlargedChart && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-md animate-fade-in"
+          onClick={() => setEnlargedChart(null)}
+        >
+          <div
+            className="bg-white rounded-2xl border border-slate-200 shadow-2xl p-5 sm:p-6 w-full max-w-5xl space-y-4 max-h-[92vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-3">
+                <span
+                  className="w-3.5 h-3.5 rounded-full flex-shrink-0"
+                  style={{
+                    backgroundColor:
+                      enlargedChart === 'ph'
+                        ? '#dc2626'
+                        : enlargedChart === 'temperature'
+                        ? '#d97706'
+                        : '#059669',
+                  }}
+                />
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900">
+                    {enlargedChart === 'ph'
+                      ? 'pH Level Telemetry Trend'
+                      : enlargedChart === 'temperature'
+                      ? 'Water Temperature Telemetry Trend'
+                      : 'Dissolved Oxygen Telemetry Trend'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Detailed view with expanded Y-axis gridlines & X-axis date ticks
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEnlargedChart(null)}
+                className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors border border-slate-200 flex-shrink-0"
+                title="Close enlarged graph (Esc or click outside)"
+                aria-label="Close enlarged graph"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="pt-2">
+              {enlargedChart === 'ph' &&
+                renderLineChart('ph', 'pH Level', 'pH', '#dc2626', '#fee2e2', 6.0, 9.5, true)}
+              {enlargedChart === 'temperature' &&
+                renderLineChart('temperature', 'Water Temperature', '°C', '#d97706', '#fef3c7', 18.0, 32.0, true)}
+              {enlargedChart === 'dissolved_oxygen' &&
+                renderLineChart('dissolved_oxygen', 'Dissolved Oxygen', 'mg/L', '#059669', '#d1fae5', 0.0, 15.0, true)}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
