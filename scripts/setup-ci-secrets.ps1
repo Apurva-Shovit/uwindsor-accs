@@ -54,7 +54,21 @@ Write-Host ""
 # --- Preconditions ----------------------------------------------------------
 Write-Host "Checking prerequisites..."
 
-$gh = Get-Command gh -ErrorAction SilentlyContinue
+# Resolve gh by path as well as by name. winget updates the machine PATH, but a
+# terminal opened before the install keeps the old environment, so a freshly
+# installed gh is routinely absent from PATH while sitting right there on disk.
+$ghCmd = Get-Command gh -ErrorAction SilentlyContinue
+if ($ghCmd) {
+    $gh = $ghCmd.Source
+} else {
+    $gh = @(
+        "$env:ProgramFiles\GitHub CLI\gh.exe",
+        "${env:ProgramFiles(x86)}\GitHub CLI\gh.exe",
+        "$env:LOCALAPPDATA\Microsoft\WinGet\Links\gh.exe",
+        "$env:LOCALAPPDATA\Programs\GitHub CLI\gh.exe"
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+
 if (-not $gh) {
     Write-Host ""
     Fail @"
@@ -62,16 +76,22 @@ GitHub CLI not found. Install it, then re-run this script:
 
     winget install --id GitHub.cli --source winget
 
-Close and reopen the terminal afterwards so gh lands on PATH, then:
+Then either reopen the terminal, or refresh PATH in this one:
 
-    gh auth login
+    `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
 "@
 }
-Ok "gh found: $($gh.Source)"
+Ok "gh found: $gh"
 
-# `gh auth status` exits non-zero when not signed in.
-$null = gh auth status 2>&1
-if ($LASTEXITCODE -ne 0) { Fail "Not signed in to GitHub. Run:  gh auth login" }
+# Exits non-zero when not signed in. Deliberately no 2>&1 redirect: gh writes
+# this to stderr, and in PowerShell 5.1 redirecting a native command's stderr
+# wraps each line in an ErrorRecord, which under $ErrorActionPreference='Stop'
+# throws before we ever reach the exit-code check. $LASTEXITCODE is the reliable
+# signal, so let the text through and test that instead.
+& $gh auth status | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Fail "Not signed in to GitHub. Run:  & '$gh' auth login"
+}
 Ok "gh authenticated"
 
 # Target the repo this checkout points at, so a stray default cannot send the
@@ -137,7 +157,7 @@ function Set-Secret {
     param([string]$Name, [string]$Value)
     # Piped over stdin rather than passed as --body, so the value never appears
     # in this process's command line.
-    $Value | gh secret set $Name --repo $repo
+    $Value | & $gh secret set $Name --repo $repo
     if ($LASTEXITCODE -ne 0) { Fail "could not set $Name" }
     Ok $Name
 }
