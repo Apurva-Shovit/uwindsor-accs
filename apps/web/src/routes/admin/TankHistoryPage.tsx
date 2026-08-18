@@ -199,13 +199,13 @@ export const TankHistoryPage: React.FC = () => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  <th className="p-4">Date</th>
-                  <th className="p-4">Tank #</th>
-                  <th className="p-4">Category</th>
-                  <th className="p-4">Event Type</th>
-                  <th className="p-4">Details & Parameters</th>
-                  <th className="p-4">Comments / Notes</th>
-                  <th className="p-4">Recorded By</th>
+                  <th className="p-4 whitespace-nowrap">Date</th>
+                  <th className="p-4 whitespace-nowrap min-w-[110px]">Tank #</th>
+                  <th className="p-4 whitespace-nowrap">Category</th>
+                  <th className="p-4 whitespace-nowrap">Event Type</th>
+                  <th className="p-4 whitespace-nowrap">Details & Parameters</th>
+                  <th className="p-4 whitespace-nowrap">Comments / Notes</th>
+                  <th className="p-4 whitespace-nowrap">Recorded By</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
@@ -214,8 +214,8 @@ export const TankHistoryPage: React.FC = () => {
                     <td className="p-4 font-semibold text-slate-900 whitespace-nowrap">
                       {formatDate(row.created_at || row.date)}
                     </td>
-                    <td className="p-4">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-blue-50 text-[#005596]">
+                    <td className="p-4 whitespace-nowrap">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-blue-50 text-[#005596] whitespace-nowrap">
                         Tank {row.tank_number}
                       </span>
                     </td>
@@ -250,7 +250,7 @@ export const TankHistoryPage: React.FC = () => {
               {history.map((row: any) => (
                 <div key={row.id} className="p-4 flex flex-col gap-3">
                   <div className="flex justify-between items-start gap-2">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-blue-50 text-[#005596]">
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-blue-50 text-[#005596] whitespace-nowrap">
                       Tank {row.tank_number}
                     </span>
                     <time className="text-xs text-slate-500 font-medium whitespace-nowrap">{formatDate(row.created_at || row.date)}</time>
