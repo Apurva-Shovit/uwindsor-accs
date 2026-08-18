@@ -133,9 +133,64 @@ All commands run from `apps/web`.
 | `npm run android:sync` | Build + copy assets and plugins into the native project |
 | `npm run android:run` | Sync, then install and launch on a device/emulator |
 | `npm run android:open` | Sync, then open the project in Android Studio |
+| `npm run android:live` | Tunnel the Vite dev server to the device and serve it |
+| `npm run android:live:install` | The above, plus build and install the live-reload APK |
 
 Anything that changes `src/`, `capacitor.config.ts`, or the installed plugins
-needs an `android:sync` before it shows up in the app.
+needs an `android:sync` before it shows up in the app — unless you are running
+live reload, below.
+
+### Live reload on a device
+
+Rebuilding and reinstalling an APK for every frontend tweak is slow, and almost
+all day-to-day work is in `src/`. Live reload points the WebView at the Vite dev
+server instead of the assets bundled by `cap sync`, so a save shows up in the
+app in about a second with no reinstall.
+
+**Once**, with the device plugged in and USB debugging accepted:
+
+```bash
+npm run android:live:install
+```
+
+This builds a **debug** APK whose `capacitor.config.json` carries
+`server.url = http://127.0.0.1:5173`, installs it, and launches it.
+
+**Every session after that**, one command, left running:
+
+```bash
+npm run android:live
+```
+
+Then open ACARE on the device and edit `src/`. HMR pushes each save straight
+into the WebView.
+
+Why it is shaped this way:
+
+- **`adb reverse`, not a LAN address.** `uwinsecure` isolates clients, so the
+  device cannot reach this machine over Wi-Fi on campus. The script tunnels the
+  port over USB instead. The tunnel does not survive an unplug, which is why
+  `android:live` re-establishes it on every run. `npx cap run android
+  --live-reload --external` does the LAN thing and will not work here.
+- **127.0.0.1, not localhost.** Capacitor serves its own assets from `localhost`
+  and would intercept the request. Chromium still treats `127.0.0.1` as a
+  trustworthy origin, so nothing about the page's capabilities changes, and the
+  API's CORS allow-list already covers it (see the origin regex in
+  `apps/api/app/main.py`).
+- **A debug APK, not a release one.** Only the debug variant permits cleartext
+  to `127.0.0.1`; the release build blocks plain HTTP outright and should stay
+  that way. The consequence is that installing the live-reload APK over a
+  release-signed one needs `adb uninstall ca.uwindsor.acare` first, which
+  clears the app's data — a one-time cost.
+- **The dev server runs in `mobile` mode**, so it reads `VITE_API_URL` from
+  `.env.mobile` exactly as the APK does. Point `.env.mobile` at a local backend
+  on `http://127.0.0.1:8000` and `android:live` tunnels that port too.
+
+Live reload is off unless `CAP_LIVE_RELOAD=1` is set, which only these two
+scripts do, so ordinary `android:sync` and release builds are unaffected. Native
+changes — plugins, the manifest, Firebase config, gradle — still need a real
+rebuild. **Never hand out a live-reload APK**: with `server.url` baked in it is
+useless away from this machine.
 
 ### Debugging
 
