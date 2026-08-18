@@ -11,6 +11,7 @@ The RSA key below is generated per-run rather than committed: the token-exchange
 path signs a real JWT, and a hardcoded private key in a repo is a liability even
 when it protects nothing.
 """
+import asyncio
 import json
 from datetime import timedelta
 
@@ -276,6 +277,37 @@ class TestRegistration:
         assert await DeviceToken.find({"token": TOKEN}).count() == 1
         doc = await DeviceToken.find_one({"token": TOKEN})
         assert doc.user_id == str(users["other"].id)
+
+    @pytest.mark.asyncio
+    async def test_concurrent_registrations_do_not_collide(self, users):
+        """
+        The app can have two registrations for one token in flight at once, and
+        a relaunch while the previous POST is still going will do it. A
+        check-then-insert let both see no row and both insert, so one died on the
+        unique index with an uncaught E11000 — a 500 to the client, and an
+        undefined winner deciding whose alerts a shared tablet receives.
+        """
+        results = await asyncio.gather(
+            *(push_service.register_token(str(users["staff"].id), TOKEN) for _ in range(5)),
+        )
+
+        assert await DeviceToken.find({"token": TOKEN}).count() == 1
+        # Every caller gets the row back, not just whichever one won the race.
+        assert all(doc.user_id == str(users["staff"].id) for doc in results)
+        assert len({str(doc.id) for doc in results}) == 1
+
+    @pytest.mark.asyncio
+    async def test_a_contested_handover_settles_on_one_user(self, users):
+        """Two users racing for the same tablet must still leave exactly one owner."""
+        owners = [users["staff"], users["other"]] * 3
+        await asyncio.gather(
+            *(push_service.register_token(str(owner.id), TOKEN) for owner in owners),
+        )
+
+        assert await DeviceToken.find({"token": TOKEN}).count() == 1
+        doc = await DeviceToken.find_one({"token": TOKEN})
+        assert doc.user_id in {str(users["staff"].id), str(users["other"].id)}
+        assert doc.disabled_at is None
 
     @pytest.mark.asyncio
     async def test_re_registering_revives_a_disabled_device(self, users):

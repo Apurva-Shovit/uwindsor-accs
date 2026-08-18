@@ -25,6 +25,8 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import httpx
 from jose import jwt
+from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 from ..config import settings
 from ..models.device_token import DeviceToken
@@ -360,22 +362,49 @@ async def register_token(user_id: str, token: str, platform: str = "android") ->
 
     Capacitor hands the app the same token on every launch, so this is called far
     more often than it changes anything; it is written to be idempotent.
-    """
-    existing = await DeviceToken.find_one({"token": token})
-    if existing:
-        existing.user_id = user_id
-        existing.platform = platform
-        existing.last_seen_at = _now()
-        # A device that re-registers is demonstrably alive, whatever FCM said
-        # about it last time.
-        existing.disabled_at = None
-        existing.last_error = None
-        await existing.save()
-        return existing
 
-    doc = DeviceToken(user_id=user_id, token=token, platform=platform)
-    await doc.insert()
-    return doc
+    One atomic upsert rather than a read followed by a write. The app can have
+    two registrations for the same token in flight at once — a relaunch while the
+    previous POST is still going will do it — and a check-then-insert lets both
+    see no row, both insert, and the loser die on the unique index with an
+    uncaught E11000. The 500 that produces is the visible symptom; the real cost
+    is that the two writes land in an undefined order, and on a shared tablet
+    mid-handover that order decides which user the device's alerts go to.
+
+    `token` is the unique key, so it comes from the filter on insert and must not
+    be named in the update document as well.
+    """
+    now = _now()
+    update = {
+        "$set": {
+            "user_id": user_id,
+            "platform": platform,
+            "last_seen_at": now,
+            # A device that re-registers is demonstrably alive, whatever FCM said
+            # about it last time.
+            "disabled_at": None,
+            "last_error": None,
+        },
+        "$setOnInsert": {"created_at": now},
+    }
+
+    collection = DeviceToken.get_motor_collection()
+    for final_attempt in (False, True):
+        try:
+            raw = await collection.find_one_and_update(
+                {"token": token},
+                update,
+                upsert=True,
+                return_document=ReturnDocument.AFTER,
+            )
+            return DeviceToken.model_validate(raw)
+        except DuplicateKeyError:
+            # Mongo can still surface this when two upserts race on a unique
+            # index: both find no row and both try to insert. The row exists by
+            # the time we get here, so the retry takes the update path.
+            if final_attempt:
+                raise
+    raise AssertionError("unreachable")
 
 
 def iter_user_ids(notifications: Iterable[Dict[str, Any]]) -> List[str]:
