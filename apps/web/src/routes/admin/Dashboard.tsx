@@ -380,7 +380,7 @@ export const Dashboard: React.FC = () => {
             </svg>
           </div>
           <div>
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Pending Approvals</p>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Pending User Approvals</p>
             <p className="text-2xl font-bold text-slate-900 mt-1">{summary?.pending_approvals}</p>
           </div>
         </div>
