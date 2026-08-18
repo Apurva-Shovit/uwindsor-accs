@@ -471,7 +471,7 @@ export const Dashboard: React.FC = () => {
               onClick={() => setTappedCard(tappedCard === 'healthy' ? null : 'healthy')}
               className="group relative flex flex-col items-center justify-center p-4 bg-emerald-50 rounded-xl w-full sm:flex-1 border border-emerald-100 cursor-pointer transition-all hover:shadow-md hover:bg-emerald-100/60"
             >
-              <span className="text-sm font-semibold text-emerald-800 text-center">Healthy / Assigned</span>
+              <span className="text-sm font-semibold text-emerald-800 text-center">Active / Assigned</span>
               <span className="text-3xl font-extrabold text-emerald-600 mt-2">{summary?.tank_status?.healthy || 0}</span>
               
               {/* Tooltip / Popover */}
@@ -479,11 +479,11 @@ export const Dashboard: React.FC = () => {
                 tappedCard === 'healthy' ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto pointer-events-none'
               }`}>
                 <div className="font-semibold text-emerald-400 mb-1 border-b border-slate-700/60 pb-1 flex items-center justify-between">
-                  <span>Active & Healthy Tanks</span>
+                  <span>Active Tanks</span>
                   <span className="text-[9px] text-slate-400 font-normal">Tap to close</span>
                 </div>
                 <p className="text-slate-200 leading-snug">
-                  {summary?.tank_status?.total_active || (summary?.tank_status?.healthy || 0)} tanks currently active in facility.
+                  {summary?.tank_status?.healthy || summary?.tank_status?.total_active || 0} tanks currently active in facility.
                 </p>
                 <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-900/95" />
               </div>

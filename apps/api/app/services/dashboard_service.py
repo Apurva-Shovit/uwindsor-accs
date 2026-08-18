@@ -86,6 +86,8 @@ class DashboardService:
                 continue
 
             total_active += 1
+            healthy += 1
+
             t_id_str = str(t.id)
             t_num_str = str(t.tank_number) if hasattr(t, "tank_number") and t.tank_number else t_id_str
             tank_label = f"Tank {t_num_str}" if t_num_str and not str(t_num_str).lower().startswith("tank") else (t_num_str or "Unknown")
@@ -107,8 +109,6 @@ class DashboardService:
                     "tank": tank_label,
                     "reason": " & ".join(sorted(list(att_reasons)))
                 })
-            if not t.is_quarantined and not needs_att:
-                healthy += 1
                 
         # Recent incidents (last 7 days)
         seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
