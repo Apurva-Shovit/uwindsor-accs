@@ -471,7 +471,7 @@ export const Dashboard: React.FC = () => {
               onClick={() => setTappedCard(tappedCard === 'healthy' ? null : 'healthy')}
               className="group relative flex flex-col items-center justify-center p-4 bg-emerald-50 rounded-xl w-full sm:flex-1 border border-emerald-100 cursor-pointer transition-all hover:shadow-md hover:bg-emerald-100/60"
             >
-              <span className="text-sm font-semibold text-emerald-800 text-center">Active / Assigned</span>
+              <span className="text-sm font-semibold text-emerald-800 text-center">Active</span>
               <span className="text-3xl font-extrabold text-emerald-600 mt-2">{summary?.tank_status?.healthy || 0}</span>
               
               {/* Tooltip / Popover */}
