@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { formatDate } from '../../utils/formatters';
-import { Database, Search, Filter } from 'lucide-react';
+import { Search, Filter } from 'lucide-react';
 import { getTanks, searchTankHistory } from '../../lib/api';
 import { Paginator } from '../../components/ui/Paginator';
 import { useDebounce } from '../../hooks/useDebounce';
@@ -68,14 +68,6 @@ export const TankHistoryPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="border-b border-slate-200 pb-4">
-        <h1 className="text-2xl font-bold text-[#005596] flex items-center gap-2">
-          <Database className="w-7 h-7 text-[#005596]" />
-          Dedicated Tank History Explorer
-        </h1>
-      </div>
-
 
       {/* Advanced Filter Panel */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">

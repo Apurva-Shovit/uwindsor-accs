@@ -31,11 +31,6 @@ export const AuditLogs: React.FC = () => {
   return (
     <ProtectedView allowPrint={false} className="space-y-6">
 
-      {/* Header */}
-      <div className="border-b border-slate-200 pb-4">
-        <h1 className="text-2xl font-bold text-[#005596]">System Audit Logs</h1>
-      </div>
-
 
       {/* Date Filters */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">

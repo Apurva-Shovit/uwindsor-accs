@@ -131,16 +131,8 @@ export const ProjectOverviewPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[#005596] flex items-center gap-2">
-            <BookOpen className="w-7 h-7 text-[#005596]" />
-            Research Projects &amp; Protocol Overview
-          </h1>
-        </div>
-
-
+      {/* Header Action */}
+      <div className="flex justify-end items-center pb-2">
         <button
           onClick={() => setShowCreateModal(true)}
           className="bg-[#005596] hover:bg-[#002B51] text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow transition-colors flex items-center gap-2 whitespace-nowrap"
