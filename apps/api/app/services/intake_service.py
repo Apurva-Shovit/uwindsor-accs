@@ -9,7 +9,7 @@ from ..models.facility import Tank
 from ..models.tank_assignment import TankAssignment
 from ..models.census_event import CensusEvent
 from ..repositories.audit_repository import AuditRepository
-from ..utils.atomic import adjust_count, get_or_create_assignment
+from ..utils.atomic import adjust_count, claim_request_id, get_or_create_assignment
 
 MANAGER_PLUS = {RoleEnum.manager, RoleEnum.chair, RoleEnum.admin, RoleEnum.super_admin}
 
@@ -19,6 +19,8 @@ class IntakeRequest(BaseModel):
     count: int
     event_type: str = "arrival"
     notes: Optional[str] = None
+    # One per submission attempt; see CensusEvent.request_id.
+    request_id: Optional[str] = None
 
 class IntakeService:
     """Service layer for Fish Intake."""
@@ -65,13 +67,6 @@ class IntakeService:
             aupp_number=p.aupp_number,
         )
 
-        new_count = await adjust_count(ta.id, body.count)
-
-        ta.current_count = new_count - body.count
-        before_ta = ta.model_dump(mode="json") if not is_new else None
-        ta.current_count = new_count
-        after_ta = ta.model_dump(mode="json")
-
         ev = CensusEvent(
             project_id=body.project_id,
             tank_assignment_id=str(ta.id),
@@ -81,9 +76,30 @@ class IntakeService:
             change=body.count,
             reason="Hatch" if body.event_type == "hatch" else "Arrival",
             notes=body.notes,
+            request_id=body.request_id,
             created_by=str(current_user.id),
         )
-        await ev.insert()
+
+        # Claims the idempotency key before the fish are counted in; see
+        # CensusService.create_census_event.
+        if await claim_request_id(ev) is None:
+            ta = await TankAssignment.get(ta.id)
+            return {
+                "message": "Intake already recorded",
+                "new_count": ta.current_count,
+                "duplicate": True,
+            }
+
+        try:
+            new_count = await adjust_count(ta.id, body.count)
+        except Exception:
+            await ev.delete()
+            raise
+
+        ta.current_count = new_count - body.count
+        before_ta = ta.model_dump(mode="json") if not is_new else None
+        ta.current_count = new_count
+        after_ta = ta.model_dump(mode="json")
 
         # Auto-activate mandatory 14-day quarantine mode on destination tank ONLY for arrival events (hatch events do NOT quarantine)
         actor_role = str(current_user.role.value if current_user.role else "none")

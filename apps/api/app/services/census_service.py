@@ -12,7 +12,7 @@ from ..models.water_quality_log import WaterQualityLog
 from ..models.incident_report import IncidentReport
 from ..schemas.census import CensusEventCreate
 from ..repositories.audit_repository import AuditRepository
-from ..utils.atomic import adjust_count
+from ..utils.atomic import adjust_count, claim_request_id
 from ..utils.entity_resolver import EntityResolver
 
 MANAGER_PLUS = {RoleEnum.manager, RoleEnum.chair, RoleEnum.admin, RoleEnum.super_admin}
@@ -42,21 +42,6 @@ class CensusService:
         if p.status == "closed":
             raise HTTPException(status.HTTP_409_CONFLICT, "Project Closed")
 
-        # The count is applied by the database, not computed here: two staff
-        # logging deaths on the same tank at once both read the same starting
-        # value, so a Python-side add loses one of them. The same filter also
-        # enforces the non-negative invariant that "new_count < 0" used to
-        # check against an already-stale read.
-        new_count = await adjust_count(ta.id, body.change)
-
-        # Snapshot around what actually happened rather than around the value
-        # read at the top of the request, so the audit trail stays truthful
-        # when another write landed in between.
-        ta.current_count = new_count - body.change
-        before_ta = ta.model_dump(mode="json")
-        ta.current_count = new_count
-        after_ta = ta.model_dump(mode="json")
-
         ev = CensusEvent(
             project_id=ta.project_id,
             tank_assignment_id=str(ta.id),
@@ -66,9 +51,41 @@ class CensusService:
             change=body.change,
             reason=body.reason,
             notes=body.notes,
+            request_id=body.request_id,
             created_by=str(current_user.id),
         )
-        await ev.insert()
+
+        # The ledger entry goes in first so it claims the idempotency key
+        # before anything moves. A re-tap after a dropped response arrives with
+        # the same key and is reported as already done.
+        if await claim_request_id(ev) is None:
+            ta = await TankAssignment.get(ta.id)
+            return {
+                "message": "Census already recorded",
+                "new_count": ta.current_count,
+                "duplicate": True,
+            }
+
+        # The count is applied by the database, not computed here: two staff
+        # logging deaths on the same tank at once both read the same starting
+        # value, so a Python-side add loses one of them. The same filter also
+        # enforces the non-negative invariant that "new_count < 0" used to
+        # check against an already-stale read.
+        try:
+            new_count = await adjust_count(ta.id, body.change)
+        except Exception:
+            # Withdraw the ledger entry and release the key, so the staff
+            # member can correct the number and submit again.
+            await ev.delete()
+            raise
+
+        # Snapshot around what actually happened rather than around the value
+        # read at the top of the request, so the audit trail stays truthful
+        # when another write landed in between.
+        ta.current_count = new_count - body.change
+        before_ta = ta.model_dump(mode="json")
+        ta.current_count = new_count
+        after_ta = ta.model_dump(mode="json")
         after_ev = ev.model_dump(mode="json")
 
         if body.event_type == "arrival":

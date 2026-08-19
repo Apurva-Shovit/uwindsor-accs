@@ -27,6 +27,7 @@ from fastapi import HTTPException
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
+from ..models.census_event import CensusEvent
 from ..models.tank_assignment import TankAssignment
 
 logger = logging.getLogger(__name__)
@@ -183,6 +184,29 @@ async def claim(
         {"$set": updates},
     )
     return result.modified_count == 1
+
+
+async def claim_request_id(event: CensusEvent) -> Optional[CensusEvent]:
+    """Insert a census event, or report that its request_id was already used.
+
+    Returns None when this is a replay -- the caller must then report the
+    earlier outcome rather than applying the change again. The event is written
+    before the counter moves so the key is claimed first; a failure afterwards
+    removes it again, which is what keeps a retry of a genuinely failed request
+    from being mistaken for a duplicate.
+
+    Events without a request_id are inserted unconditionally, so clients that
+    have not been updated behave exactly as they did before.
+    """
+    try:
+        await event.insert()
+    except DuplicateKeyError:
+        if event.request_id is None:
+            # Nothing about this event was supposed to be unique, so the
+            # collision is a real fault rather than a replay. Do not swallow it.
+            raise
+        return None
+    return event
 
 
 class Compensation:

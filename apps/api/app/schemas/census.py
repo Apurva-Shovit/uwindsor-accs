@@ -20,6 +20,9 @@ class CensusEventCreate(BaseModel):
     reason: Optional[str] = None
     notes: Optional[str] = None
     date: Optional[date] = None
+    # One per submission attempt, so a retry after a dropped response is
+    # recognised instead of applied a second time.
+    request_id: Optional[str] = None
 
     @field_validator("date", mode="before")
     @classmethod

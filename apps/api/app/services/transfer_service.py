@@ -10,7 +10,7 @@ from ..models.tank_assignment import TankAssignment
 from ..models.census_event import CensusEvent
 from ..schemas.transfer import TankTransferCreate
 from ..repositories.audit_repository import AuditRepository
-from ..utils.atomic import Compensation, adjust_count, get_or_create_assignment
+from ..utils.atomic import Compensation, adjust_count, claim_request_id, get_or_create_assignment
 
 MANAGER_PLUS = {RoleEnum.manager, RoleEnum.chair, RoleEnum.admin, RoleEnum.super_admin}
 
@@ -77,6 +77,7 @@ class TransferService:
             change=-body.count,
             notes=body.notes or f"Transferred to Tank {dest_tank_num}",
             transfer_group_id=transfer_group_id,
+            request_id=body.request_id,
             created_by=str(current_user.id),
         )
 
@@ -96,16 +97,31 @@ class TransferService:
         # them, so a failure after the debit would destroy fish. Each step
         # registers its inverse as it succeeds; the failure path puts the
         # animals back rather than leaving them in neither tank.
+        # The outbound leg carries the idempotency key and goes in first, so a
+        # re-tap after a dropped response is recognised before anything moves.
+        if await claim_request_id(ev_out) is None:
+            # Report the transfer that already happened, including its own
+            # group id -- the one generated above belongs to a move that will
+            # never take place.
+            original = await CensusEvent.find_one({"request_id": body.request_id})
+            source_ta = await TankAssignment.get(source_ta.id)
+            dest_ta = await TankAssignment.get(dest_ta.id)
+            return {
+                "message": "Transfer already completed",
+                "source_count": source_ta.current_count,
+                "destination_count": dest_ta.current_count,
+                "transfer_group_id": original.transfer_group_id if original else transfer_group_id,
+                "duplicate": True,
+            }
+
         comp = Compensation()
+        comp.add(ev_out.delete)
         try:
             new_source_count = await adjust_count(source_ta.id, -body.count)
             comp.add(lambda: adjust_count(source_ta.id, body.count, allow_negative=True))
 
             new_dest_count = await adjust_count(dest_ta.id, body.count)
             comp.add(lambda: adjust_count(dest_ta.id, -body.count, allow_negative=True))
-
-            await ev_out.insert()
-            comp.add(ev_out.delete)
 
             await ev_in.insert()
             comp.add(ev_in.delete)

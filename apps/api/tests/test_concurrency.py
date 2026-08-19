@@ -355,3 +355,148 @@ async def test_close_records_what_was_really_in_the_tank(env):
     assert ta.current_count == ledger, (
         f"count {ta.current_count} disagrees with the ledger {ledger}"
     )
+
+
+@pytest.mark.asyncio
+async def test_replayed_census_submission_is_applied_once(env):
+    """The dead-zone case: the request landed, the response did not, user re-taps."""
+    ta = await _stock(env, env["tank_a"], env["project"], 50)
+    key = "probe-census-key-1"
+
+    first = await CensusService.create_census_event(
+        CensusEventCreate(
+            tank_assignment_id=str(ta.id),
+            event_type="death",
+            change=-6,
+            request_id=key,
+        ),
+        env["manager"],
+    )
+    second = await CensusService.create_census_event(
+        CensusEventCreate(
+            tank_assignment_id=str(ta.id),
+            event_type="death",
+            change=-6,
+            request_id=key,
+        ),
+        env["manager"],
+    )
+
+    assert first.get("duplicate") is None
+    assert second["duplicate"] is True
+    assert second["new_count"] == first["new_count"]
+
+    ta = await TankAssignment.get(ta.id)
+    assert ta.current_count == 44
+
+    deaths = await CensusEvent.find({
+        "tank_assignment_id": str(ta.id), "event_type": "death"
+    }).to_list()
+    assert len(deaths) == 1
+
+
+@pytest.mark.asyncio
+async def test_simultaneous_replays_still_apply_once(env):
+    """Even fired together, one key means one change."""
+    ta = await _stock(env, env["tank_a"], env["project"], 50)
+    key = "probe-census-key-2"
+
+    results = await asyncio.gather(*[
+        CensusService.create_census_event(
+            CensusEventCreate(
+                tank_assignment_id=str(ta.id),
+                event_type="death",
+                change=-6,
+                request_id=key,
+            ),
+            env["manager"],
+        )
+        for _ in range(4)
+    ], return_exceptions=True)
+
+    assert not [r for r in results if isinstance(r, Exception)], results
+    duplicates = [r for r in results if r.get("duplicate")]
+    assert len(duplicates) == 3
+
+    ta = await TankAssignment.get(ta.id)
+    assert ta.current_count == 44
+
+
+@pytest.mark.asyncio
+async def test_a_rejected_submission_releases_its_key(env):
+    """A key burned by a failed attempt would lock the user out of retrying."""
+    ta = await _stock(env, env["tank_a"], env["project"], 3)
+    key = "probe-census-key-3"
+
+    with pytest.raises(HTTPException):
+        await CensusService.create_census_event(
+            CensusEventCreate(
+                tank_assignment_id=str(ta.id),
+                event_type="death",
+                change=-99,
+                request_id=key,
+            ),
+            env["manager"],
+        )
+
+    # The same key must work once the number is corrected.
+    result = await CensusService.create_census_event(
+        CensusEventCreate(
+            tank_assignment_id=str(ta.id),
+            event_type="death",
+            change=-2,
+            request_id=key,
+        ),
+        env["manager"],
+    )
+    assert result.get("duplicate") is None
+    assert result["new_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_replayed_transfer_moves_the_fish_once(env):
+    source_ta = await _stock(env, env["tank_a"], env["project"], 40)
+    key = "probe-transfer-key-1"
+
+    body = TankTransferCreate(
+        source_assignment_id=str(source_ta.id),
+        destination_tank_id=str(env["tank_b"].id),
+        count=12,
+        request_id=key,
+    )
+    first = await TransferService.create_tank_transfer(body, env["manager"])
+    second = await TransferService.create_tank_transfer(body, env["manager"])
+
+    assert second["duplicate"] is True
+    assert second["transfer_group_id"] == first["transfer_group_id"]
+
+    source_ta = await TankAssignment.get(source_ta.id)
+    dest_ta = await TankAssignment.find_one({"tank_id": str(env["tank_b"].id)})
+    assert source_ta.current_count == 28
+    assert dest_ta.current_count == 12
+
+    out = await CensusEvent.find({
+        "project_id": str(env["project"].id), "event_type": "transfer_out"
+    }).to_list()
+    assert len(out) == 1
+
+
+@pytest.mark.asyncio
+async def test_submissions_without_a_key_are_unaffected(env):
+    """Clients that have not been updated must behave exactly as before."""
+    ta = await _stock(env, env["tank_a"], env["project"], 50)
+
+    for _ in range(3):
+        await CensusService.create_census_event(
+            CensusEventCreate(
+                tank_assignment_id=str(ta.id), event_type="death", change=-2
+            ),
+            env["manager"],
+        )
+
+    ta = await TankAssignment.get(ta.id)
+    assert ta.current_count == 44
+    deaths = await CensusEvent.find({
+        "tank_assignment_id": str(ta.id), "event_type": "death"
+    }).to_list()
+    assert len(deaths) == 3
