@@ -9,6 +9,7 @@ interface SpeciesDropdownProps {
 const SpeciesDropdown: React.FC<SpeciesDropdownProps> = ({ species, setSpecies }) => {
   const [speciesList, setSpeciesList] = useState<string[]>([]);
   const [showOtherInput, setShowOtherInput] = useState(false);
+  const [addingSpecies, setAddingSpecies] = useState(false);
   const [newSpecies, setNewSpecies] = useState('');
 
   const fetchSpecies = async () => {
@@ -41,7 +42,10 @@ const SpeciesDropdown: React.FC<SpeciesDropdownProps> = ({ species, setSpecies }
   };
 
   const handleAddNewSpecies = async () => {
-    if (!newSpecies.trim()) return;
+    // Creating a species is a find-then-insert on the server, so two taps can
+    // add the same name twice and leave it duplicated in every dropdown.
+    if (!newSpecies.trim() || addingSpecies) return;
+    setAddingSpecies(true);
     try {
       await createSpecies({ name: newSpecies.trim() });
       // Refresh list and select the newly added species
@@ -50,6 +54,8 @@ const SpeciesDropdown: React.FC<SpeciesDropdownProps> = ({ species, setSpecies }
       setShowOtherInput(false);
     } catch (err) {
       console.error('Failed to create species', err);
+    } finally {
+      setAddingSpecies(false);
     }
   };
 
@@ -90,9 +96,10 @@ const SpeciesDropdown: React.FC<SpeciesDropdownProps> = ({ species, setSpecies }
           <button
             type="button"
             onClick={handleAddNewSpecies}
-            className="rounded bg-brandBlue px-3 py-1 text-xs text-white hover:bg-brandBlueDark"
+            disabled={addingSpecies || !newSpecies.trim()}
+            className="rounded bg-brandBlue px-3 py-1 text-xs text-white hover:bg-brandBlueDark disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Add
+            {addingSpecies ? 'Adding...' : 'Add'}
           </button>
         </div>
       )}

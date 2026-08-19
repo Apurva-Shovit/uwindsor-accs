@@ -37,6 +37,10 @@ export const QuarantinePage: React.FC = () => {
 
   const [liftModalTank, setLiftModalTank] = useState<any>(null);
   const [liftVerification, setLiftVerification] = useState('');
+  // Lifting writes an audit entry and a census event, so repeated taps while
+  // the first request is open leave a duplicated release in the record. The
+  // existing disabled state only checks the typed verification text.
+  const [lifting, setLifting] = useState(false);
 
   // Approving an exemption moves fish, so the decision has to be in flight only
   // once: a second click while the first request is open would transfer twice.
@@ -122,18 +126,21 @@ export const QuarantinePage: React.FC = () => {
   };
 
   const confirmLiftQuarantine = async () => {
-    if (!liftModalTank) return;
+    if (!liftModalTank || lifting) return;
     if (liftVerification !== `TANK ${liftModalTank.tank_number}`) {
       alert("Verification failed. Please type the exact text.");
       return;
     }
 
+    setLifting(true);
     try {
       await toggleTankQuarantine(liftModalTank.id || liftModalTank._id, false);
-      refetchTanks();
+      await refetchTanks();
       setLiftModalTank(null);
     } catch (err: any) {
       alert(err.response?.data?.detail || err.message || 'Error lifting quarantine');
+    } finally {
+      setLifting(false);
     }
   };
 
@@ -503,10 +510,10 @@ export const QuarantinePage: React.FC = () => {
               <button
                 type="button"
                 onClick={confirmLiftQuarantine}
-                disabled={liftVerification !== `TANK ${liftModalTank.tank_number}`}
+                disabled={lifting || liftVerification !== `TANK ${liftModalTank.tank_number}`}
                 className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm transition-all"
               >
-                Confirm Lift
+                {lifting ? 'Lifting...' : 'Confirm Lift'}
               </button>
             </div>
           </div>

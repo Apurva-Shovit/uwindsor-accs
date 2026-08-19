@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getTanksSummary, createTank, deleteTank, getTankHistory, toggleTankQuarantine } from '../lib/api';
+import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
 import { useAuth } from '../context/AuthContext';
 import { Database, Plus } from 'lucide-react';
 
@@ -65,6 +66,11 @@ export const TanksView: React.FC<TanksViewProps> = ({ isAdminMode = false }) => 
   const [newTankNumber, setNewTankNumber] = useState('');
   const [newNotes, setNewNotes] = useState('');
   const [addLoading, setAddLoading] = useState(false);
+  // Neither of the tank actions below is idempotent from the user's side:
+  // deleting is destructive, and placing a tank in quarantine stamps a fresh
+  // start date and emits a census event. Both were bare async onClicks, so a
+  // double-tap on a tablet fired the request twice.
+  const [tankActionBusy, setTankActionBusy] = useState<'delete' | 'quarantine' | null>(null);
 
   const fetchTanks = async () => {
     setLoading(true);
@@ -82,6 +88,10 @@ export const TanksView: React.FC<TanksViewProps> = ({ isAdminMode = false }) => 
   useEffect(() => {
     fetchTanks();
   }, []);
+
+  // The grid shows live fish counts and quarantine state for every tank, and
+  // had no refresh other than the manual button.
+  useRefreshOnFocus(fetchTanks);
 
   const handleAddTank = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -467,21 +477,25 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
               <div className="flex justify-end gap-2 pt-4 border-t border-border mt-4">
                 {isAdminMode && canDelete && (
                   <button
+                    disabled={tankActionBusy !== null}
                     onClick={async () => {
-                      if (!selectedTank) return;
+                      if (!selectedTank || tankActionBusy) return;
                       if (window.confirm('Delete this tank permanently?')) {
+                        setTankActionBusy('delete');
                         try {
                           await deleteTank(getId(selectedTank));
                           setSelectedTank(null);
                           await fetchTanks();
-                        } catch (err) {
-                          alert('Failed to delete tank');
+                        } catch (err: any) {
+                          setError(err.response?.data?.detail || 'Failed to delete tank');
+                        } finally {
+                          setTankActionBusy(null);
                         }
                       }
                     }}
-                    className="rounded-md border border-red-200 bg-red-50 text-red-600 px-4 py-2 text-sm font-semibold hover:bg-red-100 hover:border-red-300 transition-colors"
+                    className="rounded-md border border-red-200 bg-red-50 text-red-600 px-4 py-2 text-sm font-semibold hover:bg-red-100 hover:border-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Delete
+                    {tankActionBusy === 'delete' ? 'Deleting...' : 'Delete'}
                   </button>
                 )}
                 
@@ -491,19 +505,23 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
                   </div>
                 ) : (
                   <button
+                    disabled={tankActionBusy !== null}
                     onClick={async () => {
-                      if (!selectedTank) return;
+                      if (!selectedTank || tankActionBusy) return;
+                      setTankActionBusy('quarantine');
                       try {
                         await toggleTankQuarantine(getId(selectedTank), true);
                         await fetchTanks();
                         setSelectedTank({ ...selectedTank, display_status: 'quarantine' });
                       } catch (err: any) {
-                        alert(err.response?.data?.detail || 'Failed to place in quarantine');
+                        setError(err.response?.data?.detail || 'Failed to place in quarantine');
+                      } finally {
+                        setTankActionBusy(null);
                       }
                     }}
-                    className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 transition-colors"
+                    className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Place in Quarantine
+                    {tankActionBusy === 'quarantine' ? 'Placing...' : 'Place in Quarantine'}
                   </button>
                 )}
                 
