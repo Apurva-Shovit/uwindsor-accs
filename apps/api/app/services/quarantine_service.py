@@ -10,6 +10,18 @@ from ..models.quarantine import QuarantineExemption
 from ..models.tank_assignment import TankAssignment
 from ..models.census_event import CensusEvent
 from ..repositories.audit_repository import AuditRepository
+from ..utils.atomic import Compensation, adjust_count, claim, get_or_create_assignment
+
+
+class ExemptionTransferPartiallyApplied(Exception):
+    """The fish moved, but the records that follow the move did not complete.
+
+    Without transactions there is no way to undo the move at that point, and
+    reporting a plain failure would send the exemption back to the decision
+    queue where a second approval would transfer the same animals again. This
+    tells decide_exemption to keep the request claimed.
+    """
+
 
 class ExemptionRequestCreate(BaseModel):
     tank_id: str
@@ -145,11 +157,24 @@ class QuarantineService:
         if body.approved:
             try:
                 await QuarantineService._execute_exemption_transfer(ex, current_user)
+            except ExemptionTransferPartiallyApplied:
+                # The animals have already moved and the census ledger records
+                # it. Returning the request to the queue here would let it be
+                # approved a second time and move them twice, so it stays
+                # approved and the incomplete records are reported instead.
+                raise HTTPException(
+                    500,
+                    "The fish were transferred but their records did not finish saving. "
+                    "Do not retry this approval - contact an administrator.",
+                )
             except Exception:
-                # Nothing was transferred, so hand the request back to the
-                # decision queue with Accept and Reject both still live.
+                # The compensating writes inside _execute_exemption_transfer
+                # put both counts back, so nothing was transferred and the
+                # request can safely go back to the decision queue with Accept
+                # and Reject both live again. Conditional on the status this
+                # request set, so a decision made concurrently is not undone.
                 await QuarantineExemption.get_motor_collection().update_one(
-                    {"_id": ex.id},
+                    {"_id": ex.id, "status": new_status, "decided_by": str(current_user.id)},
                     {"$set": {
                         "status": "pending",
                         "decided_by": None,
@@ -186,103 +211,28 @@ class QuarantineService:
 
         if not source_ta or source_ta.current_count < ex.fish_count:
             raise HTTPException(400, f"Source tank does not have enough fish ({source_ta.current_count if source_ta else 0} available, {ex.fish_count} requested)")
-
-        dest_ta = await TankAssignment.find_one({
+        occupant = await TankAssignment.find_one({
             "tank_id": ex.target_tank_id,
             "current_count": {"$gt": 0}
         })
+        if occupant and occupant.project_id != source_ta.project_id:
+            raise HTTPException(409, "Destination tank is occupied by a different AUPP project")
 
-        dest_is_new = False
-        if dest_ta:
-            if dest_ta.project_id != source_ta.project_id:
-                raise HTTPException(409, "Destination tank is occupied by a different AUPP project")
-        else:
-            dest_is_new = True
-            dest_ta = TankAssignment(
-                project_id=source_ta.project_id,
-                tank_id=ex.target_tank_id,
-                current_count=0,
-                pi_name=source_ta.pi_name,
-                aupp_number=source_ta.aupp_number,
-                created_by=str(current_user.id),
-            )
-            await dest_ta.insert()
+        # Keyed on (tank_id, project_id) so an emptied row for this project is
+        # reused rather than collided with under the unique index.
+        dest_ta, dest_is_new = await get_or_create_assignment(
+            ex.target_tank_id,
+            source_ta.project_id,
+            created_by=str(current_user.id),
+            pi_name=source_ta.pi_name,
+            aupp_number=source_ta.aupp_number,
+        )
 
         actor_role = current_user.role.value if current_user.role else "none"
 
-        before_source = source_ta.model_dump(mode="json")
-        source_ta.current_count -= ex.fish_count
-        await source_ta.save()
-
-        await AuditRepository.insert(AuditLog(
-            actor_id=str(current_user.id),
-            actor_role=actor_role,
-            action="update",
-            entity_type="tank_assignment",
-            entity_id=str(source_ta.id),
-            before=before_source,
-            after=source_ta.model_dump(mode="json"),
-        ))
-
-        before_dest = dest_ta.model_dump(mode="json") if not dest_is_new else None
-        dest_ta.current_count += ex.fish_count
-        await dest_ta.save()
-
-        await AuditRepository.insert(AuditLog(
-            actor_id=str(current_user.id),
-            actor_role=actor_role,
-            action="create" if dest_is_new else "update",
-            entity_type="tank_assignment",
-            entity_id=str(dest_ta.id),
-            before=before_dest,
-            after=dest_ta.model_dump(mode="json"),
-        ))
-
-        # Ensure destination tank is NOT placed in quarantine status
-        target_tank_obj = await Tank.get(ex.target_tank_id)
-        if target_tank_obj and target_tank_obj.is_quarantined:
-            before_target_tank = target_tank_obj.model_dump(mode="json")
-            target_tank_obj.is_quarantined = False
-            target_tank_obj.quarantine_start_date = None
-            target_tank_obj.quarantine_end_date = None
-            await target_tank_obj.save()
-
-            await AuditRepository.insert(AuditLog(
-                actor_id=str(current_user.id),
-                actor_role=actor_role,
-                action="lifted_quarantine",
-                entity_type="tank",
-                entity_id=str(target_tank_obj.id),
-                before=before_target_tank,
-                after=target_tank_obj.model_dump(mode="json"),
-            ))
-
-            q_ev = CensusEvent(
-                project_id=source_ta.project_id,
-                tank_assignment_id=str(dest_ta.id),
-                tank_id=ex.target_tank_id,
-                date=date.today(),
-                event_type="quarantine_lifted",
-                change=0,
-                reason="Quarantine Exemption Approved & Cleared for Transfer",
-                notes=f"Exemption approved by {current_user.first_name} {current_user.last_name}",
-                created_by=str(current_user.id),
-            )
-            await q_ev.insert()
-
-            await AuditRepository.insert(AuditLog(
-                actor_id=str(current_user.id),
-                actor_role=actor_role,
-                action="create",
-                entity_type="census_event",
-                entity_id=str(q_ev.id),
-                before=None,
-                after=q_ev.model_dump(mode="json"),
-            ))
-
-        # Generate Census Events for transfer audit
         transfer_group_id = str(uuid.uuid4())
         source_tank_obj = await Tank.get(ex.tank_id)
+        target_tank_obj = await Tank.get(ex.target_tank_id)
         source_tank_num = source_tank_obj.tank_number if source_tank_obj else "Unknown"
         dest_tank_num = target_tank_obj.tank_number if target_tank_obj else "Unknown"
 
@@ -297,18 +247,6 @@ class QuarantineService:
             transfer_group_id=transfer_group_id,
             created_by=str(current_user.id),
         )
-        await ev_out.insert()
-
-        await AuditRepository.insert(AuditLog(
-            actor_id=str(current_user.id),
-            actor_role=actor_role,
-            action="create",
-            entity_type="census_event",
-            entity_id=str(ev_out.id),
-            before=None,
-            after=ev_out.model_dump(mode="json"),
-        ))
-
         ev_in = CensusEvent(
             project_id=source_ta.project_id,
             tank_assignment_id=str(dest_ta.id),
@@ -320,14 +258,128 @@ class QuarantineService:
             transfer_group_id=transfer_group_id,
             created_by=str(current_user.id),
         )
-        await ev_in.insert()
 
-        await AuditRepository.insert(AuditLog(
-            actor_id=str(current_user.id),
-            actor_role=actor_role,
-            action="create",
-            entity_type="census_event",
-            entity_id=str(ev_in.id),
-            before=None,
-            after=ev_in.model_dump(mode="json"),
-        ))
+        # The move itself. Debit, credit and the paired ledger entries are four
+        # separate writes with no transaction across them, so each registers its
+        # inverse as it lands. If any step fails the animals go back where they
+        # were, which is what makes it safe for decide_exemption to return the
+        # request to the queue.
+        comp = Compensation()
+        try:
+            new_source_count = await adjust_count(source_ta.id, -ex.fish_count)
+            comp.add(lambda: adjust_count(source_ta.id, ex.fish_count, allow_negative=True))
+
+            new_dest_count = await adjust_count(dest_ta.id, ex.fish_count)
+            comp.add(lambda: adjust_count(dest_ta.id, -ex.fish_count, allow_negative=True))
+
+            await ev_out.insert()
+            comp.add(ev_out.delete)
+
+            await ev_in.insert()
+            comp.add(ev_in.delete)
+        except Exception:
+            await comp.rollback()
+            raise
+
+        # Past this point the fish have moved and the ledger says so. Anything
+        # that fails from here is bookkeeping, and must not be reported to
+        # decide_exemption as "nothing happened" -- that would hand the request
+        # back to the queue and let a second approval move the same animals.
+        try:
+            source_ta.current_count = new_source_count + ex.fish_count
+            before_source = source_ta.model_dump(mode="json")
+            source_ta.current_count = new_source_count
+
+            await AuditRepository.insert(AuditLog(
+                actor_id=str(current_user.id),
+                actor_role=actor_role,
+                action="update",
+                entity_type="tank_assignment",
+                entity_id=str(source_ta.id),
+                before=before_source,
+                after=source_ta.model_dump(mode="json"),
+            ))
+
+            dest_ta.current_count = new_dest_count - ex.fish_count
+            before_dest = dest_ta.model_dump(mode="json") if not dest_is_new else None
+            dest_ta.current_count = new_dest_count
+
+            await AuditRepository.insert(AuditLog(
+                actor_id=str(current_user.id),
+                actor_role=actor_role,
+                action="create" if dest_is_new else "update",
+                entity_type="tank_assignment",
+                entity_id=str(dest_ta.id),
+                before=before_dest,
+                after=dest_ta.model_dump(mode="json"),
+            ))
+
+            for ev in (ev_out, ev_in):
+                await AuditRepository.insert(AuditLog(
+                    actor_id=str(current_user.id),
+                    actor_role=actor_role,
+                    action="create",
+                    entity_type="census_event",
+                    entity_id=str(ev.id),
+                    before=None,
+                    after=ev.model_dump(mode="json"),
+                ))
+
+            # The exemption exists precisely so the destination does not inherit
+            # quarantine, so clear it if the tank was holding one. Claimed
+            # conditionally: a concurrent release must not produce a second
+            # "lifted" record.
+            if target_tank_obj and target_tank_obj.is_quarantined:
+                before_target_tank = target_tank_obj.model_dump(mode="json")
+                released = await claim(
+                    Tank,
+                    target_tank_obj.id,
+                    {"is_quarantined": True},
+                    {
+                        "is_quarantined": False,
+                        "quarantine_start_date": None,
+                        "quarantine_end_date": None,
+                        "updated_at": datetime.now(timezone.utc),
+                    },
+                )
+                if released:
+                    target_tank_obj.is_quarantined = False
+                    target_tank_obj.quarantine_start_date = None
+                    target_tank_obj.quarantine_end_date = None
+
+                    await AuditRepository.insert(AuditLog(
+                        actor_id=str(current_user.id),
+                        actor_role=actor_role,
+                        action="lifted_quarantine",
+                        entity_type="tank",
+                        entity_id=str(target_tank_obj.id),
+                        before=before_target_tank,
+                        after=target_tank_obj.model_dump(mode="json"),
+                    ))
+
+                    q_ev = CensusEvent(
+                        project_id=source_ta.project_id,
+                        tank_assignment_id=str(dest_ta.id),
+                        tank_id=ex.target_tank_id,
+                        date=date.today(),
+                        event_type="quarantine_lifted",
+                        change=0,
+                        reason="Quarantine Exemption Approved & Cleared for Transfer",
+                        notes=f"Exemption approved by {current_user.first_name} {current_user.last_name}",
+                        created_by=str(current_user.id),
+                    )
+                    await q_ev.insert()
+
+                    await AuditRepository.insert(AuditLog(
+                        actor_id=str(current_user.id),
+                        actor_role=actor_role,
+                        action="create",
+                        entity_type="census_event",
+                        entity_id=str(q_ev.id),
+                        before=None,
+                        after=q_ev.model_dump(mode="json"),
+                    ))
+        except Exception as exc:
+            raise ExemptionTransferPartiallyApplied(
+                "Fish were transferred but the follow-up records did not complete"
+            ) from exc

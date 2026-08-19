@@ -11,6 +11,7 @@ from ..models.water_quality_log import WaterQualityLog
 from ..models.incident_report import IncidentReport
 from ..repositories.base_repository import BaseRepository
 from ..repositories.audit_repository import AuditRepository
+from ..utils.atomic import claim
 from ..utils.entity_resolver import EntityResolver
 from ..utils.quarantine_utils import lift_quarantine, lift_expired_quarantines
 
@@ -165,11 +166,31 @@ class FacilityService:
 
         before = t.model_dump(mode="json")
 
-        t.is_quarantined = True
-        t.quarantine_start_date = datetime.now(timezone.utc)
-        t.quarantine_end_date = t.quarantine_start_date + timedelta(days=days)
+        start = datetime.now(timezone.utc)
+        end = start + timedelta(days=days)
 
-        await t.save()
+        # Placing a tank in quarantine is not idempotent -- it stamps a fresh
+        # start date and emits a census event. A double-tapped button would
+        # otherwise record the tank as quarantined twice and push the release
+        # date out. Whoever loses the claim gets the tank as it stands.
+        placed = await claim(
+            Tank,
+            t.id,
+            {"is_quarantined": False},
+            {
+                "is_quarantined": True,
+                "quarantine_start_date": start,
+                "quarantine_end_date": end,
+                "updated_at": start,
+            },
+        )
+        if not placed:
+            return await Tank.get(tank_id) or t
+
+        t.is_quarantined = True
+        t.quarantine_start_date = start
+        t.quarantine_end_date = end
+        t.updated_at = start
 
         await AuditRepository.insert(AuditLog(
             actor_id=str(current_user.id),

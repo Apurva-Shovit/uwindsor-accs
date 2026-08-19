@@ -7,6 +7,7 @@ from ..models.facility import Tank
 from ..schemas.user import ApproveRequest, RejectRequest, PendingUserResponse
 from ..repositories.user_repository import UserRepository
 from ..repositories.audit_repository import AuditRepository
+from ..utils.atomic import claim
 
 class UserService:
     """Service layer for User Management."""
@@ -21,7 +22,7 @@ class UserService:
             query = {"status": "pending", "requested_role": "staff"}
         else:
             raise HTTPException(403, "Not authorized to view pending users")
-            
+
         users = await UserRepository.find(query)
         return [PendingUserResponse(
             id=str(u.id), email=u.email, first_name=u.first_name, last_name=u.last_name,
@@ -61,8 +62,29 @@ class UserService:
 
         target.approved_by = str(current_user.id)
         target.approved_at = datetime.now(timezone.utc).isoformat()
-        
-        await UserRepository.update(target)
+
+        # Claim the transition out of "pending" first. The check at the top of
+        # this method reads a status that a second approver -- or the same
+        # admin double-clicking -- also sees as pending, so only a conditional
+        # update can pick one winner. UserRepository.update is a whole-document
+        # save(), so a loser would otherwise overwrite the winner's role and
+        # tank assignments with its own.
+        won = await claim(
+            User,
+            target.id,
+            {"status": StatusEnum.pending.value},
+            {
+                "status": StatusEnum.active.value,
+                "role": target.role.value if target.role else None,
+                "facility_ids": target.facility_ids,
+                "room_ids": target.room_ids,
+                "assigned_tank_ids": target.assigned_tank_ids,
+                "approved_by": target.approved_by,
+                "approved_at": target.approved_at,
+            },
+        )
+        if not won:
+            raise HTTPException(409, "This account has already been decided by someone else")
 
         await AuditRepository.insert(AuditLog(
             actor_id=str(current_user.id), 
@@ -73,7 +95,7 @@ class UserService:
             before=before, 
             after=target.model_dump()
         ))
-        
+
         return target.role.value if target.role else "none"
 
     @staticmethod
@@ -84,13 +106,26 @@ class UserService:
 
         if current_user.role == RoleEnum.manager and target.requested_role != RoleEnum.staff and target.role != RoleEnum.staff:
             raise HTTPException(403, "Managers can only reject Staff account requests")
-            
+
         before = target.model_dump()
         target.status = StatusEnum.rejected
         target.rejection_reason = body.reason
-        
-        await UserRepository.update(target)
-        
+
+        # Same claim as approve_user, so an approve and a reject issued at the
+        # same moment resolve to one outcome instead of whichever write lands
+        # second.
+        won = await claim(
+            User,
+            target.id,
+            {"status": StatusEnum.pending.value},
+            {
+                "status": StatusEnum.rejected.value,
+                "rejection_reason": body.reason,
+            },
+        )
+        if not won:
+            raise HTTPException(409, "This account has already been decided by someone else")
+
         await AuditRepository.insert(AuditLog(
             actor_id=str(current_user.id), 
             actor_role=current_user.role.value if current_user.role else "none", 

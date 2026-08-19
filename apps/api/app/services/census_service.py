@@ -12,6 +12,7 @@ from ..models.water_quality_log import WaterQualityLog
 from ..models.incident_report import IncidentReport
 from ..schemas.census import CensusEventCreate
 from ..repositories.audit_repository import AuditRepository
+from ..utils.atomic import adjust_count
 from ..utils.entity_resolver import EntityResolver
 
 MANAGER_PLUS = {RoleEnum.manager, RoleEnum.chair, RoleEnum.admin, RoleEnum.super_admin}
@@ -41,13 +42,19 @@ class CensusService:
         if p.status == "closed":
             raise HTTPException(status.HTTP_409_CONFLICT, "Project Closed")
 
-        new_count = ta.current_count + body.change
-        if new_count < 0:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid Count")
+        # The count is applied by the database, not computed here: two staff
+        # logging deaths on the same tank at once both read the same starting
+        # value, so a Python-side add loses one of them. The same filter also
+        # enforces the non-negative invariant that "new_count < 0" used to
+        # check against an already-stale read.
+        new_count = await adjust_count(ta.id, body.change)
 
+        # Snapshot around what actually happened rather than around the value
+        # read at the top of the request, so the audit trail stays truthful
+        # when another write landed in between.
+        ta.current_count = new_count - body.change
         before_ta = ta.model_dump(mode="json")
         ta.current_count = new_count
-        await ta.save()
         after_ta = ta.model_dump(mode="json")
 
         ev = CensusEvent(

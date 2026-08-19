@@ -10,6 +10,7 @@ from ..models.tank_assignment import TankAssignment
 from ..models.census_event import CensusEvent
 from ..schemas.transfer import TankTransferCreate
 from ..repositories.audit_repository import AuditRepository
+from ..utils.atomic import Compensation, adjust_count, get_or_create_assignment
 
 MANAGER_PLUS = {RoleEnum.manager, RoleEnum.chair, RoleEnum.admin, RoleEnum.super_admin}
 
@@ -36,43 +37,31 @@ class TransferService:
         if not p or p.status == "closed":
             raise HTTPException(status.HTTP_409_CONFLICT, "Project Closed")
 
+        # A friendly early rejection only. The authoritative stock check is the
+        # filter inside adjust_count, because this one reads a value that two
+        # concurrent transfers would both pass.
         if source_ta.current_count < body.count:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Transfer count exceeds current count")
 
-        dest_ta = await TankAssignment.find_one({
+        occupant = await TankAssignment.find_one({
             "tank_id": body.destination_tank_id,
             "current_count": {"$gt": 0}
         })
+        if occupant and occupant.project_id != source_ta.project_id:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Destination tank is occupied by a different AUPP project")
 
-        dest_is_new = False
-        if dest_ta:
-            if dest_ta.project_id != source_ta.project_id:
-                raise HTTPException(status.HTTP_409_CONFLICT, "Destination tank is occupied by a different AUPP project")
-        else:
-            dest_is_new = True
-            dest_ta = TankAssignment(
-                project_id=source_ta.project_id,
-                tank_id=body.destination_tank_id,
-                current_count=0,
-                pi_name=source_ta.pi_name,
-                aupp_number=source_ta.aupp_number,
-                created_by=str(current_user.id),
-            )
+        # Keyed on (tank_id, project_id) rather than on "whichever row happens
+        # to hold fish", so it reuses an existing emptied row instead of
+        # colliding with it under the unique index.
+        dest_ta, dest_is_new = await get_or_create_assignment(
+            body.destination_tank_id,
+            source_ta.project_id,
+            created_by=str(current_user.id),
+            pi_name=source_ta.pi_name,
+            aupp_number=source_ta.aupp_number,
+        )
 
         transfer_group_id = str(uuid.uuid4())
-
-        if dest_is_new:
-            await dest_ta.insert()
-
-        before_source = source_ta.model_dump(mode="json")
-        source_ta.current_count -= body.count
-        await source_ta.save()
-        after_source = source_ta.model_dump(mode="json")
-
-        before_dest = dest_ta.model_dump(mode="json") if not dest_is_new else None
-        dest_ta.current_count += body.count
-        await dest_ta.save()
-        after_dest = dest_ta.model_dump(mode="json")
 
         source_tank_obj = await Tank.get(source_ta.tank_id)
         dest_tank_obj = await Tank.get(body.destination_tank_id)
@@ -90,7 +79,6 @@ class TransferService:
             transfer_group_id=transfer_group_id,
             created_by=str(current_user.id),
         )
-        await ev_out.insert()
 
         ev_in = CensusEvent(
             project_id=source_ta.project_id,
@@ -103,7 +91,37 @@ class TransferService:
             transfer_group_id=transfer_group_id,
             created_by=str(current_user.id),
         )
-        await ev_in.insert()
+
+        # Debit and credit are two separate writes with no transaction between
+        # them, so a failure after the debit would destroy fish. Each step
+        # registers its inverse as it succeeds; the failure path puts the
+        # animals back rather than leaving them in neither tank.
+        comp = Compensation()
+        try:
+            new_source_count = await adjust_count(source_ta.id, -body.count)
+            comp.add(lambda: adjust_count(source_ta.id, body.count, allow_negative=True))
+
+            new_dest_count = await adjust_count(dest_ta.id, body.count)
+            comp.add(lambda: adjust_count(dest_ta.id, -body.count, allow_negative=True))
+
+            await ev_out.insert()
+            comp.add(ev_out.delete)
+
+            await ev_in.insert()
+            comp.add(ev_in.delete)
+        except Exception:
+            await comp.rollback()
+            raise
+
+        source_ta.current_count = new_source_count + body.count
+        before_source = source_ta.model_dump(mode="json")
+        source_ta.current_count = new_source_count
+        after_source = source_ta.model_dump(mode="json")
+
+        dest_ta.current_count = new_dest_count - body.count
+        before_dest = dest_ta.model_dump(mode="json") if not dest_is_new else None
+        dest_ta.current_count = new_dest_count
+        after_dest = dest_ta.model_dump(mode="json")
 
         actor_role = str(current_user.role.value if current_user.role else "none")
 

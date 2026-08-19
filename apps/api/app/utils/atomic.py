@@ -86,6 +86,25 @@ async def adjust_count(
     )
 
 
+async def drain_count(assignment_id: Any) -> int:
+    """Empty a TankAssignment and report how many animals that removed.
+
+    Closing a project has to zero the row *and* record the number removed in
+    the census ledger. Decrementing by a previously-read count gets both wrong
+    when an intake lands in between: the subtraction leaves a remainder, and
+    the ledger entry names a number that never left the tank. Setting the field
+    and taking the pre-image in the same operation cannot disagree with itself.
+    """
+    doc = await TankAssignment.get_motor_collection().find_one_and_update(
+        {"_id": _as_object_id(assignment_id)},
+        {"$set": {"current_count": 0}},
+        return_document=ReturnDocument.BEFORE,
+    )
+    if doc is None:
+        raise HTTPException(404, "Tank assignment not found")
+    return doc.get("current_count", 0)
+
+
 async def get_or_create_assignment(
     tank_id: str,
     project_id: str,
@@ -93,8 +112,12 @@ async def get_or_create_assignment(
     created_by: str,
     pi_name: Optional[str] = None,
     aupp_number: Optional[str] = None,
-) -> TankAssignment:
+) -> tuple[TankAssignment, bool]:
     """Fetch the (tank, project) assignment, creating it if it does not exist.
+
+    Returns the assignment and whether this call is the one that created it --
+    callers need that to label the audit entry "create" rather than "update",
+    and an emptied row that already existed is not the same thing as a new one.
 
     A find-then-insert races: two first intakes into a fresh tank both see
     nothing and both insert. This upserts instead, and the unique index on
@@ -113,23 +136,32 @@ async def get_or_create_assignment(
         "created_at": datetime.now(timezone.utc),
     }
 
+    collection = TankAssignment.get_motor_collection()
+    selector = {"tank_id": tank_id, "project_id": project_id}
+
+    created = False
     try:
-        raw = await TankAssignment.get_motor_collection().find_one_and_update(
-            {"tank_id": tank_id, "project_id": project_id},
+        # BEFORE rather than AFTER: the pre-image is None exactly when this call
+        # performed the insert, which is the only unambiguous way to tell an
+        # upsert that created a row from one that found an existing one.
+        raw = await collection.find_one_and_update(
+            selector,
             {"$setOnInsert": on_insert},
             upsert=True,
-            return_document=ReturnDocument.AFTER,
+            return_document=ReturnDocument.BEFORE,
         )
+        created = raw is None
     except DuplicateKeyError:
         # Another request inserted the same pair between our lookup and our
         # write. Its row is the one that exists, so use it.
-        raw = await TankAssignment.get_motor_collection().find_one(
-            {"tank_id": tank_id, "project_id": project_id}
-        )
+        raw = None
+
+    if raw is None:
+        raw = await collection.find_one(selector)
         if raw is None:
             raise HTTPException(409, "Tank assignment could not be created, please retry")
 
-    return TankAssignment.model_validate(raw)
+    return TankAssignment.model_validate(raw), created
 
 
 async def claim(
