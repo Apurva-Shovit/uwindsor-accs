@@ -9,6 +9,7 @@ from ..models.facility import Tank
 from ..models.tank_assignment import TankAssignment
 from ..models.census_event import CensusEvent
 from ..repositories.audit_repository import AuditRepository
+from ..utils.atomic import adjust_count, claim_request_id, get_or_create_assignment
 
 MANAGER_PLUS = {RoleEnum.manager, RoleEnum.chair, RoleEnum.admin, RoleEnum.super_admin}
 
@@ -18,6 +19,8 @@ class IntakeRequest(BaseModel):
     count: int
     event_type: str = "arrival"
     notes: Optional[str] = None
+    # One per submission attempt; see CensusEvent.request_id.
+    request_id: Optional[str] = None
 
 class IntakeService:
     """Service layer for Fish Intake."""
@@ -42,6 +45,10 @@ class IntakeService:
         if p.status == "closed":
             raise HTTPException(status.HTTP_409_CONFLICT, "Project Closed")
 
+        # A friendly early rejection, not the guarantee. Two concurrent intakes
+        # for different projects both pass this read; the partial unique index
+        # on an occupied tank is what actually stops the second one, surfacing
+        # from adjust_count below as a 409.
         dest_ta = await TankAssignment.find_one({
             "tank_id": body.tank_id,
             "current_count": {"$gt": 0}
@@ -49,28 +56,16 @@ class IntakeService:
         if dest_ta and dest_ta.project_id != body.project_id:
             raise HTTPException(status.HTTP_409_CONFLICT, "Destination Occupied")
 
-        ta = await TankAssignment.find_one({
-            "tank_id": body.tank_id,
-            "project_id": body.project_id
-        })
-
-        is_new = False
-        if not ta:
-            is_new = True
-            ta = TankAssignment(
-                project_id=body.project_id,
-                tank_id=body.tank_id,
-                current_count=0,
-                pi_name=p.pi_name,
-                aupp_number=p.aupp_number,
-                created_by=str(current_user.id),
-            )
-            await ta.insert()
-
-        before_ta = ta.model_dump(mode="json") if not is_new else None
-        ta.current_count += body.count
-        await ta.save()
-        after_ta = ta.model_dump(mode="json")
+        # Upsert rather than find-then-insert: two first intakes into a fresh
+        # tank both see nothing and both create a row, after which find_one
+        # picks one arbitrarily and the other tank's fish become invisible.
+        ta, is_new = await get_or_create_assignment(
+            body.tank_id,
+            body.project_id,
+            created_by=str(current_user.id),
+            pi_name=p.pi_name,
+            aupp_number=p.aupp_number,
+        )
 
         ev = CensusEvent(
             project_id=body.project_id,
@@ -81,9 +76,30 @@ class IntakeService:
             change=body.count,
             reason="Hatch" if body.event_type == "hatch" else "Arrival",
             notes=body.notes,
+            request_id=body.request_id,
             created_by=str(current_user.id),
         )
-        await ev.insert()
+
+        # Claims the idempotency key before the fish are counted in; see
+        # CensusService.create_census_event.
+        if await claim_request_id(ev) is None:
+            ta = await TankAssignment.get(ta.id)
+            return {
+                "message": "Intake already recorded",
+                "new_count": ta.current_count,
+                "duplicate": True,
+            }
+
+        try:
+            new_count = await adjust_count(ta.id, body.count)
+        except Exception:
+            await ev.delete()
+            raise
+
+        ta.current_count = new_count - body.count
+        before_ta = ta.model_dump(mode="json") if not is_new else None
+        ta.current_count = new_count
+        after_ta = ta.model_dump(mode="json")
 
         # Auto-activate mandatory 14-day quarantine mode on destination tank ONLY for arrival events (hatch events do NOT quarantine)
         actor_role = str(current_user.role.value if current_user.role else "none")

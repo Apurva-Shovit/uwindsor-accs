@@ -7,3 +7,5 @@ class TankTransferCreate(BaseModel):
     destination_tank_id: str
     count: int = Field(gt=0, description="Number of fish to transfer")
     notes: Optional[str] = None
+    # One per submission attempt; see CensusEvent.request_id.
+    request_id: Optional[str] = None

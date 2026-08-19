@@ -12,6 +12,7 @@ from ..models.facility import Tank
 from ..schemas.project import ProjectCreate, ProjectClose
 from ..repositories.base_repository import BaseRepository
 from ..repositories.audit_repository import AuditRepository
+from ..utils.atomic import claim, drain_count
 from ..utils.quarantine_utils import lift_expired_quarantines
 
 class ProjectService:
@@ -581,12 +582,31 @@ class ProjectService:
 
         before = p.model_dump(mode="json")
 
+        closed_at = datetime.now(timezone.utc)
+        # Claim the close before disposing of anything. The status check above
+        # reads a value that two concurrent closes both see as "active", so
+        # without this they both run the disposition loop and every animal is
+        # recorded as euthanised twice.
+        won = await claim(
+            Project,
+            p.id,
+            {"status": "active"},
+            {
+                "status": "closed",
+                "closed_at": closed_at,
+                "closed_by": str(current_user.id),
+                "disposition_type": body.disposition_type,
+                "disposition_notes": body.notes,
+            },
+        )
+        if not won:
+            raise HTTPException(409, "Project already closed")
+
         p.status = "closed"
-        p.closed_at = datetime.now(timezone.utc)
+        p.closed_at = closed_at
         p.closed_by = str(current_user.id)
         p.disposition_type = body.disposition_type
         p.disposition_notes = body.notes
-        await p.save()
 
         active_assignments = await TankAssignment.find({
             "project_id": str(p.id),
@@ -604,12 +624,20 @@ class ProjectService:
             reason = f"Project Closed: {body.disposition_type.capitalize()}"
 
             for ta in active_assignments:
+                # Empty the row first and record what was actually in it. The
+                # count read into active_assignments a moment ago may already
+                # be out of date, and the ledger must name the number that
+                # really left the tank.
+                removed = await drain_count(ta.id)
+                if removed == 0:
+                    continue
+
                 ev = CensusEvent(
                     tank_id=ta.tank_id,
                     tank_assignment_id=str(ta.id),
                     project_id=str(p.id),
                     event_type=census_type,
-                    change=-ta.current_count,
+                    change=-removed,
                     reason=reason,
                     notes=body.notes,
                     date=datetime.now(timezone.utc).date(),
@@ -627,9 +655,9 @@ class ProjectService:
                     after=ev.model_dump(mode="json")
                 ))
                 
+                ta.current_count = removed
                 before_ta = ta.model_dump(mode="json")
                 ta.current_count = 0
-                await ta.save()
 
                 await AuditRepository.insert(AuditLog(
                     actor_id=str(current_user.id),

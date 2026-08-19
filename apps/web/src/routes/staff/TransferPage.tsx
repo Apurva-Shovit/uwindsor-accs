@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { getTanks, getTankAssignments, postTankTransfer } from '../../lib/api';
+import { isConflict, newRequestId, serverAnswered, submitErrorMessage } from '../../lib/submission';
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 
 interface Tank {
   id?: string;
@@ -76,28 +78,54 @@ export const TransferPage: React.FC = () => {
     transferCount > sourceCurrentCount ||
     hasAUPPMismatch;
 
+  // Survives re-renders and, deliberately, a failed attempt: see lib/submission.
+  const attemptId = useRef<string | null>(null);
+
+  const reload = async () => {
+    const [tRes, aRes] = await Promise.all([getTanks(), getTankAssignments()]);
+    setTanks(tRes.data);
+    setAssignments(aRes.data);
+  };
+
+  // The source count is what the transfer is sized against, so it must not be
+  // the one from whenever this screen was opened.
+  useRefreshOnFocus(() => { reload().catch(() => {}); });
+
   const handleConfirmSubmit = async () => {
+    if (loading) return;
     setShowConfirm(false);
     setLoading(true);
     setError('');
+
+    // Reused if the request gets no reply, so a retry moves the fish once.
+    if (!attemptId.current) attemptId.current = newRequestId();
+
     try {
-      await postTankTransfer({
+      const res = await postTankTransfer({
         source_assignment_id: sourceAssignmentId,
         destination_tank_id: destTankId,
         count: transferCount,
         notes: notes || undefined,
+        request_id: attemptId.current,
       });
-      setToast('Transfer successful!');
+      attemptId.current = null;
+      setToast(
+        res.data?.duplicate
+          ? 'That transfer had already gone through — the fish were not moved twice.'
+          : 'Transfer successful!'
+      );
       setCountStr('');
       setNotes('');
       setSourceAssignmentId('');
       setDestTankId('');
-      // Reload values
-      const [tRes, aRes] = await Promise.all([getTanks(), getTankAssignments()]);
-      setTanks(tRes.data);
-      setAssignments(aRes.data);
+      await reload();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to complete tank transfer');
+      if (serverAnswered(err)) attemptId.current = null;
+      setError(submitErrorMessage(err, 'Failed to complete tank transfer'));
+      if (isConflict(err)) {
+        // The counts this transfer was sized against have moved.
+        await reload().catch(() => {});
+      }
     } finally {
       setLoading(false);
     }
@@ -288,9 +316,10 @@ export const TransferPage: React.FC = () => {
               </button>
               <button
                 onClick={handleConfirmSubmit}
-                className="rounded-md bg-brandBlue px-4 py-2 text-sm font-semibold text-white hover:bg-brandBlueDark"
+                disabled={loading}
+                className="rounded-md bg-brandBlue px-4 py-2 text-sm font-semibold text-white hover:bg-brandBlueDark disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Confirm
+                {loading ? 'Transferring...' : 'Confirm'}
               </button>
             </div>
           </div>

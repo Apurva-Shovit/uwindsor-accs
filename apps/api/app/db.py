@@ -17,12 +17,59 @@ from .models.device_token import DeviceToken
 from .models.app_bundle import AppBundle
 
 import certifi
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Indexes that an earlier version of a model created and that the current
+# definition supersedes. Mongo refuses to redefine an index in place -- asking
+# for {tank_id, project_id} as unique when a non-unique index of that name
+# already exists fails with IndexKeySpecsConflict, and because init_beanie
+# builds indexes during startup that failure takes the whole API down rather
+# than surfacing as a warning. Dropping them first is what makes the upgrade
+# survivable on a database that already holds data.
+SUPERSEDED_INDEXES = {
+    "tank_assignments": [
+        # Replaced by the same key pattern with unique=True.
+        "tank_id_1_project_id_1",
+        # Replaced by the partial unique index on tank_id alone, which serves
+        # the same {tank_id, current_count: {$gt: 0}} lookups.
+        "tank_id_1_current_count_-1",
+    ],
+}
+
+
+async def drop_superseded_indexes(database) -> None:
+    """Remove indexes whose definition has changed, so init_beanie can rebuild them.
+
+    Idempotent: a name that is already gone is skipped, so this is a no-op on
+    every boot after the first.
+    """
+    for collection_name, index_names in SUPERSEDED_INDEXES.items():
+        collection = database[collection_name]
+        try:
+            existing = await collection.index_information()
+        except Exception:
+            continue  # collection does not exist yet on a fresh database
+
+        for name in index_names:
+            spec = existing.get(name)
+            if spec is None:
+                continue
+            # Only drop the old shape. Once the index has been rebuilt with the
+            # new options, leave it alone.
+            if name == "tank_id_1_project_id_1" and spec.get("unique"):
+                continue
+            await collection.drop_index(name)
+            logger.info("Dropped superseded index %s.%s", collection_name, name)
+
 
 async def init_db():
     kwargs = {}
     if "mongodb+srv://" in settings.MONGO_URI or "ssl=true" in settings.MONGO_URI.lower() or "tls=true" in settings.MONGO_URI.lower():
         kwargs["tlsCAFile"] = certifi.where()
     client = AsyncIOMotorClient(settings.MONGO_URI, **kwargs)
+    await drop_superseded_indexes(client[settings.MONGODB_DB_NAME])
     await init_beanie(
         database=client[settings.MONGODB_DB_NAME],
         document_models=[
@@ -60,30 +107,62 @@ async def init_db():
         if changed:
             await su.save()
 
-    # Ensure baseline facility, room, and 14 tanks exist
-    fac = await Facility.find_one({"name": "LaSalle Freshwater Restoration Ecology Centre"})
+    await ensure_baseline_facility()
+
+
+BASELINE_FACILITY_NAME = "LaSalle Freshwater Restoration Ecology Centre"
+BASELINE_ROOM_NUMBER = "1"
+BASELINE_TANK_COUNT = 14
+
+
+async def ensure_baseline_facility() -> tuple[Facility, Room]:
+    """Ensure the pilot facility, its holding room, and its 14 tanks exist.
+
+    This runs on every boot, so it matches the room by facility rather than by
+    room number: the pilot room has been renamed once already (from "301" to
+    "1"), and a number-only lookup treats a renamed room as missing and seeds a
+    second room plus a second set of 14 tanks. Anything that needs the baseline
+    room must come through here for the same reason.
+    """
+    fac = await Facility.find_one({"name": BASELINE_FACILITY_NAME})
     if not fac:
-        fac = Facility(name="LaSalle Freshwater Restoration Ecology Centre", address="LaSalle, ON", description="Main restoration ecology facility")
+        fac = Facility(
+            name=BASELINE_FACILITY_NAME,
+            address="LaSalle, ON",
+            description="Main restoration ecology facility",
+        )
         await fac.insert()
-        
-    room = await Room.find_one({"facility_id": str(fac.id), "room_number": "1"})
+
+    room = await Room.find_one(
+        {"facility_id": str(fac.id), "room_number": BASELINE_ROOM_NUMBER, "deleted": False}
+    )
     if not room:
-        room = await Room.find_one({"facility_id": str(fac.id)})
+        # Oldest surviving room wins, so repeated boots always settle on the
+        # same room no matter what it has been renamed to.
+        rooms = await Room.find({"facility_id": str(fac.id), "deleted": False}).sort("+_id").limit(1).to_list()
+        room = rooms[0] if rooms else None
     if not room:
-        room = Room(facility_id=str(fac.id), room_number="1", description="Main aquatic holding room")
+        room = Room(
+            facility_id=str(fac.id),
+            room_number=BASELINE_ROOM_NUMBER,
+            description="Main aquatic holding room",
+        )
         await room.insert()
-    elif room.room_number != "1":
-        room.room_number = "1"
-        await room.save()
 
-    existing_tanks = await Tank.find({"room_id": str(room.id)}).to_list()
-    if len(existing_tanks) < 14:
-        for i in range(1, 15):
+    # Soft-deleted tanks count as present: they were retired on purpose and
+    # must not be resurrected on the next boot.
+    existing = await Tank.find({"room_id": str(room.id)}).to_list()
+    if len(existing) < BASELINE_TANK_COUNT:
+        present = {t.tank_number for t in existing}
+        for i in range(1, BASELINE_TANK_COUNT + 1):
             t_num = str(i)
-            t = await Tank.find_one({"room_id": str(room.id), "tank_number": t_num})
-            if not t:
-                t = Tank(room_id=str(room.id), tank_number=t_num, status="active", notes=f"Seeded Tank {t_num}")
-                await t.insert()
+            if t_num in present:
+                continue
+            await Tank(
+                room_id=str(room.id),
+                tank_number=t_num,
+                status="active",
+                notes=f"Seeded Tank {t_num}",
+            ).insert()
 
-
-
+    return fac, room

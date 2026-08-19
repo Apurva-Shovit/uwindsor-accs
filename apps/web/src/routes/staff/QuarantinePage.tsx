@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Clock, ShieldAlert, CheckCircle2, XCircle } from 'lucide-react';
+import { AlertTriangle, Clock, ShieldAlert, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
 import { parseApiDate, formatQuarantineRemaining } from '../../utils/formatters';
@@ -37,6 +37,14 @@ export const QuarantinePage: React.FC = () => {
 
   const [liftModalTank, setLiftModalTank] = useState<any>(null);
   const [liftVerification, setLiftVerification] = useState('');
+  // Lifting writes an audit entry and a census event, so repeated taps while
+  // the first request is open leave a duplicated release in the record. The
+  // existing disabled state only checks the typed verification text.
+  const [lifting, setLifting] = useState(false);
+
+  // Approving an exemption moves fish, so the decision has to be in flight only
+  // once: a second click while the first request is open would transfer twice.
+  const [deciding, setDeciding] = useState<{ id: string; approved: boolean } | null>(null);
 
   // The countdown now resolves down to the minute, so it has to tick rather than
   // only recomputing when the tank query happens to refetch.
@@ -118,28 +126,39 @@ export const QuarantinePage: React.FC = () => {
   };
 
   const confirmLiftQuarantine = async () => {
-    if (!liftModalTank) return;
+    if (!liftModalTank || lifting) return;
     if (liftVerification !== `TANK ${liftModalTank.tank_number}`) {
       alert("Verification failed. Please type the exact text.");
       return;
     }
 
+    setLifting(true);
     try {
       await toggleTankQuarantine(liftModalTank.id || liftModalTank._id, false);
-      refetchTanks();
+      await refetchTanks();
       setLiftModalTank(null);
     } catch (err: any) {
       alert(err.response?.data?.detail || err.message || 'Error lifting quarantine');
+    } finally {
+      setLifting(false);
     }
   };
 
   const handleDecideExemption = async (exemptionId: string, approved: boolean) => {
+    if (deciding) return;
+
+    setDeciding({ id: exemptionId, approved });
     try {
       await decideExemption(exemptionId, { approved });
-      refetchExemptions();
-      refetchTanks();
+      // Wait for the refreshed list before releasing the buttons, so the row has
+      // already flipped out of "pending" by the time it becomes clickable again.
+      await Promise.all([refetchExemptions(), refetchTanks()]);
     } catch (err: any) {
+      // The request was rejected before anything moved, so the row stays pending
+      // and both buttons come back for another attempt.
       alert(err.response?.data?.detail || err.message || 'Error deciding exemption');
+    } finally {
+      setDeciding(null);
     }
   };
 
@@ -251,6 +270,7 @@ export const QuarantinePage: React.FC = () => {
                 ) : (
                   exemptions.map((ex: any) => {
                     const exId = ex.id || ex._id;
+                    const decidingThis = deciding && deciding.id === exId ? deciding : null;
                     return (
                       <tr key={exId} className="hover:bg-slate-50 transition-colors">
                         <td className="p-3 font-medium text-slate-900 whitespace-nowrap">
@@ -301,15 +321,31 @@ export const QuarantinePage: React.FC = () => {
                             <div className="inline-flex items-center gap-2">
                               <button
                                 onClick={() => handleDecideExemption(exId, true)}
-                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-xs shadow-sm transition-colors"
+                                disabled={!!deciding}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-xs shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-600"
                               >
-                                Accept &amp; Transfer
+                                {decidingThis?.approved === true ? (
+                                  <>
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    Transferring...
+                                  </>
+                                ) : (
+                                  <>Accept &amp; Transfer</>
+                                )}
                               </button>
                               <button
                                 onClick={() => handleDecideExemption(exId, false)}
-                                className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded text-xs shadow-sm transition-colors"
+                                disabled={!!deciding}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded text-xs shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-600"
                               >
-                                Reject
+                                {decidingThis?.approved === false ? (
+                                  <>
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    Rejecting...
+                                  </>
+                                ) : (
+                                  <>Reject</>
+                                )}
                               </button>
                             </div>
                           ) : (
@@ -474,10 +510,10 @@ export const QuarantinePage: React.FC = () => {
               <button
                 type="button"
                 onClick={confirmLiftQuarantine}
-                disabled={liftVerification !== `TANK ${liftModalTank.tank_number}`}
+                disabled={lifting || liftVerification !== `TANK ${liftModalTank.tank_number}`}
                 className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm transition-all"
               >
-                Confirm Lift
+                {lifting ? 'Lifting...' : 'Confirm Lift'}
               </button>
             </div>
           </div>

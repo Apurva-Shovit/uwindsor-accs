@@ -12,7 +12,7 @@ name: OTA bundle
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     # Native code cannot ship this way — a bundle needing a new plugin would
     # white-screen every APK that lacks it. Changes under android/ therefore go
     # through the APK workflow instead.

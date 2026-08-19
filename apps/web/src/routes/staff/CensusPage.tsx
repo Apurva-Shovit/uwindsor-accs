@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   getTankAssignments,
   postCensusEvent,
@@ -7,6 +7,8 @@ import {
   getTanks,
   getProjects,
 } from '../../lib/api';
+import { isConflict, newRequestId, serverAnswered, submitErrorMessage } from '../../lib/submission';
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 
 /* ─── Types ─── */
 interface TankAssignment {
@@ -92,11 +94,18 @@ export const CensusPage: React.FC = () => {
   }, []);
 
   /* ── Load assignments (for death/adjustment) ── */
-  useEffect(() => {
+  const loadAssignments = () => {
     getTankAssignments()
       .then(r => setAssignments(r.data))
       .catch(() => {});
-  }, []);
+  };
+
+  useEffect(loadAssignments, []);
+
+  // The counts drive the live preview and the client-side validation, so a
+  // screen left open while someone else logged deaths would otherwise still be
+  // showing -- and checking against -- the population from page load.
+  useRefreshOnFocus(loadAssignments);
 
   /* ── Reset selections when switching mode ── */
   useEffect(() => {
@@ -147,22 +156,35 @@ export const CensusPage: React.FC = () => {
     : previewCount < 0 || changeValue === 0 || !selectedTaId;
 
   /* ── Submit ── */
+  // Survives re-renders and, deliberately, a failed attempt: see lib/submission.
+  const attemptId = useRef<string | null>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isInvalid) return;
+    if (isInvalid || loading) return;
     setLoading(true);
     setError('');
+
+    // Held across retries of the same entry, so a tap repeated after a dropped
+    // reply is recognised by the API instead of recorded a second time.
+    if (!attemptId.current) attemptId.current = newRequestId();
+
     try {
       if (isAdditive) {
         /* Use the intake endpoint – creates/updates TankAssignment + logs arrival event */
-        await postFishIntake({
+        const res = await postFishIntake({
           tank_id: selectedTankId,
           project_id: selectedProjectId,
           count: Math.abs(rawChange),
           event_type: eventType,
           notes: notes || `Fish ${eventType}`,
+          request_id: attemptId.current,
         });
-        setToast(`${eventType === 'arrival' ? 'Arrival' : 'Hatch'} recorded — ${rawChange} fish added!`);
+        setToast(
+          res.data?.duplicate
+            ? 'That entry was already recorded — nothing was added twice.'
+            : `${eventType === 'arrival' ? 'Arrival' : 'Hatch'} recorded — ${rawChange} fish added!`
+        );
         /* Refresh assignments so subtractive mode has latest data */
         getTankAssignments().then(r => setAssignments(r.data)).catch(() => {});
       } else {
@@ -173,17 +195,33 @@ export const CensusPage: React.FC = () => {
           change: changeValue,
           reason: reason || undefined,
           notes: notes || undefined,
+          request_id: attemptId.current,
         });
-        setToast('Census recorded successfully!');
+        setToast(
+          res.data?.duplicate
+            ? 'That entry was already recorded — nothing was counted twice.'
+            : 'Census recorded successfully!'
+        );
         setAssignments(prev =>
           prev.map(a => (getId(a) === selectedTaId ? { ...a, current_count: res.data.new_count } : a))
         );
       }
+      attemptId.current = null;
       setChangeStr('');
       setReason('');
       setNotes('');
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to record census event');
+      // A server that answered has already released the key, so the next
+      // attempt is a fresh entry. A request that got no reply keeps its key.
+      if (serverAnswered(err)) attemptId.current = null;
+
+      setError(submitErrorMessage(err, 'Failed to record census event'));
+
+      // Someone else moved this tank. Pull the real numbers in so the screen
+      // stops showing the figure the entry was calculated against.
+      if (isConflict(err)) {
+        getTankAssignments().then(r => setAssignments(r.data)).catch(() => {});
+      }
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getTanksSummary, createTank, deleteTank, getTankHistory, toggleTankQuarantine } from '../lib/api';
+import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
 import { useAuth } from '../context/AuthContext';
 import { Database, Plus } from 'lucide-react';
 
@@ -65,6 +66,11 @@ export const TanksView: React.FC<TanksViewProps> = ({ isAdminMode = false }) => 
   const [newTankNumber, setNewTankNumber] = useState('');
   const [newNotes, setNewNotes] = useState('');
   const [addLoading, setAddLoading] = useState(false);
+  // Neither of the tank actions below is idempotent from the user's side:
+  // deleting is destructive, and placing a tank in quarantine stamps a fresh
+  // start date and emits a census event. Both were bare async onClicks, so a
+  // double-tap on a tablet fired the request twice.
+  const [tankActionBusy, setTankActionBusy] = useState<'delete' | 'quarantine' | null>(null);
 
   const fetchTanks = async () => {
     setLoading(true);
@@ -82,6 +88,10 @@ export const TanksView: React.FC<TanksViewProps> = ({ isAdminMode = false }) => 
   useEffect(() => {
     fetchTanks();
   }, []);
+
+  // The grid shows live fish counts and quarantine state for every tank, and
+  // had no refresh other than the manual button.
+  useRefreshOnFocus(fetchTanks);
 
   const handleAddTank = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,6 +150,34 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
         return '#58585B'; // brandGrey
       default:
         return '#1E8A4C';
+    }
+  };
+
+  const getFillColor = (display_status: string) => {
+    switch (display_status) {
+      case 'inactive':
+        return '#E5E7EB';
+      case 'quarantine':
+        return '#EFF6FF';
+      case 'attention':
+        return '#FFFBEB';
+      case 'healthy':
+      default:
+        return '#F0FDF4';
+    }
+  };
+
+  const getStatusBadgeClass = (display_status: string) => {
+    switch (display_status) {
+      case 'quarantine':
+        return 'bg-blue-100 text-blue-800 border border-blue-200';
+      case 'attention':
+        return 'bg-amber-100 text-amber-800 border border-amber-200';
+      case 'inactive':
+        return 'bg-gray-100 text-gray-800 border border-gray-200';
+      case 'healthy':
+      default:
+        return 'bg-green-100 text-success border border-green-200';
     }
   };
 
@@ -221,7 +259,7 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
                         height="14"
                         rx="2"
                         stroke={getStatusColor(t.display_status)}
-                        fill={t.display_status === "inactive" ? "#E5E7EB" : "#F0FDF4"}
+                        fill={getFillColor(t.display_status)}
                       />
                       <line
                         x1="2"
@@ -272,7 +310,7 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
                         height="14"
                         rx="2"
                         stroke={getStatusColor(t.display_status)}
-                        fill={t.display_status === "inactive" ? "#E5E7EB" : "#F0FDF4"}
+                        fill={getFillColor(t.display_status)}
                       />
                       <line
                         x1="2"
@@ -326,7 +364,7 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
                     </div>
                     <div>
                       <span className="block text-xs font-semibold uppercase text-textSecondary">Display Status</span>
-                      <span className="inline-flex rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-success">
+                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${getStatusBadgeClass(selectedTank.display_status)}`}>
                         {selectedTank.display_status}
                       </span>
                     </div>
@@ -344,10 +382,6 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
                     <div>
                       <span className="block text-xs font-semibold uppercase text-textSecondary">Current Occupant Count</span>
                       <span className="text-sm font-bold text-textPrimary">{selectedTank.count}</span>
-                    </div>
-                    <div>
-                      <span className="block text-xs font-semibold uppercase text-textSecondary">Operational status</span>
-                      <span className="text-sm font-bold text-textPrimary capitalize">{selectedTank.status}</span>
                     </div>
                     <div>
                       <span className="block text-xs font-semibold uppercase text-textSecondary">Notes</span>
@@ -443,21 +477,25 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
               <div className="flex justify-end gap-2 pt-4 border-t border-border mt-4">
                 {isAdminMode && canDelete && (
                   <button
+                    disabled={tankActionBusy !== null}
                     onClick={async () => {
-                      if (!selectedTank) return;
+                      if (!selectedTank || tankActionBusy) return;
                       if (window.confirm('Delete this tank permanently?')) {
+                        setTankActionBusy('delete');
                         try {
                           await deleteTank(getId(selectedTank));
                           setSelectedTank(null);
                           await fetchTanks();
-                        } catch (err) {
-                          alert('Failed to delete tank');
+                        } catch (err: any) {
+                          setError(err.response?.data?.detail || 'Failed to delete tank');
+                        } finally {
+                          setTankActionBusy(null);
                         }
                       }
                     }}
-                    className="rounded-md border border-red-200 bg-red-50 text-red-600 px-4 py-2 text-sm font-semibold hover:bg-red-100 hover:border-red-300 transition-colors"
+                    className="rounded-md border border-red-200 bg-red-50 text-red-600 px-4 py-2 text-sm font-semibold hover:bg-red-100 hover:border-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Delete
+                    {tankActionBusy === 'delete' ? 'Deleting...' : 'Delete'}
                   </button>
                 )}
                 
@@ -467,19 +505,23 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
                   </div>
                 ) : (
                   <button
+                    disabled={tankActionBusy !== null}
                     onClick={async () => {
-                      if (!selectedTank) return;
+                      if (!selectedTank || tankActionBusy) return;
+                      setTankActionBusy('quarantine');
                       try {
                         await toggleTankQuarantine(getId(selectedTank), true);
                         await fetchTanks();
                         setSelectedTank({ ...selectedTank, display_status: 'quarantine' });
                       } catch (err: any) {
-                        alert(err.response?.data?.detail || 'Failed to place in quarantine');
+                        setError(err.response?.data?.detail || 'Failed to place in quarantine');
+                      } finally {
+                        setTankActionBusy(null);
                       }
                     }}
-                    className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 transition-colors"
+                    className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Place in Quarantine
+                    {tankActionBusy === 'quarantine' ? 'Placing...' : 'Place in Quarantine'}
                   </button>
                 )}
                 
