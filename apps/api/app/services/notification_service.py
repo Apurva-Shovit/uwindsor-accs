@@ -699,6 +699,8 @@ class NotificationService:
 
             pushed = await NotificationService._dispatch_push(new_alerts)
 
+            drifted = await NotificationService._report_census_drift()
+
             duration_ms = int((now_utc() - started).total_seconds() * 1000)
             await NotificationService._record_sweep(
                 last_run_at=started, duration_ms=duration_ms,
@@ -714,10 +716,41 @@ class NotificationService:
                 "swept_at": started.isoformat(),
                 "status": "completed",
                 "pushed": pushed,
+                "census_drift": drifted,
             }
         finally:
             if not force:
                 await NotificationService.release_lock(instance_id)
+
+    @staticmethod
+    async def _report_census_drift() -> int:
+        """Log any tank whose count no longer matches its census ledger.
+
+        Report only -- nothing here changes a count. Every write path is atomic
+        now, so a mismatch means something got past them, and that is worth a
+        log line an admin can act on rather than a silent correction. Repair is
+        a deliberate step: scripts/reconcile_census.py --repair.
+
+        A failure must not take the sweep down with it; this is a health check
+        bolted onto a job whose real work has already completed.
+        """
+        try:
+            from ..utils.census_reconcile import find_drift
+
+            drifted = await find_drift()
+        except Exception:
+            logger.exception("Census drift check failed")
+            return 0
+
+        for d in drifted:
+            logger.warning("Census drift: %s", d.describe())
+        if drifted:
+            logger.warning(
+                "%d tank assignment(s) disagree with the census ledger. "
+                "Run scripts/reconcile_census.py for detail.",
+                len(drifted),
+            )
+        return len(drifted)
 
     @staticmethod
     async def _dispatch_push(new_alerts: List[Dict[str, Any]]) -> Dict[str, int]:

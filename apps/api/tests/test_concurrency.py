@@ -500,3 +500,64 @@ async def test_submissions_without_a_key_are_unaffected(env):
         "tank_assignment_id": str(ta.id), "event_type": "death"
     }).to_list()
     assert len(deaths) == 3
+
+
+@pytest.mark.asyncio
+async def test_reconciler_finds_and_repairs_drift(env):
+    """The backstop: a counter that no longer matches its ledger must be visible."""
+    from app.utils.census_reconcile import find_drift, repair
+
+    ta = await _stock(env, env["tank_a"], env["project"], 60)
+
+    assert not [d for d in await find_drift() if d.assignment_id == str(ta.id)]
+
+    # Corrupt the counter the way a lost update used to.
+    await TankAssignment.get_motor_collection().update_one(
+        {"_id": ta.id}, {"$set": {"current_count": 71}}
+    )
+
+    drifted = [d for d in await find_drift() if d.assignment_id == str(ta.id)]
+    assert len(drifted) == 1
+    assert drifted[0].ledger_total == 60
+    assert drifted[0].current_count == 71
+    assert drifted[0].delta == 11
+
+    repaired = await repair(drifted, actor_id="test")
+    assert repaired == 1
+
+    ta = await TankAssignment.get(ta.id)
+    assert ta.current_count == 60
+    assert not [d for d in await find_drift() if d.assignment_id == str(ta.id)]
+
+    trail = await AuditLog.find({
+        "entity_id": str(ta.id), "action": "census_reconciliation"
+    }).to_list()
+    assert len(trail) == 1
+    await AuditLog.find({"action": "census_reconciliation"}).delete()
+
+
+@pytest.mark.asyncio
+async def test_reconciler_skips_a_count_that_moved_mid_repair(env):
+    """A repair computed against a stale value must not overwrite a newer one."""
+    from app.utils.census_reconcile import find_drift, repair
+
+    ta = await _stock(env, env["tank_a"], env["project"], 60)
+    await TankAssignment.get_motor_collection().update_one(
+        {"_id": ta.id}, {"$set": {"current_count": 71}}
+    )
+
+    drifted = [d for d in await find_drift() if d.assignment_id == str(ta.id)]
+
+    # Someone records a death between the scan and the repair.
+    await CensusService.create_census_event(
+        CensusEventCreate(
+            tank_assignment_id=str(ta.id), event_type="death", change=-1
+        ),
+        env["manager"],
+    )
+
+    repaired = await repair(drifted, actor_id="test")
+    assert repaired == 0, "stale repair clobbered a newer count"
+
+    ta = await TankAssignment.get(ta.id)
+    assert ta.current_count == 70
