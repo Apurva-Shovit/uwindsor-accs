@@ -1,5 +1,6 @@
 from datetime import datetime
 from beanie import Document
+from pymongo import ASCENDING, IndexModel
 from .base import MutableBaseFields
 
 class Facility(Document, MutableBaseFields):
@@ -32,8 +33,17 @@ class Tank(Document, MutableBaseFields):
     class Settings:
         name = "tanks"
         indexes = [
-            "room_id",
-            "tank_number",
-            "is_quarantined"
+            # Adding a tank is a find_one-then-insert, so only the database can
+            # stop two concurrent adds (or the boot seeder running on two
+            # replicas) from creating the same tank number twice in a room.
+            # Soft-deleted tanks are excluded so a retired number can be reused.
+            IndexModel(
+                [("room_id", ASCENDING), ("tank_number", ASCENDING)],
+                unique=True,
+                name="unique_tank_number_per_room",
+                partialFilterExpression={"deleted": False},
+            ),
+            IndexModel([("room_id", ASCENDING)]),
+            IndexModel([("is_quarantined", ASCENDING)]),
         ]
 

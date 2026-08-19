@@ -17,12 +17,59 @@ from .models.device_token import DeviceToken
 from .models.app_bundle import AppBundle
 
 import certifi
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Indexes that an earlier version of a model created and that the current
+# definition supersedes. Mongo refuses to redefine an index in place -- asking
+# for {tank_id, project_id} as unique when a non-unique index of that name
+# already exists fails with IndexKeySpecsConflict, and because init_beanie
+# builds indexes during startup that failure takes the whole API down rather
+# than surfacing as a warning. Dropping them first is what makes the upgrade
+# survivable on a database that already holds data.
+SUPERSEDED_INDEXES = {
+    "tank_assignments": [
+        # Replaced by the same key pattern with unique=True.
+        "tank_id_1_project_id_1",
+        # Replaced by the partial unique index on tank_id alone, which serves
+        # the same {tank_id, current_count: {$gt: 0}} lookups.
+        "tank_id_1_current_count_-1",
+    ],
+}
+
+
+async def drop_superseded_indexes(database) -> None:
+    """Remove indexes whose definition has changed, so init_beanie can rebuild them.
+
+    Idempotent: a name that is already gone is skipped, so this is a no-op on
+    every boot after the first.
+    """
+    for collection_name, index_names in SUPERSEDED_INDEXES.items():
+        collection = database[collection_name]
+        try:
+            existing = await collection.index_information()
+        except Exception:
+            continue  # collection does not exist yet on a fresh database
+
+        for name in index_names:
+            spec = existing.get(name)
+            if spec is None:
+                continue
+            # Only drop the old shape. Once the index has been rebuilt with the
+            # new options, leave it alone.
+            if name == "tank_id_1_project_id_1" and spec.get("unique"):
+                continue
+            await collection.drop_index(name)
+            logger.info("Dropped superseded index %s.%s", collection_name, name)
+
 
 async def init_db():
     kwargs = {}
     if "mongodb+srv://" in settings.MONGO_URI or "ssl=true" in settings.MONGO_URI.lower() or "tls=true" in settings.MONGO_URI.lower():
         kwargs["tlsCAFile"] = certifi.where()
     client = AsyncIOMotorClient(settings.MONGO_URI, **kwargs)
+    await drop_superseded_indexes(client[settings.MONGODB_DB_NAME])
     await init_beanie(
         database=client[settings.MONGODB_DB_NAME],
         document_models=[
