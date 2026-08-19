@@ -66,9 +66,9 @@ class UserService:
         # Claim the transition out of "pending" first. The check at the top of
         # this method reads a status that a second approver -- or the same
         # admin double-clicking -- also sees as pending, so only a conditional
-        # update can pick one winner. UserRepository.update is a save(), which
-        # $sets every field from the copy it read, so a loser would otherwise
-        # overwrite the winner's role and tank assignments with its own.
+        # update can pick one winner. This replaced a save(), which $sets every
+        # field from the copy it read, so a loser used to overwrite the
+        # winner's role and tank assignments with its own.
         won = await claim(
             User,
             target.id,
@@ -260,7 +260,12 @@ class UserService:
 
 
     @staticmethod
-    async def update_user_role(user_id: str, new_role: RoleEnum, current_user: User) -> Dict[str, Any]:
+    async def update_user_role(
+        user_id: str,
+        new_role: RoleEnum,
+        current_user: User,
+        expected_role: Optional[RoleEnum] = None,
+    ) -> Dict[str, Any]:
         if current_user.role == RoleEnum.manager:
             raise HTTPException(403, "Managers are not authorized to modify user roles")
 
@@ -273,9 +278,22 @@ class UserService:
             raise HTTPException(403, "Only Super Admin can manage Chair/Admin/Super Admin roles")
 
         before = target.model_dump()
-        target.role = new_role
-        await UserRepository.update(target)
 
+        # Write only the field this endpoint owns. This replaced a save(), which
+        # $sets every field from the copy read above -- so a concurrent
+        # tank-assignment or status edit was reverted by a role change that
+        # never intended to touch it.
+        expected = {"role": expected_role.value} if expected_role else {}
+        won = await claim(
+            User, target.id, expected, {"role": new_role.value}, require_change=False
+        )
+        if not won:
+            raise HTTPException(
+                409,
+                "This user's role was changed by someone else. Reopen the record and try again.",
+            )
+
+        target.role = new_role
         await AuditRepository.insert(AuditLog(
             actor_id=str(current_user.id),
             actor_role=current_user.role.value if current_user.role else "none",
@@ -288,7 +306,12 @@ class UserService:
         return {"id": str(target.id), "role": target.role.value}
 
     @staticmethod
-    async def update_user_status(user_id: str, new_status: str | StatusEnum, current_user: User) -> Dict[str, Any]:
+    async def update_user_status(
+        user_id: str,
+        new_status: str | StatusEnum,
+        current_user: User,
+        expected_status: Optional[StatusEnum] = None,
+    ) -> Dict[str, Any]:
         target = await UserRepository.get_by_id(user_id)
         if not target:
             raise HTTPException(404, "User not found")
@@ -303,9 +326,22 @@ class UserService:
             raise HTTPException(403, "Only Super Admin can suspend/reinstate Chair/Admin/Super Admin")
 
         before = target.model_dump()
-        target.status = status_enum
-        await UserRepository.update(target)
 
+        # Targeted write plus, when the client sent one, a check that the
+        # account is still in the state the admin was looking at. Suspend and
+        # reinstate are the same endpoint, so without this an admin acting on a
+        # stale list can reinstate someone another admin just suspended.
+        expected = {"status": expected_status.value} if expected_status else {}
+        won = await claim(
+            User, target.id, expected, {"status": status_enum.value}, require_change=False
+        )
+        if not won:
+            raise HTTPException(
+                409,
+                "This account's status was changed by someone else. Refresh and check before retrying.",
+            )
+
+        target.status = status_enum
         await AuditRepository.insert(AuditLog(
             actor_id=str(current_user.id),
             actor_role=current_user.role.value if current_user.role else "none",
@@ -319,15 +355,48 @@ class UserService:
 
 
     @staticmethod
-    async def update_tank_assignments(user_id: str, assigned_tank_ids: List[str], current_user: User) -> Dict[str, Any]:
+    async def update_tank_assignments(
+        user_id: str,
+        assigned_tank_ids: List[str],
+        current_user: User,
+        expected_tank_ids: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         target = await UserRepository.get_by_id(user_id)
         if not target:
             raise HTTPException(404, "User not found")
 
         before = target.model_dump()
-        target.assigned_tank_ids = assigned_tank_ids
-        await UserRepository.update(target)
 
+        # The client sends the whole checkbox list, so this replaces the set
+        # rather than merging into it. expected_tank_ids is the set the modal
+        # was opened with: if it no longer matches, another admin has edited
+        # this user's access and blindly writing would erase their change.
+        expected: Dict[str, Any] = {}
+        if expected_tank_ids is not None:
+            # Order is not meaningful in a checkbox list, so compare as a set.
+            if sorted(target.assigned_tank_ids or []) != sorted(expected_tank_ids):
+                raise HTTPException(
+                    409,
+                    "This user's tank access was changed by someone else. "
+                    "Reopen the record to see the current list before saving.",
+                )
+            expected = {"assigned_tank_ids": target.assigned_tank_ids or []}
+
+        won = await claim(
+            User,
+            target.id,
+            expected,
+            {"assigned_tank_ids": assigned_tank_ids},
+            require_change=False,
+        )
+        if not won:
+            raise HTTPException(
+                409,
+                "This user's tank access was changed by someone else. "
+                "Reopen the record to see the current list before saving.",
+            )
+
+        target.assigned_tank_ids = assigned_tank_ids
         await AuditRepository.insert(AuditLog(
             actor_id=str(current_user.id),
             actor_role=current_user.role.value if current_user.role else "none",

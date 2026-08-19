@@ -39,10 +39,16 @@ export const getUsers = (params?: { status_filter?: string; search?: string; pag
 export const getPending = () => api.get('/users/pending');
 export const approveUser = (id: string, body: any) => api.patch(`/users/${id}/approve`, body);
 export const rejectUser = (id: string, reason: string) => api.patch(`/users/${id}/reject`, { reason });
-export const updateUserRole = (id: string, role: string) => api.patch(`/users/${id}/role`, { role });
-export const updateUserStatus = (id: string, status: string) => api.patch(`/users/${id}/status`, { status });
-export const updateTankAssignments = (id: string, tank_ids: string[]) =>
-  api.patch(`/users/${id}/tank-assignments`, { assigned_tank_ids: tank_ids });
+// The optional expected_* values are what the admin's screen was showing when
+// they made the change. The API refuses the write if the record has moved on
+// since, so two admins editing the same user find out rather than silently
+// overwriting each other.
+export const updateUserRole = (id: string, role: string, expected_role?: string) =>
+  api.patch(`/users/${id}/role`, { role, expected_role });
+export const updateUserStatus = (id: string, status: string, expected_status?: string) =>
+  api.patch(`/users/${id}/status`, { status, expected_status });
+export const updateTankAssignments = (id: string, tank_ids: string[], expected_tank_ids?: string[]) =>
+  api.patch(`/users/${id}/tank-assignments`, { assigned_tank_ids: tank_ids, expected_tank_ids });
 
 // Facilities, Rooms, and Tanks APIs
 export const getFacilities = () => api.get('/facilities-structure/facilities');
