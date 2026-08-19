@@ -143,6 +143,34 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
     }
   };
 
+  const getFillColor = (display_status: string) => {
+    switch (display_status) {
+      case 'inactive':
+        return '#E5E7EB';
+      case 'quarantine':
+        return '#EFF6FF';
+      case 'attention':
+        return '#FFFBEB';
+      case 'healthy':
+      default:
+        return '#F0FDF4';
+    }
+  };
+
+  const getStatusBadgeClass = (display_status: string) => {
+    switch (display_status) {
+      case 'quarantine':
+        return 'bg-blue-100 text-blue-800 border border-blue-200';
+      case 'attention':
+        return 'bg-amber-100 text-amber-800 border border-amber-200';
+      case 'inactive':
+        return 'bg-gray-100 text-gray-800 border border-gray-200';
+      case 'healthy':
+      default:
+        return 'bg-green-100 text-success border border-green-200';
+    }
+  };
+
   const activeRoomNumber = tanks[0]?.room_number || '1';
   const activeFacilityName = tanks[0]?.facility_name || 'LaSalle Freshwater Restoration Ecology Centre';
 
@@ -221,7 +249,7 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
                         height="14"
                         rx="2"
                         stroke={getStatusColor(t.display_status)}
-                        fill={t.display_status === "inactive" ? "#E5E7EB" : "#F0FDF4"}
+                        fill={getFillColor(t.display_status)}
                       />
                       <line
                         x1="2"
@@ -272,7 +300,7 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
                         height="14"
                         rx="2"
                         stroke={getStatusColor(t.display_status)}
-                        fill={t.display_status === "inactive" ? "#E5E7EB" : "#F0FDF4"}
+                        fill={getFillColor(t.display_status)}
                       />
                       <line
                         x1="2"
@@ -326,7 +354,7 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
                     </div>
                     <div>
                       <span className="block text-xs font-semibold uppercase text-textSecondary">Display Status</span>
-                      <span className="inline-flex rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-success">
+                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${getStatusBadgeClass(selectedTank.display_status)}`}>
                         {selectedTank.display_status}
                       </span>
                     </div>
@@ -344,10 +372,6 @@ const rackBTotal = group2.reduce((sum, t) => sum + (t.count ?? 0), 0);
                     <div>
                       <span className="block text-xs font-semibold uppercase text-textSecondary">Current Occupant Count</span>
                       <span className="text-sm font-bold text-textPrimary">{selectedTank.count}</span>
-                    </div>
-                    <div>
-                      <span className="block text-xs font-semibold uppercase text-textSecondary">Operational status</span>
-                      <span className="text-sm font-bold text-textPrimary capitalize">{selectedTank.status}</span>
                     </div>
                     <div>
                       <span className="block text-xs font-semibold uppercase text-textSecondary">Notes</span>
