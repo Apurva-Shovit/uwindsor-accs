@@ -3,8 +3,11 @@
 The facility runs on shared tablets and a handful of desktops, and managers are
 authorised on every tank, so any given TankAssignment row can be written by
 several people in the same second. Read-modify-write in Python cannot survive
-that -- and because Beanie's .save() replaces the whole document, a lost update
-reverts every field, not just the counter it meant to change.
+that -- and because Beanie's .save() issues a $set over every field of the
+in-memory copy, a lost update reverts fields the request never meant to touch.
+Verified on beanie 1.30: loading a row twice, setting current_count on one copy
+and pi_name on the other, then saving both, leaves the count back at its
+original value.
 
 Everything here pushes the decision down to the database, so the outcome does
 not depend on how two requests interleave. It is the same compare-and-set shape

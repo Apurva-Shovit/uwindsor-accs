@@ -66,9 +66,9 @@ class UserService:
         # Claim the transition out of "pending" first. The check at the top of
         # this method reads a status that a second approver -- or the same
         # admin double-clicking -- also sees as pending, so only a conditional
-        # update can pick one winner. UserRepository.update is a whole-document
-        # save(), so a loser would otherwise overwrite the winner's role and
-        # tank assignments with its own.
+        # update can pick one winner. UserRepository.update is a save(), which
+        # $sets every field from the copy it read, so a loser would otherwise
+        # overwrite the winner's role and tank assignments with its own.
         won = await claim(
             User,
             target.id,
