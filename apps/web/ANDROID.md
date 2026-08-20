@@ -324,7 +324,7 @@ Repository → Settings → Secrets and variables → Actions:
 
 | Secret | Used by | Value |
 |---|---|---|
-| `MOBILE_API_URL` | both workflows | `https://uwindsor-accs.onrender.com` |
+| `MOBILE_API_URL` | both workflows | `https://uwindsor-accs-7k3r.onrender.com` |
 | `APP_UPDATE_TOKEN` | ota-bundle | any long random string; must match the API's env var |
 | `ANDROID_KEYSTORE_BASE64` | release-apk | `base64 -w0 acare-release.jks` |
 | `ANDROID_KEYSTORE_PASSWORD` | release-apk | from `keystore.properties` |
