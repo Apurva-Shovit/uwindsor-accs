@@ -131,9 +131,8 @@ export const ProjectReportPage: React.FC = () => {
               <BookOpen className="w-7 h-7 text-[#005596]" />
               {project.title}
             </h1>
-            <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold uppercase ${
-              project.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-            }`}>
+            <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold uppercase ${project.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+              }`}>
               {project.status}
             </span>
           </div>
@@ -282,57 +281,50 @@ export const ProjectReportPage: React.FC = () => {
       <div className="border-b border-slate-200 flex gap-2 overflow-x-auto print:hidden">
         <button
           onClick={() => setActiveTab('tanks')}
-          className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
-            activeTab === 'tanks' ? 'bg-[#005596] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-          }`}
+          className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${activeTab === 'tanks' ? 'bg-[#005596] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
         >
           Occupied Tanks ({occupied_tanks.length})
         </button>
         <button
           onClick={() => setActiveTab('deaths')}
-          className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
-            activeTab === 'deaths' ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-          }`}
+          className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${activeTab === 'deaths' ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
         >
           Deaths &amp; Mortality ({deaths_meta?.total_items ?? deaths.length})
         </button>
         <button
           onClick={() => setActiveTab('incidents')}
-          className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
-            activeTab === 'incidents' ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-          }`}
+          className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${activeTab === 'incidents' ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
         >
           Incident Reports ({incidents_meta?.total_items ?? incidents.length})
         </button>
         <button
           onClick={() => setActiveTab('census')}
-          className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
-            activeTab === 'census' ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-          }`}
+          className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${activeTab === 'census' ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
         >
           Census History ({census_meta?.total_items ?? census_events.length})
         </button>
         <button
           onClick={() => setActiveTab('quarantine')}
-          className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
-            activeTab === 'quarantine' ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-          }`}
+          className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${activeTab === 'quarantine' ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
         >
           Quarantine History ({quarantine_meta?.total_items ?? quarantine_events.length})
         </button>
         <button
           onClick={() => setActiveTab('water_quality')}
-          className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
-            activeTab === 'water_quality' ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-          }`}
+          className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${activeTab === 'water_quality' ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
         >
           Water Quality ({water_quality_meta?.total_items ?? water_quality_logs.length})
         </button>
         <button
           onClick={() => setActiveTab('audits')}
-          className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${
-            activeTab === 'audits' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-          }`}
+          className={`px-4 py-2.5 text-xs font-extrabold rounded-t-xl transition-colors whitespace-nowrap ${activeTab === 'audits' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
         >
           Audit Trail Logs ({audit_meta?.total_items ?? audit_logs.length})
         </button>
@@ -577,7 +569,7 @@ export const ProjectReportPage: React.FC = () => {
                     {quarantine_events.map((q: any) => (
                       <tr key={q.id} className="hover:bg-slate-50">
                         <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">{formatDate(q.date)}</td>
-                        <td className="p-3 font-bold text-slate-800">Tank {q.tank_number}</td>
+                        <td className="p-3 font-bold text-slate-800">{q.tank_number}</td>
                         <td className="p-3 whitespace-nowrap">
                           {q.event_type === 'quarantine_placed' ? (
                             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
@@ -638,7 +630,7 @@ export const ProjectReportPage: React.FC = () => {
                     {water_quality_logs.map((wq: any) => (
                       <tr key={wq.id} className="hover:bg-slate-50">
                         <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">{formatDate(wq.date)}</td>
-                        <td className="p-3 font-bold text-slate-800">Tank {wq.tank_number}</td>
+                        <td className="p-3 font-bold text-slate-800">{wq.tank_number}</td>
                         <td className="p-3 font-bold text-teal-700">{wq.pH ?? 'N/A'}</td>
                         <td className="p-3 font-bold text-teal-700">{wq.temperature_celsius ? `${wq.temperature_celsius}°C` : 'N/A'}</td>
                         <td className="p-3 font-bold text-teal-700">

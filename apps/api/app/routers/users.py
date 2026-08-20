@@ -37,12 +37,14 @@ async def reject_user(user_id: str, body: RejectRequest, current: User = Depends
 
 @router.patch("/{user_id}/role")
 async def update_user_role(user_id: str, body: UserRoleUpdate, current: User = Depends(require_chair_or_admin)):
-    return await UserService.update_user_role(user_id, body.role, current)
+    return await UserService.update_user_role(user_id, body.role, current, expected_role=body.expected_role)
 
 @router.patch("/{user_id}/status")
 async def update_user_status(user_id: str, body: UserStatusUpdate, current: User = Depends(require_manager_plus)):
-    return await UserService.update_user_status(user_id, body.status, current)
+    return await UserService.update_user_status(user_id, body.status, current, expected_status=body.expected_status)
 
 @router.patch("/{user_id}/tank-assignments")
 async def update_tank_assignments(user_id: str, body: UserTankAssignmentsUpdate, current: User = Depends(require_manager_plus)):
-    return await UserService.update_tank_assignments(user_id, body.assigned_tank_ids, current)
+    return await UserService.update_tank_assignments(
+        user_id, body.assigned_tank_ids, current, expected_tank_ids=body.expected_tank_ids
+    )

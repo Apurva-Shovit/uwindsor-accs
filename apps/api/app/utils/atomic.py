@@ -173,20 +173,34 @@ async def claim(
     doc_id: Any,
     expected: Dict[str, Any],
     updates: Dict[str, Any],
+    *,
+    require_change: bool = True,
 ) -> bool:
-    """Move a document from one state to another, once.
+    """Apply `updates` only if the document still matches `expected`.
 
-    Returns True for the request that performed the transition and False for
-    everyone else. A status check read into Python cannot do this: a manager
-    double-clicking "Approve" fires several requests that all read the document
-    while it is still pending, so they all pass the check. Only a conditional
-    update can pick a single winner.
+    Returns True for the request that got through and False for everyone else.
+    A status check read into Python cannot do this: a manager double-clicking
+    "Approve" fires several requests that all read the document while it is
+    still pending, so they all pass the check. Only a conditional update can
+    pick a single winner.
+
+    `require_change` chooses between the two things callers mean by "did I win":
+
+    - True (default) is for a one-way transition -- pending to active, active
+      to closed. Exactly one request may perform it, so a write that changed
+      nothing lost the race.
+    - False is for a conditional field edit, where the precondition is carried
+      by `expected` and writing the value it already holds is a legitimate
+      no-op. Setting a user's role to the role they already have must not be
+      reported as a conflict.
     """
     result = await model.get_motor_collection().update_one(
         {"_id": _as_object_id(doc_id), **expected},
         {"$set": updates},
     )
-    return result.modified_count == 1
+    if require_change:
+        return result.modified_count == 1
+    return result.matched_count == 1
 
 
 async def claim_request_id(event: CensusEvent) -> Optional[CensusEvent]:

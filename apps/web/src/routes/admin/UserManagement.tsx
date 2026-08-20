@@ -11,6 +11,7 @@ import {
   updateTankAssignments,
   approveUser,
 } from '../../lib/api';
+import { isConflict } from '../../lib/submission';
 import { Paginator } from '../../components/ui/Paginator';
 import { useAuth } from '../../context/AuthContext';
 import { useDebounce } from '../../hooks/useDebounce';
@@ -36,6 +37,15 @@ export const UserManagement: React.FC = () => {
   // Form states
   const [newRole, setNewRole] = useState<string>('staff');
   const [assignedTanks, setAssignedTanks] = useState<string[]>([]);
+  // What the record looked like when this modal was opened. Sent back with the
+  // change so the API can refuse it if another admin has edited the user since
+  // -- the modal can sit open for a long time, and the list behind it is a
+  // cache that may already be out of date when it opens.
+  const [baseline, setBaseline] = useState<{
+    role?: string;
+    status?: string;
+    tankIds: string[];
+  } | null>(null);
   const [actionError, setActionError] = useState('');
 
   // 1. Fetch Users List (Debounced search prevents excessive API calls)
@@ -95,48 +105,65 @@ export const UserManagement: React.FC = () => {
     });
   }, [tanksList]);
 
+  // Someone else got there first. Pull the list back in so the admin is looking
+  // at the real record before they decide what to do, and keep the modal open
+  // with the explanation rather than closing it over a change that never landed.
+  const handleActionError = (err: any) => {
+    setActionError(err.response?.data?.detail || err.message);
+    if (isConflict(err)) {
+      queryClient.invalidateQueries({ queryKey: ['adminUsersList'] });
+    }
+  };
+
   // Role Update Mutation
   const roleMutation = useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
-      const res = await updateUserRole(userId, role);
+      const res = await updateUserRole(userId, role, baseline?.role);
       return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminUsersList'] });
       closeModal();
     },
-    onError: (err: any) => setActionError(err.response?.data?.detail || err.message)
+    onError: handleActionError
   });
 
   // Status Update Mutation (Suspend/Reinstate)
   const statusMutation = useMutation({
     mutationFn: async ({ userId, status }: { userId: string; status: string; _reason?: string }) => {
-      const res = await updateUserStatus(userId, status);
+      // Suspend and reinstate are the same endpoint and the target is derived
+      // from what this screen last saw, so the baseline is what stops an admin
+      // reinstating someone another admin just suspended.
+      const res = await updateUserStatus(userId, status, baseline?.status);
       return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminUsersList'] });
       closeModal();
     },
-    onError: (err: any) => setActionError(err.response?.data?.detail || err.message)
+    onError: handleActionError
   });
 
   // Tank Assignments Mutation
   const tanksMutation = useMutation({
     mutationFn: async ({ userId, tankIds }: { userId: string; tankIds: string[] }) => {
-      const res = await updateTankAssignments(userId, tankIds);
+      // The whole checkbox list replaces the stored set, so without the
+      // baseline a save here would erase another admin's edit wholesale.
+      const res = await updateTankAssignments(userId, tankIds, baseline?.tankIds);
       return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminUsersList'] });
       closeModal();
     },
-    onError: (err: any) => setActionError(err.response?.data?.detail || err.message)
+    onError: handleActionError
   });
 
   // Approve User Mutation
   const approveMutation = useMutation({
     mutationFn: async ({ userId, role, tankIds }: { userId: string; role: string; tankIds: string[] }) => {
+      // Approval already claims the pending -> active transition server-side,
+      // so a second approver gets a 409 rather than overwriting the first.
       const res = await approveUser(userId, { role, assigned_tank_ids: tankIds });
       return res.data;
     },
@@ -144,13 +171,14 @@ export const UserManagement: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['adminUsersList'] });
       closeModal();
     },
-    onError: (err: any) => setActionError(err.response?.data?.detail || err.message)
+    onError: handleActionError
   });
 
   const closeModal = () => {
     setSelectedUser(null);
     setModalType(null);
     setActionError('');
+    setBaseline(null);
   };
 
   const openModal = (user: any, type: 'role' | 'status' | 'tanks' | 'approve') => {
@@ -159,6 +187,11 @@ export const UserManagement: React.FC = () => {
     setActionError('');
     setNewRole(user.role || user.requested_role || 'staff');
     setAssignedTanks(user.assigned_tank_ids || []);
+    setBaseline({
+      role: user.role,
+      status: user.status,
+      tankIds: user.assigned_tank_ids || [],
+    });
   };
 
   const toggleTankSelection = (tankId: string) => {
