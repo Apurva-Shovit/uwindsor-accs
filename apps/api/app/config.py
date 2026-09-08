@@ -63,7 +63,10 @@ class Settings(BaseSettings):
     RATE_LIMIT_APP_UPDATE_CHECK: str = "120/minute"
 
     # --- Email Notification Settings ----------------------------------------
-    # Outbound SMTP configuration. If SMTP_HOST is unset, email dispatches are logged in mock mode.
+    # Outbound SMTP / HTTPS configuration.
+    # If RESEND_API_KEY is set, sends via HTTPS (port 443), which bypasses local network firewall blocks.
+    # If SMTP_HOST is unset and no API key is provided, email dispatches operate in structured MOCK mode.
+    RESEND_API_KEY: str = ""
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
     SMTP_USERNAME: str = ""

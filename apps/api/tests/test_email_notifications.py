@@ -109,7 +109,11 @@ async def test_render_missing_log_email():
 
 
 @pytest.mark.asyncio
-async def test_email_dispatch_and_deduplication(email_env):
+async def test_email_dispatch_and_deduplication(email_env, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "SMTP_HOST", "")
+    monkeypatch.setattr(settings, "RESEND_API_KEY", "")
+
     settings_rec = await NotificationSettingsStore.get()
     settings_rec.sender_email = "custom-sender@uwindsor.ca"
     await settings_rec.save()

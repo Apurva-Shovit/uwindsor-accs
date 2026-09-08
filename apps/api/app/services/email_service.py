@@ -2,25 +2,27 @@
 Email delivery service for ACARE facility alerts.
 
 Handles building and dispatching emails for missing daily log notifications and
-other facility alerts. Supports real SMTP delivery when configured via
-environment variables, and falls back to structured mock log entries when SMTP
-is unconfigured.
+other facility alerts. Supports real SMTP delivery, Resend HTTPS API delivery
+(port 443, which bypasses network firewall port blocks), and structured mock fallback.
 """
 import asyncio
 import logging
+import socket
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import List, Optional, Tuple
+
+import httpx
 
 from ..config import settings
 
 logger = logging.getLogger(__name__)
 
 
-def is_smtp_configured() -> bool:
-    """True when SMTP server details are provided in settings."""
-    return bool((settings.SMTP_HOST or "").strip())
+def is_email_configured() -> bool:
+    """True when SMTP server details or Resend API key is provided."""
+    return bool((settings.RESEND_API_KEY or "").strip()) or bool((settings.SMTP_HOST or "").strip())
 
 
 def _send_via_smtp(
@@ -31,7 +33,7 @@ def _send_via_smtp(
     body_text: str,
     body_html: str,
 ) -> Tuple[bool, Optional[str]]:
-    """Synchronous SMTP sending logic, executed in a thread pool via asyncio.to_thread."""
+    """Synchronous SMTP sending logic with port fallback and timeout handling."""
     recipients = list(set(to_addrs + cc_addrs))
     if not recipients:
         return False, "No recipient email addresses provided"
@@ -46,21 +48,80 @@ def _send_via_smtp(
     msg.attach(MIMEText(body_text, "plain", "utf-8"))
     msg.attach(MIMEText(body_html, "html", "utf-8"))
 
-    try:
-        if settings.SMTP_PORT == 465:
-            server = smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15)
-        else:
-            server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15)
+    # Try configured port first, fallback to 465 SSL if 587 times out
+    ports_to_try = [settings.SMTP_PORT]
+    if settings.SMTP_PORT == 587 and 465 not in ports_to_try:
+        ports_to_try.append(465)
 
-        with server:
-            if settings.SMTP_USE_TLS and settings.SMTP_PORT != 465:
-                server.starttls()
-            if settings.SMTP_USERNAME and settings.SMTP_PASSWORD:
-                server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
-            server.sendmail(sender, recipients, msg.as_string())
-        return True, None
+    last_error = "Connection timed out"
+
+    for port in ports_to_try:
+        try:
+            if port == 465:
+                server = smtplib.SMTP_SSL(settings.SMTP_HOST, 465, timeout=10)
+            else:
+                server = smtplib.SMTP(settings.SMTP_HOST, port, timeout=10)
+
+            with server:
+                if settings.SMTP_USE_TLS and port != 465:
+                    server.starttls()
+                if settings.SMTP_USERNAME and settings.SMTP_PASSWORD:
+                    server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+                server.sendmail(sender, recipients, msg.as_string())
+            return True, None
+        except (TimeoutError, socket.timeout, OSError) as exc:
+            last_error = f"SMTP connect to {settings.SMTP_HOST}:{port} timed out (local firewall may block SMTP ports 587/465)"
+            if port == 587 and len(ports_to_try) > 1:
+                logger.info("SMTP connect to %s:587 timed out; attempting SSL connection on port 465", settings.SMTP_HOST)
+                continue
+            logger.warning(last_error)
+            return False, last_error
+        except smtplib.SMTPAuthenticationError as exc:
+            logger.error("SMTP Authentication failed for %s: %s", settings.SMTP_USERNAME, exc)
+            return False, f"SMTP Authentication failed: {exc}"
+        except Exception as exc:
+            logger.error("SMTP email send failed on port %s: %s", port, exc)
+            return False, str(exc)
+
+    return False, last_error
+
+
+async def _send_via_resend(
+    sender: str,
+    to_addrs: List[str],
+    cc_addrs: List[str],
+    subject: str,
+    body_html: str,
+    body_text: str,
+) -> Tuple[bool, Optional[str]]:
+    """Send via Resend HTTP API on port 443 (HTTPS), bypassing firewall SMTP blocks."""
+    url = "https://api.resend.com/emails"
+    headers = {
+        "Authorization": f"Bearer {settings.RESEND_API_KEY.strip()}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "from": sender if "@" in sender else f"ACARE Alerts <onboarding@resend.dev>",
+        "to": to_addrs,
+        "cc": cc_addrs if cc_addrs else None,
+        "subject": subject,
+        "html": body_html,
+        "text": body_text,
+    }
+    # Clean None values
+    payload = {k: v for k, v in payload.items() if v is not None}
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            if resp.status_code in (200, 201):
+                logger.info("Email dispatched successfully via Resend HTTPS API")
+                return True, None
+            error_msg = f"Resend API error ({resp.status_code}): {resp.text}"
+            logger.error(error_msg)
+            return False, error_msg
     except Exception as exc:
-        logger.exception("SMTP email send failed: %s", exc)
+        logger.error("Resend API request failed: %s", exc)
         return False, str(exc)
 
 
@@ -73,7 +134,7 @@ async def send_email(
     body_html: str,
 ) -> Tuple[str, Optional[str]]:
     """
-    Dispatch an email.
+    Dispatch an email via HTTPS (Resend), SMTP, or mock logger.
 
     Returns a tuple of (status, error_message), where status is one of
     'sent', 'mock_sent', or 'failed'.
@@ -85,7 +146,12 @@ async def send_email(
     if not to_addrs and not cc_addrs:
         return "failed", "No recipient email addresses provided"
 
-    if not is_smtp_configured():
+    # Resend API HTTPS priority (port 443 works on all firewalled networks)
+    if settings.RESEND_API_KEY and settings.RESEND_API_KEY.strip():
+        success, err = await _send_via_resend(sender, to_addrs, cc_addrs, subject, body_html, body_text)
+        return ("sent", None) if success else ("failed", err)
+
+    if not is_email_configured():
         logger.info(
             "[EMAIL MOCK DISPATCH] From: %s | To: %s | CC: %s | Subject: '%s'",
             sender,
