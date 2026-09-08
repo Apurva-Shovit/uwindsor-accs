@@ -1,8 +1,10 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useSidebar } from '../../context/SidebarContext';
 import { LogOut, Shield, User as UserIcon, Menu } from 'lucide-react';
 import { NotificationBell } from '../notifications/NotificationBell';
+import { accountPathForRole } from '../../lib/roles';
 
 export const Topbar: React.FC = () => {
   const { user, logout } = useAuth();
@@ -34,14 +36,20 @@ export const Topbar: React.FC = () => {
       <div className="flex flex-shrink-0 items-center space-x-2 sm:space-x-4">
         {user && (
           <div className="flex items-center space-x-2 sm:space-x-3">
-            <span className="hidden items-center rounded-full bg-brandBlueTint px-3 py-1 text-xs font-medium text-brandBlueDark md:inline-flex">
-              <Shield className="mr-1 h-3 w-3" />
-              {user.role}
-            </span>
-            <div className="hidden items-center text-sm font-medium text-textPrimary md:flex">
-              <UserIcon className="mr-1.5 h-4 w-4 text-brandGrey" />
-              {user.first_name} {user.last_name}
-            </div>
+            <Link
+              to={accountPathForRole(user.role)}
+              className="group flex items-center space-x-2 rounded-lg p-1.5 transition-colors hover:bg-slate-100"
+              title="View My Account & Profile Settings"
+            >
+              <span className="hidden items-center rounded-full bg-brandBlueTint px-3 py-1 text-xs font-medium text-brandBlueDark group-hover:bg-blue-100 md:inline-flex">
+                <Shield className="mr-1 h-3 w-3" />
+                {user.role}
+              </span>
+              <div className="flex items-center text-sm font-medium text-textPrimary group-hover:text-brandBlue">
+                <UserIcon className="mr-1.5 h-4 w-4 text-brandGrey group-hover:text-brandBlue" />
+                <span>{user.first_name} {user.last_name}</span>
+              </div>
+            </Link>
             <NotificationBell />
             <button
               onClick={logout}

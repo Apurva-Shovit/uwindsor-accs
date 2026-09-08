@@ -2,7 +2,10 @@ from fastapi import APIRouter, Depends, status, Request, Response
 from ..core.limiter import limiter
 from ..config import settings
 from ..models.user import User
-from ..schemas.auth import SignupRequest, LoginRequest, TokenResponse, MeResponse
+from ..schemas.auth import (
+    SignupRequest, LoginRequest, TokenResponse, MeResponse,
+    ChangePasswordRequest, ChangeEmailRequest, VerifyPasswordRequest
+)
 from ..services.auth_service import AuthService
 from ..core.permissions import get_current_user
 from ..core.security import token_lifetime
@@ -37,8 +40,18 @@ async def logout(response: Response, current: User = Depends(get_current_user)):
 
 @router.get("/me", response_model=MeResponse)
 async def me(user: User = Depends(get_current_user)):
-    return MeResponse(
-        id=str(user.id), email=user.email, first_name=user.first_name,
-        last_name=user.last_name, role=user.role.value if user.role else None,
-        status=user.status.value, assigned_tank_ids=user.assigned_tank_ids,
-    )
+    return await AuthService.get_me(user)
+
+@router.post("/verify-password")
+async def verify_password(body: VerifyPasswordRequest, current: User = Depends(get_current_user)):
+    return await AuthService.verify_password_current(current, body.password)
+
+@router.post("/change-password")
+async def change_password(body: ChangePasswordRequest, current: User = Depends(get_current_user)):
+    return await AuthService.change_password(current, body)
+
+@router.post("/change-email")
+async def change_email(body: ChangeEmailRequest, current: User = Depends(get_current_user)):
+    return await AuthService.change_email(current, body)
+
+

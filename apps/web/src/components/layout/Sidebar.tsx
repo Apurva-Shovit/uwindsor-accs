@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
-import { Users, LayoutDashboard, Database, Activity, ClipboardList, TrendingUp, RefreshCw, BookOpen, FileText, ChevronDown, Fish, Download, Bell } from 'lucide-react';
+import { NavLink, useLocation, Link } from 'react-router-dom';
+import { Users, LayoutDashboard, Database, Activity, ClipboardList, TrendingUp, RefreshCw, BookOpen, FileText, ChevronDown, Fish, Download, Bell, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSidebar } from '../../context/SidebarContext';
 import { useIsDesktop } from '../../hooks/useMediaQuery';
 import { notificationsPathForRole, useNotificationFeed } from '../../lib/notifications';
+import { accountPathForRole } from '../../lib/roles';
 
 export const Sidebar: React.FC = () => {
   const { user } = useAuth();
@@ -85,10 +86,10 @@ export const Sidebar: React.FC = () => {
     }`;
 
   const asideClass = isDesktop
-    ? `border-r border-border bg-white transition-all duration-300 ease-in-out h-full overflow-y-auto flex-shrink-0 ${
+    ? `border-r border-border bg-white transition-all duration-300 ease-in-out h-full flex flex-col flex-shrink-0 ${
         isSidebarOpen ? 'w-64 p-4' : 'w-16 p-2'
       }`
-    : `fixed left-0 top-16 bottom-0 z-40 w-64 p-4 border-r border-border bg-white overflow-y-auto overscroll-contain shadow-xl transition-transform duration-300 ease-in-out ${
+    : `fixed left-0 top-16 bottom-0 z-40 w-64 p-4 border-r border-border bg-white flex flex-col overscroll-contain shadow-xl transition-transform duration-300 ease-in-out ${
         isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
       }`;
 
@@ -113,7 +114,11 @@ export const Sidebar: React.FC = () => {
       className={asideClass}
     >
       {!isDesktop && (
-        <div className="mb-3 flex items-center gap-3 border-b border-border pb-3">
+        <Link
+          to={accountPathForRole(user?.role)}
+          className="mb-3 flex items-center gap-3 border-b border-border pb-3 hover:bg-slate-50 p-1 rounded-lg transition-colors flex-shrink-0"
+          title="View My Account"
+        >
           <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brandBlueTint text-sm font-bold text-brandBlueDark">
             {`${user?.first_name?.[0] ?? ''}${user?.last_name?.[0] ?? ''}`}
           </div>
@@ -125,9 +130,9 @@ export const Sidebar: React.FC = () => {
               {user?.role?.replace(/_/g, ' ')}
             </div>
           </div>
-        </div>
+        </Link>
       )}
-      <nav className="space-y-1">
+      <nav className="flex-1 overflow-y-auto space-y-1 pr-1">
         {/* 1. Dashboard */}
         {isManagerPlus && (
           <NavLink
@@ -230,7 +235,7 @@ export const Sidebar: React.FC = () => {
                   title="Quarantine Monitor"
                   className={({ isActive }) => linkClass(isActive)}
                 >
-                  <Activity className={`h-4 w-4 text-amber-600 ${showLabels ? 'mr-2.5' : ''}`} />
+                  <Activity className={`h-4 w-4 text-[#005596] ${showLabels ? 'mr-2.5' : ''}`} />
                   {showLabels && <span className="text-xs font-semibold">Quarantine Monitor</span>}
                 </NavLink>
               </div>
@@ -366,6 +371,19 @@ export const Sidebar: React.FC = () => {
           </NavLink>
         )}
       </nav>
+
+      {/* 13. My Account (Pinned at the very bottom of the sidebar) */}
+      <div className="mt-auto pt-3 border-t border-slate-200 flex-shrink-0">
+        <NavLink
+          end
+          to={accountPathForRole(user?.role)}
+          title="My Account"
+          className={({ isActive }) => linkClass(isActive)}
+        >
+          <UserIcon className={`h-5 w-5 text-[#005596] ${showLabels ? 'mr-3' : ''}`} />
+          {showLabels && <span className="font-bold text-[#005596]">My Account</span>}
+        </NavLink>
+      </div>
     </aside>
     </>
   );

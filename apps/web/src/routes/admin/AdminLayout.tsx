@@ -12,12 +12,9 @@ import { TankHistoryPage } from './TankHistoryPage';
 import { UserManagement } from './UserManagement';
 import { ExportPage } from './ExportPage';
 import { NotificationsPage } from '../NotificationsPage';
-
-
+import { AccountPage } from '../AccountPage';
 
 export const AdminLayout: React.FC = () => {
-
-
 
   return (
     <div className="flex flex-col h-screen max-lg:h-[100dvh] overflow-hidden bg-surface">
@@ -41,6 +38,8 @@ export const AdminLayout: React.FC = () => {
             <Route path="audit-logs" element={<AuditLogs />} />
             <Route path="export" element={<ExportPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="account" element={<AccountPage />} />
+            <Route path="me" element={<AccountPage />} />
             <Route path="*" element={<Navigate to="/admin" replace />} />
           </Routes>
         </main>
