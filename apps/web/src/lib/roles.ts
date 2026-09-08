@@ -22,3 +22,8 @@ export const isChairOrAdmin = (role?: string | null): boolean =>
 /** Where a signed-in user should land. AdminLayout forwards /admin to its dashboard. */
 export const homePathForRole = (role?: string | null): string =>
   isManagerPlus(role) ? '/admin' : '/staff/tanks';
+
+/** Account / Profile Settings page path for the given role. */
+export const accountPathForRole = (role?: string | null): string =>
+  isManagerPlus(role) ? '/admin/account' : '/staff/account';
+

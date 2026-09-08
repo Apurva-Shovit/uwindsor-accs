@@ -1,7 +1,10 @@
 from fastapi import HTTPException
 from ..models.user import User, RoleEnum, StatusEnum
 from ..models.audit_log import AuditLog
-from ..schemas.auth import SignupRequest, LoginRequest
+from ..schemas.auth import (
+    SignupRequest, LoginRequest, MeResponse,
+    ChangePasswordRequest, ChangeEmailRequest
+)
 from ..core.security import hash_password, verify_password, create_access_token
 from ..repositories.user_repository import UserRepository
 from ..repositories.audit_repository import AuditRepository
@@ -109,3 +112,102 @@ class AuthService:
             entity_type="user",
             entity_id=str(current_user.id)
         ))
+
+    @staticmethod
+    async def get_me(current_user: User) -> MeResponse:
+        from beanie import PydanticObjectId
+        from ..models.facility import Tank, Room, Facility
+        from ..schemas.auth import AssignedTankDetail
+
+        assigned_tanks: list[AssignedTankDetail] = []
+        if current_user.assigned_tank_ids:
+            valid_ids = [PydanticObjectId(tid) for tid in current_user.assigned_tank_ids if PydanticObjectId.is_valid(tid)]
+            if valid_ids:
+                tanks = await Tank.find({"_id": {"$in": valid_ids}, "deleted": False}).to_list()
+                room_ids = [PydanticObjectId(t.room_id) for t in tanks if t.room_id and PydanticObjectId.is_valid(t.room_id)]
+                rooms = await Room.find({"_id": {"$in": room_ids}}).to_list() if room_ids else []
+                room_map = {str(r.id): r for r in rooms}
+
+                fac_ids = [PydanticObjectId(r.facility_id) for r in rooms if r.facility_id and PydanticObjectId.is_valid(r.facility_id)]
+                facilities = await Facility.find({"_id": {"$in": fac_ids}}).to_list() if fac_ids else []
+                facility_map = {str(f.id): f.name for f in facilities}
+
+                for t in tanks:
+                    r = room_map.get(t.room_id)
+                    fac_name = facility_map.get(r.facility_id) if r else None
+                    assigned_tanks.append(AssignedTankDetail(
+                        id=str(t.id),
+                        tank_number=t.tank_number,
+                        room_number=r.room_number if r else None,
+                        facility_name=fac_name,
+                        status=t.status
+                    ))
+
+        return MeResponse(
+            id=str(current_user.id),
+            email=current_user.email,
+            first_name=current_user.first_name,
+            last_name=current_user.last_name,
+            role=current_user.role.value if current_user.role else None,
+            status=current_user.status.value,
+            assigned_tank_ids=current_user.assigned_tank_ids,
+            assigned_tanks=assigned_tanks,
+            created_at=current_user.created_at.isoformat() if current_user.created_at else None
+        )
+
+    @staticmethod
+    async def change_password(current_user: User, body: ChangePasswordRequest) -> dict:
+        if not verify_password(body.old_password, current_user.password_hash):
+            raise HTTPException(400, "Incorrect current password")
+
+        if body.new_password != body.confirm_password:
+            raise HTTPException(400, "New passwords do not match")
+
+        if body.old_password == body.new_password:
+            raise HTTPException(400, "New password cannot be the same as your current password")
+
+        if len(body.new_password) < 6:
+            raise HTTPException(400, "New password must be at least 6 characters long")
+
+        current_user.password_hash = hash_password(body.new_password)
+        await current_user.save()
+
+        await AuditRepository.insert(AuditLog(
+            actor_id=str(current_user.id),
+            actor_role=current_user.role.value if current_user.role else "none",
+            action="change_password",
+            entity_type="user",
+            entity_id=str(current_user.id)
+        ))
+
+        return {"message": "Password changed successfully"}
+
+    @staticmethod
+    async def change_email(current_user: User, body: ChangeEmailRequest) -> dict:
+        if not verify_password(body.current_password, current_user.password_hash):
+            raise HTTPException(400, "Incorrect password")
+
+        new_email_clean = body.new_email.lower().strip()
+        if new_email_clean == current_user.email.lower():
+            raise HTTPException(400, "New email address must be different from your current email address")
+
+        existing = await UserRepository.get_by_email(new_email_clean)
+        if existing and str(existing.id) != str(current_user.id):
+            raise HTTPException(409, "An account with this email address already exists")
+
+        old_email = current_user.email
+        current_user.email = new_email_clean
+        await current_user.save()
+
+        await AuditRepository.insert(AuditLog(
+            actor_id=str(current_user.id),
+            actor_role=current_user.role.value if current_user.role else "none",
+            action="change_email",
+            entity_type="user",
+            entity_id=str(current_user.id),
+            before={"email": old_email},
+            after={"email": current_user.email}
+        ))
+
+        return {"message": "Email address updated successfully", "email": current_user.email}
+
