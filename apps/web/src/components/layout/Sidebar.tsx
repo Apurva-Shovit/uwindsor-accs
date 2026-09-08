@@ -86,10 +86,10 @@ export const Sidebar: React.FC = () => {
     }`;
 
   const asideClass = isDesktop
-    ? `border-r border-border bg-white transition-all duration-300 ease-in-out h-full overflow-y-auto flex-shrink-0 ${
+    ? `border-r border-border bg-white transition-all duration-300 ease-in-out h-full flex flex-col flex-shrink-0 ${
         isSidebarOpen ? 'w-64 p-4' : 'w-16 p-2'
       }`
-    : `fixed left-0 top-16 bottom-0 z-40 w-64 p-4 border-r border-border bg-white overflow-y-auto overscroll-contain shadow-xl transition-transform duration-300 ease-in-out ${
+    : `fixed left-0 top-16 bottom-0 z-40 w-64 p-4 border-r border-border bg-white flex flex-col overscroll-contain shadow-xl transition-transform duration-300 ease-in-out ${
         isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
       }`;
 
@@ -116,7 +116,7 @@ export const Sidebar: React.FC = () => {
       {!isDesktop && (
         <Link
           to={accountPathForRole(user?.role)}
-          className="mb-3 flex items-center gap-3 border-b border-border pb-3 hover:bg-slate-50 p-1 rounded-lg transition-colors"
+          className="mb-3 flex items-center gap-3 border-b border-border pb-3 hover:bg-slate-50 p-1 rounded-lg transition-colors flex-shrink-0"
           title="View My Account"
         >
           <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brandBlueTint text-sm font-bold text-brandBlueDark">
@@ -132,7 +132,7 @@ export const Sidebar: React.FC = () => {
           </div>
         </Link>
       )}
-      <nav className="space-y-1">
+      <nav className="flex-1 overflow-y-auto space-y-1 pr-1">
         {/* 1. Dashboard */}
         {isManagerPlus && (
           <NavLink
@@ -370,20 +370,20 @@ export const Sidebar: React.FC = () => {
             {showLabels && <span>Data Export</span>}
           </NavLink>
         )}
-
-        {/* 13. My Account (Fixed at bottom of menu) */}
-        <div className="pt-2 mt-2 border-t border-slate-200">
-          <NavLink
-            end
-            to={accountPathForRole(user?.role)}
-            title="My Account"
-            className={({ isActive }) => linkClass(isActive)}
-          >
-            <UserIcon className={`h-5 w-5 text-[#005596] ${showLabels ? 'mr-3' : ''}`} />
-            {showLabels && <span className="font-bold text-[#005596]">My Account</span>}
-          </NavLink>
-        </div>
       </nav>
+
+      {/* 13. My Account (Pinned at the very bottom of the sidebar) */}
+      <div className="mt-auto pt-3 border-t border-slate-200 flex-shrink-0">
+        <NavLink
+          end
+          to={accountPathForRole(user?.role)}
+          title="My Account"
+          className={({ isActive }) => linkClass(isActive)}
+        >
+          <UserIcon className={`h-5 w-5 text-[#005596] ${showLabels ? 'mr-3' : ''}`} />
+          {showLabels && <span className="font-bold text-[#005596]">My Account</span>}
+        </NavLink>
+      </div>
     </aside>
     </>
   );

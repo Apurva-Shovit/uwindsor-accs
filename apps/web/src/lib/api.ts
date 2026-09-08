@@ -147,10 +147,13 @@ export const getExportPreview = (params?: { start_date?: string; end_date?: stri
 export const downloadExport = (params: { start_date?: string; end_date?: string; format: 'json' | 'csv' }) =>
   api.get('/export/backup', { params, responseType: 'blob' });
 
-// Account & Profile Settings
+export const verifyPassword = (password: string) =>
+  api.post('/auth/verify-password', { password });
+
 export const changePassword = (data: { old_password: string; new_password: string; confirm_password: string }) =>
   api.post('/auth/change-password', data);
 
 export const changeEmail = (data: { new_email: string; current_password: string }) =>
   api.post('/auth/change-email', data);
+
 

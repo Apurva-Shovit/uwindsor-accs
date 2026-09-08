@@ -54,3 +54,11 @@ class ChangeEmailRequest(BaseModel):
     new_email: EmailStr
     current_password: str
 
+class VerifyPasswordRequest(BaseModel):
+    password: str
+
+class VerifyPasswordResponse(BaseModel):
+    valid: bool = True
+
+
+

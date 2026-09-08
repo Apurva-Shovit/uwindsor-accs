@@ -211,3 +211,10 @@ class AuthService:
 
         return {"message": "Email address updated successfully", "email": current_user.email}
 
+    @staticmethod
+    async def verify_password_current(current_user: User, password: str) -> dict:
+        if not verify_password(password, current_user.password_hash):
+            raise HTTPException(400, "Incorrect password")
+        return {"valid": True}
+
+

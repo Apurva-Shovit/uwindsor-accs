@@ -4,7 +4,7 @@ from ..config import settings
 from ..models.user import User
 from ..schemas.auth import (
     SignupRequest, LoginRequest, TokenResponse, MeResponse,
-    ChangePasswordRequest, ChangeEmailRequest
+    ChangePasswordRequest, ChangeEmailRequest, VerifyPasswordRequest
 )
 from ..services.auth_service import AuthService
 from ..core.permissions import get_current_user
@@ -42,6 +42,10 @@ async def logout(response: Response, current: User = Depends(get_current_user)):
 async def me(user: User = Depends(get_current_user)):
     return await AuthService.get_me(user)
 
+@router.post("/verify-password")
+async def verify_password(body: VerifyPasswordRequest, current: User = Depends(get_current_user)):
+    return await AuthService.verify_password_current(current, body.password)
+
 @router.post("/change-password")
 async def change_password(body: ChangePasswordRequest, current: User = Depends(get_current_user)):
     return await AuthService.change_password(current, body)
@@ -49,4 +53,5 @@ async def change_password(body: ChangePasswordRequest, current: User = Depends(g
 @router.post("/change-email")
 async def change_email(body: ChangeEmailRequest, current: User = Depends(get_current_user)):
     return await AuthService.change_email(current, body)
+
 
