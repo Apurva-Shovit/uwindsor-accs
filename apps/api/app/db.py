@@ -13,6 +13,7 @@ from .models.census_event import CensusEvent
 from .models.individual_fish import IndividualFish
 from .models.quarantine import QuarantineExemption
 from .models.notification import Notification, NotificationSettings, NotificationSweepState
+from .models.email_log import EmailLog
 from .models.device_token import DeviceToken
 from .models.app_bundle import AppBundle
 
@@ -77,7 +78,7 @@ async def init_db():
             WaterQualityLog, IncidentReport, Project,
             TankAssignment, CensusEvent, Species,
             IndividualFish, QuarantineExemption,
-            Notification, NotificationSettings, NotificationSweepState,
+            Notification, NotificationSettings, NotificationSweepState, EmailLog,
             DeviceToken, AppBundle,
         ],
     )

@@ -22,7 +22,7 @@ class MarkReadRequest(BaseModel):
 
 class DeadlineUpdate(BaseModel):
     """
-    The daily water quality cutoff, as a wall-clock time in a named zone.
+    The daily water quality cutoff and notification settings.
 
     A zone name rather than an offset: staff mean the same 3 PM either side of
     the daylight-saving change, which a stored offset would not give them.
@@ -30,6 +30,8 @@ class DeadlineUpdate(BaseModel):
     hour: int = Field(ge=0, le=23)
     minute: int = Field(default=0, ge=0, le=59)
     timezone: str = "America/Toronto"
+    sender_email: Optional[str] = None
+    email_notifications_enabled: Optional[bool] = None
 
 
 class DeviceRegistration(BaseModel):
@@ -73,7 +75,12 @@ async def update_notification_settings(
 ):
     """Chair, admin and super admin only — this changes what everyone is held to."""
     return await NotificationService.update_settings(
-        body.hour, body.minute, body.timezone, current
+        hour=body.hour,
+        minute=body.minute,
+        timezone_name=body.timezone,
+        current_user=current,
+        sender_email=body.sender_email,
+        email_notifications_enabled=body.email_notifications_enabled,
     )
 
 

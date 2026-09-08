@@ -534,6 +534,8 @@ class NotificationService:
         deadline = await NotificationSettingsStore.deadline()
         return {
             "deadline": deadline.as_dict(),
+            "sender_email": record.sender_email or settings.DEFAULT_SENDER_EMAIL or "acare-alerts@uwindsor.ca",
+            "email_notifications_enabled": record.email_notifications_enabled,
             "updated_at": as_utc(record.updated_at).isoformat() if record.updated_at else None,
             "updated_by": record.updated_by,
             "updated_by_name": await EntityResolver.resolve_user_name(record.updated_by),
@@ -541,33 +543,44 @@ class NotificationService:
 
     @staticmethod
     async def update_settings(
-        hour: int, minute: int, timezone_name: str, current_user: User, now: Optional[datetime] = None
+        hour: int,
+        minute: int,
+        timezone_name: str,
+        current_user: User,
+        sender_email: Optional[str] = None,
+        email_notifications_enabled: Optional[bool] = None,
+        now: Optional[datetime] = None,
     ) -> Dict[str, Any]:
         """
-        Move the daily deadline, then rebuild anything that was measured against
-        the old one.
-
-        Missed-deadline alerts are normally never rewritten, but they quote the
-        cutoff they were generated against — leaving them in place after the
-        cutoff moves would leave the feed asserting a deadline that no longer
-        exists. Dropping and regenerating them is the only way the panel and the
-        setting agree.
+        Move the daily deadline or update email sender settings, then rebuild
+        anything measured against the old cutoff if the deadline moved.
         """
-        NotificationSettingsStore.validate(hour, minute, timezone_name)
+        NotificationSettingsStore.validate(hour, minute, timezone_name, sender_email=sender_email)
 
         record = await NotificationSettingsStore.get()
         before = record.model_dump(mode="json")
-        unchanged = (
-            record.water_quality_deadline_hour == hour
-            and record.water_quality_deadline_minute == minute
-            and record.timezone == timezone_name
+
+        new_sender = sender_email.strip() if sender_email and sender_email.strip() else record.sender_email
+        new_email_enabled = email_notifications_enabled if email_notifications_enabled is not None else record.email_notifications_enabled
+
+        deadline_changed = (
+            record.water_quality_deadline_hour != hour
+            or record.water_quality_deadline_minute != minute
+            or record.timezone != timezone_name
         )
-        if unchanged:
+        email_settings_changed = (
+            record.sender_email != new_sender
+            or record.email_notifications_enabled != new_email_enabled
+        )
+
+        if not deadline_changed and not email_settings_changed:
             return {**await NotificationService.get_settings(), "changed": False}
 
         record.water_quality_deadline_hour = hour
         record.water_quality_deadline_minute = minute
         record.timezone = timezone_name
+        record.sender_email = new_sender
+        record.email_notifications_enabled = new_email_enabled
         record.updated_at = now_utc()
         record.updated_by = str(current_user.id)
         await record.save()
@@ -585,15 +598,21 @@ class NotificationService:
             after=record.model_dump(mode="json"),
         ))
 
-        stale = await Notification.find({"type": WATER_QUALITY_MISSING}).to_list()
-        for doc in stale:
-            await doc.delete()
+        if deadline_changed:
+            stale = await Notification.find({"type": WATER_QUALITY_MISSING}).to_list()
+            for doc in stale:
+                await doc.delete()
 
-        swept = await NotificationService.sweep(now=now, force=True)
+            swept = await NotificationService.sweep(now=now, force=True)
+            return {
+                **await NotificationService.get_settings(),
+                "changed": True,
+                "regenerated": swept["created"],
+            }
+
         return {
             **await NotificationService.get_settings(),
             "changed": True,
-            "regenerated": swept["created"],
         }
 
     # ------------------------------------------------------------- generation
@@ -699,6 +718,8 @@ class NotificationService:
 
             pushed = await NotificationService._dispatch_push(new_alerts)
 
+            emailed = await NotificationService._dispatch_emails(snap)
+
             drifted = await NotificationService._report_census_drift()
 
             duration_ms = int((now_utc() - started).total_seconds() * 1000)
@@ -716,11 +737,170 @@ class NotificationService:
                 "swept_at": started.isoformat(),
                 "status": "completed",
                 "pushed": pushed,
+                "emailed": emailed,
                 "census_drift": drifted,
             }
         finally:
             if not force:
                 await NotificationService.release_lock(instance_id)
+
+    @staticmethod
+    async def _dispatch_emails(snap: FacilitySnapshot) -> Dict[str, int]:
+        """
+        Dispatch email notifications for missing daily water quality log entries.
+
+        Guarantees idempotency: for any given (date, recipient), an email is sent
+        at most once by checking and inserting a unique EmailLog record.
+        """
+        from pymongo.errors import DuplicateKeyError
+        from ..models.email_log import EmailLog
+        from . import email_service
+
+        settings_rec = await NotificationSettingsStore.get()
+        if not settings.ENABLE_EMAIL_NOTIFICATIONS or not settings_rec.email_notifications_enabled:
+            return {"sent": 0, "mock_sent": 0, "failed": 0, "disabled": 1}
+
+        if not snap.days:
+            return {"sent": 0, "mock_sent": 0, "failed": 0, "disabled": 0}
+
+        sender_email = settings_rec.sender_email or settings.DEFAULT_SENDER_EMAIL or "acare-alerts@uwindsor.ca"
+
+        active_users = await User.find({"status": StatusEnum.active.value}).to_list()
+        manager_users = [u for u in active_users if u.role in MANAGER_PLUS]
+        cc_emails = list({u.email.strip() for u in manager_users if u.email and u.email.strip()})
+
+        sent_count = mock_count = failed_count = 0
+
+        for day in snap.days:
+            done_tanks = snap.logged_by_day.get(day.isoformat(), set())
+            missing_tanks = []
+            for tank in snap.tanks:
+                if str(tank.id) in done_tanks:
+                    continue
+                created = as_utc(tank.created_at)
+                if created and local_date(created, snap.deadline.zone) > day:
+                    continue
+                missing_tanks.append(tank)
+
+            if not missing_tanks:
+                continue
+
+            missing_date_str = day.isoformat()
+            missing_date_formatted = _format_day(day)
+            deadline_label = snap.deadline.label(snap.deadline.on(day))
+
+            staff_users = [u for u in active_users if u.role not in MANAGER_PLUS]
+            assigned_tank_ids_set = set()
+
+            for staff in staff_users:
+                assigned = set(staff.assigned_tank_ids or [])
+                assigned_tank_ids_set.update(assigned)
+                staff_missing = [t for t in missing_tanks if str(t.id) in assigned]
+                if not staff_missing or not staff.email:
+                    continue
+
+                email_key = f"email:{WATER_QUALITY_MISSING}:{missing_date_str}:{str(staff.id)}"
+                existing = await EmailLog.find_one({"key": email_key})
+                if existing and existing.status in ("sent", "mock_sent"):
+                    continue
+
+                staff_missing.sort(key=lambda t: _tank_sort_key(t.tank_number))
+                tank_labels = [f"Tank {t.tank_number}" for t in staff_missing]
+                staff_name = f"{staff.first_name} {staff.last_name}".strip()
+                subject, text_body, html_body = email_service.render_missing_log_email(
+                    staff_name=staff_name,
+                    tank_labels=tank_labels,
+                    missing_date_formatted=missing_date_formatted,
+                    deadline_label=deadline_label,
+                )
+
+                recipient_cc = [email for email in cc_emails if email.lower() != staff.email.lower()]
+
+                email_doc = EmailLog(
+                    key=email_key,
+                    type=WATER_QUALITY_MISSING,
+                    date=missing_date_str,
+                    recipient_user_id=str(staff.id),
+                    recipient_email=staff.email,
+                    cc_emails=recipient_cc,
+                    tank_numbers=[t.tank_number for t in staff_missing],
+                    sender_email=sender_email,
+                    subject=subject,
+                    status="pending",
+                )
+                try:
+                    await email_doc.insert()
+                except DuplicateKeyError:
+                    continue
+
+                status, err = await email_service.send_email(
+                    sender=sender_email,
+                    to_addrs=[staff.email],
+                    cc_addrs=recipient_cc,
+                    subject=subject,
+                    body_text=text_body,
+                    body_html=html_body,
+                )
+                email_doc.status = status
+                email_doc.error = err
+                await email_doc.save()
+
+                if status == "sent":
+                    sent_count += 1
+                elif status == "mock_sent":
+                    mock_count += 1
+                else:
+                    failed_count += 1
+
+            unassigned_missing = [t for t in missing_tanks if str(t.id) not in assigned_tank_ids_set]
+            if unassigned_missing and cc_emails:
+                email_key = f"email:{WATER_QUALITY_MISSING}:{missing_date_str}:unassigned"
+                existing = await EmailLog.find_one({"key": email_key})
+                if not (existing and existing.status in ("sent", "mock_sent")):
+                    unassigned_missing.sort(key=lambda t: _tank_sort_key(t.tank_number))
+                    tank_labels = [f"Tank {t.tank_number}" for t in unassigned_missing]
+                    subject, text_body, html_body = email_service.render_missing_log_email(
+                        staff_name="Facility Manager / Team",
+                        tank_labels=tank_labels,
+                        missing_date_formatted=missing_date_formatted,
+                        deadline_label=deadline_label,
+                    )
+                    email_doc = EmailLog(
+                        key=email_key,
+                        type=WATER_QUALITY_MISSING,
+                        date=missing_date_str,
+                        recipient_user_id=None,
+                        recipient_email=cc_emails[0],
+                        cc_emails=cc_emails[1:],
+                        tank_numbers=[t.tank_number for t in unassigned_missing],
+                        sender_email=sender_email,
+                        subject=subject,
+                        status="pending",
+                    )
+                    try:
+                        await email_doc.insert()
+                        status, err = await email_service.send_email(
+                            sender=sender_email,
+                            to_addrs=[cc_emails[0]],
+                            cc_addrs=cc_emails[1:],
+                            subject=subject,
+                            body_text=text_body,
+                            body_html=html_body,
+                        )
+                        email_doc.status = status
+                        email_doc.error = err
+                        await email_doc.save()
+
+                        if status == "sent":
+                            sent_count += 1
+                        elif status == "mock_sent":
+                            mock_count += 1
+                        else:
+                            failed_count += 1
+                    except DuplicateKeyError:
+                        pass
+
+        return {"sent": sent_count, "mock_sent": mock_count, "failed": failed_count, "disabled": 0}
 
     @staticmethod
     async def _report_census_drift() -> int:
