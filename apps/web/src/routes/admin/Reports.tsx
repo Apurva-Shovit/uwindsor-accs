@@ -1018,7 +1018,7 @@ export const Reports: React.FC = () => {
       {/* Executive Breakdown Modal (Arrivals / Deaths) */}
       {detailModalCategory && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto print:hidden">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-7xl max-h-[90vh] flex flex-col overflow-hidden animate-fade-in">
             {/* Modal Header */}
             <div className={`px-6 py-4 border-b flex items-center justify-between ${
               detailModalCategory === 'arrivals'
