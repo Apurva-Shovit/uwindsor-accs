@@ -816,22 +816,35 @@ class NotificationService:
 
                 recipient_cc = [email for email in cc_emails if email.lower() != staff.email.lower()]
 
-                email_doc = EmailLog(
-                    key=email_key,
-                    type=WATER_QUALITY_MISSING,
-                    date=missing_date_str,
-                    recipient_user_id=str(staff.id),
-                    recipient_email=staff.email,
-                    cc_emails=recipient_cc,
-                    tank_numbers=[t.tank_number for t in staff_missing],
-                    sender_email=sender_email,
-                    subject=subject,
-                    status="pending",
-                )
-                try:
-                    await email_doc.insert()
-                except DuplicateKeyError:
-                    continue
+                if existing:
+                    email_doc = existing
+                    email_doc.type = WATER_QUALITY_MISSING
+                    email_doc.date = missing_date_str
+                    email_doc.recipient_user_id = str(staff.id)
+                    email_doc.recipient_email = staff.email
+                    email_doc.cc_emails = recipient_cc
+                    email_doc.tank_numbers = [t.tank_number for t in staff_missing]
+                    email_doc.sender_email = sender_email
+                    email_doc.subject = subject
+                    email_doc.status = "pending"
+                    await email_doc.save()
+                else:
+                    email_doc = EmailLog(
+                        key=email_key,
+                        type=WATER_QUALITY_MISSING,
+                        date=missing_date_str,
+                        recipient_user_id=str(staff.id),
+                        recipient_email=staff.email,
+                        cc_emails=recipient_cc,
+                        tank_numbers=[t.tank_number for t in staff_missing],
+                        sender_email=sender_email,
+                        subject=subject,
+                        status="pending",
+                    )
+                    try:
+                        await email_doc.insert()
+                    except DuplicateKeyError:
+                        continue
 
                 status, err = await email_service.send_email(
                     sender=sender_email,
@@ -865,40 +878,54 @@ class NotificationService:
                         missing_date_formatted=missing_date_formatted,
                         deadline_label=deadline_label,
                     )
-                    email_doc = EmailLog(
-                        key=email_key,
-                        type=WATER_QUALITY_MISSING,
-                        date=missing_date_str,
-                        recipient_user_id=None,
-                        recipient_email=cc_emails[0],
-                        cc_emails=cc_emails[1:],
-                        tank_numbers=[t.tank_number for t in unassigned_missing],
-                        sender_email=sender_email,
-                        subject=subject,
-                        status="pending",
-                    )
-                    try:
-                        await email_doc.insert()
-                        status, err = await email_service.send_email(
-                            sender=sender_email,
-                            to_addrs=[cc_emails[0]],
-                            cc_addrs=cc_emails[1:],
-                            subject=subject,
-                            body_text=text_body,
-                            body_html=html_body,
-                        )
-                        email_doc.status = status
-                        email_doc.error = err
+                    if existing:
+                        email_doc = existing
+                        email_doc.type = WATER_QUALITY_MISSING
+                        email_doc.date = missing_date_str
+                        email_doc.recipient_user_id = None
+                        email_doc.recipient_email = cc_emails[0]
+                        email_doc.cc_emails = cc_emails[1:]
+                        email_doc.tank_numbers = [t.tank_number for t in unassigned_missing]
+                        email_doc.sender_email = sender_email
+                        email_doc.subject = subject
+                        email_doc.status = "pending"
                         await email_doc.save()
+                    else:
+                        email_doc = EmailLog(
+                            key=email_key,
+                            type=WATER_QUALITY_MISSING,
+                            date=missing_date_str,
+                            recipient_user_id=None,
+                            recipient_email=cc_emails[0],
+                            cc_emails=cc_emails[1:],
+                            tank_numbers=[t.tank_number for t in unassigned_missing],
+                            sender_email=sender_email,
+                            subject=subject,
+                            status="pending",
+                        )
+                        try:
+                            await email_doc.insert()
+                        except DuplicateKeyError:
+                            continue
 
-                        if status == "sent":
-                            sent_count += 1
-                        elif status == "mock_sent":
-                            mock_count += 1
-                        else:
-                            failed_count += 1
-                    except DuplicateKeyError:
-                        pass
+                    status, err = await email_service.send_email(
+                        sender=sender_email,
+                        to_addrs=[cc_emails[0]],
+                        cc_addrs=cc_emails[1:],
+                        subject=subject,
+                        body_text=text_body,
+                        body_html=html_body,
+                    )
+                    email_doc.status = status
+                    email_doc.error = err
+                    await email_doc.save()
+
+                    if status == "sent":
+                        sent_count += 1
+                    elif status == "mock_sent":
+                        mock_count += 1
+                    else:
+                        failed_count += 1
 
         return {"sent": sent_count, "mock_sent": mock_count, "failed": failed_count, "disabled": 0}
 
