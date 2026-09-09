@@ -13,6 +13,7 @@ class IncidentReport(Document):
     tank_assignment_id: Optional[str] = None
     tank_id: str
     date: date
+    time: Optional[str] = None
     problem: str
     comments: Optional[str] = None
     treatment: Optional[str] = None

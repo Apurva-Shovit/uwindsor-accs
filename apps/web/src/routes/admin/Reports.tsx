@@ -977,7 +977,7 @@ export const Reports: React.FC = () => {
                                   {pageIncidents.map((inc: any) => (
                                     <tr key={inc.id} className="border-b border-slate-400">
                                       <td className="border border-slate-900 p-2 font-semibold whitespace-nowrap">{fmtDMY(inc.date || inc.created_at)}</td>
-                                      <td className="border border-slate-900 p-2 whitespace-nowrap text-slate-700">{fmtTime(inc.date || inc.created_at)}</td>
+                                      <td className="border border-slate-900 p-2 whitespace-nowrap text-slate-700">{inc.time || fmtTime(inc.date || inc.created_at)}</td>
                                       <td className="border border-slate-900 p-2 whitespace-nowrap text-slate-700">{dateEst}</td>
                                       <td className="border border-slate-900 p-2 font-bold text-[#005596] text-center">{inc.tank_number}</td>
                                       <td className="border border-slate-900 p-2">{inc.description}</td>

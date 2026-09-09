@@ -34,6 +34,7 @@ class IncidentReportService:
             tank_assignment_id=body.tank_assignment_id,
             tank_id=body.tank_id,
             date=body.date,
+            time=body.time,
             problem=body.problem,
             comments=body.comments,
             treatment=body.treatment,

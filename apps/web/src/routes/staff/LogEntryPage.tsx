@@ -15,6 +15,10 @@ interface ValidationResult {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const today = () => new Date().toISOString().slice(0, 10);
+const nowTime = () => {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
 
 const fieldLabel: Record<string, string> = {
   ph: 'pH', temperature: 'Temperature (°C)', dissolved_oxygen: 'Dissolved Oxygen (mg/L)',
@@ -268,6 +272,7 @@ function ToggleSwitch({ label, checked, onChange }: { label: string; checked: bo
 function IncidentReportForm({ tanks }: { tanks: Tank[] }) {
   const [tankId, setTankId] = useState('');
   const [date, setDate] = useState(today());
+  const [time, setTime] = useState(nowTime());
   const [problem, setProblem] = useState('');
   const [comments, setComments] = useState('');
   const [treatment, setTreatment] = useState('');
@@ -283,13 +288,14 @@ function IncidentReportForm({ tanks }: { tanks: Tank[] }) {
     setLoading(true); setError('');
     try {
       await postIncidentReport({
-        tank_id: tankId, date, problem, comments: comments || undefined,
+        tank_id: tankId, date, time, problem, comments: comments || undefined,
         treatment: treatment || undefined,
         aquatic_condition_checked: aquatic, vet_contacted: vet, researcher_notified: researcher,
       });
       setToast('Incident report created!');
       setProblem(''); setComments(''); setTreatment('');
       setAquatic(false); setVet(false); setResearcher(false);
+      setTime(nowTime());
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Submission failed');
     } finally {
@@ -300,11 +306,16 @@ function IncidentReportForm({ tanks }: { tanks: Tank[] }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && <div className="rounded-lg bg-red-50 border border-red-300 text-red-700 px-4 py-3 text-sm">{error}</div>}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <TankSelect tanks={tanks} value={tankId} onChange={setTankId} />
         <div>
           <label className="block text-xs font-semibold text-textSecondary uppercase tracking-wide mb-1">Date</label>
           <input type="date" value={date} onChange={e => setDate(e.target.value)}
+            className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brandBlue" required />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-textSecondary uppercase tracking-wide mb-1">Time (24-hr)</label>
+          <input type="time" value={time} onChange={e => setTime(e.target.value)}
             className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brandBlue" required />
         </div>
       </div>
