@@ -62,6 +62,8 @@ class NotificationSettings(Document):
     water_quality_deadline_hour: int = 15
     water_quality_deadline_minute: int = 0
     timezone: str = "America/Toronto"
+    sender_email: Optional[str] = None
+    email_notifications_enabled: bool = True
 
     # `timezone` here is a field name, which is why datetime's is imported as
     # dt_timezone throughout this module.

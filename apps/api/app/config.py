@@ -60,9 +60,20 @@ class Settings(BaseSettings):
     # Shared secret CI presents as X-Update-Token to register a bundle. Unset
     # means nobody can publish, which is the safe default for a fresh deploy.
     APP_UPDATE_TOKEN: str = ""
-    # Every device checks on launch and on resume, so this is per-IP and a whole
-    # facility can sit behind one NAT address.
     RATE_LIMIT_APP_UPDATE_CHECK: str = "120/minute"
+
+    # --- Email Notification Settings ----------------------------------------
+    # Outbound SMTP / HTTPS configuration.
+    # If RESEND_API_KEY is set, sends via HTTPS (port 443), which bypasses local network firewall blocks.
+    # If SMTP_HOST is unset and no API key is provided, email dispatches operate in structured MOCK mode.
+    RESEND_API_KEY: str = ""
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_USE_TLS: bool = True
+    DEFAULT_SENDER_EMAIL: str = "acare-alerts@uwindsor.ca"
+    ENABLE_EMAIL_NOTIFICATIONS: bool = True
 
     CORS_ORIGINS: str = ""  # comma-separated extra allowed origins, e.g. "https://acare-mvp.vercel.app"
 

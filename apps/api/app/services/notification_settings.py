@@ -59,6 +59,8 @@ class NotificationSettingsStore:
         """The stored settings, seeded from config on first use."""
         record = await NotificationSettings.find_one({"singleton": SINGLETON})
         if record is not None:
+            if not record.sender_email:
+                record.sender_email = settings.DEFAULT_SENDER_EMAIL
             return record
 
         record = NotificationSettings(
@@ -66,6 +68,8 @@ class NotificationSettingsStore:
             water_quality_deadline_hour=settings.WATER_QUALITY_DEADLINE_HOUR,
             water_quality_deadline_minute=settings.WATER_QUALITY_DEADLINE_MINUTE,
             timezone=settings.NOTIFICATION_TIMEZONE,
+            sender_email=settings.DEFAULT_SENDER_EMAIL,
+            email_notifications_enabled=settings.ENABLE_EMAIL_NOTIFICATIONS,
         )
         try:
             await record.insert()
@@ -88,7 +92,17 @@ class NotificationSettingsStore:
         )
 
     @staticmethod
-    def validate(hour: int, minute: int, timezone_name: str) -> None:
+    async def sender_email() -> str:
+        record = await NotificationSettingsStore.get()
+        return record.sender_email or settings.DEFAULT_SENDER_EMAIL or "acare-alerts@uwindsor.ca"
+
+    @staticmethod
+    def validate(
+        hour: int,
+        minute: int,
+        timezone_name: str,
+        sender_email: Optional[str] = None,
+    ) -> None:
         if not 0 <= hour <= 23:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Hour must be between 0 and 23")
         if not 0 <= minute <= 59:
@@ -98,3 +112,11 @@ class NotificationSettingsStore:
                 status.HTTP_422_UNPROCESSABLE_ENTITY,
                 f"Unknown timezone '{timezone_name}'. Use an IANA name such as America/Toronto.",
             )
+        if sender_email is not None and sender_email.strip():
+            email_clean = sender_email.strip()
+            if "@" not in email_clean or "." not in email_clean.split("@")[-1]:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    "Invalid sender email format. Please provide a valid email address.",
+                )
+
