@@ -207,15 +207,7 @@ function WaterQualityForm({ tanks, existingLogsMap, onSubmitted }: { tanks: Tank
         </div>
       )}
 
-      {tankId && statusInfo.typedKeys.length > 0 && statusInfo.additions.length > 0 && statusInfo.overwrites.length === 0 && (
-        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3.5 text-xs text-blue-900 flex items-start gap-2.5">
-          <span className="text-base leading-none">ℹ️</span>
-          <div>
-            <strong>Parameter Combining Notice ({activeTankNum}):</strong>{' '}
-            {statusInfo.additions.join(', ')} was recorded earlier today. Your new entry will combine cleanly with existing readings in official daily reports.
-          </div>
-        </div>
-      )}
+
 
       <div className="grid grid-cols-3 gap-4">
         <FieldInput label={fieldLabel.ph} name="ph" value={ph} onChange={setPh} hint={safeRangeHint.ph} result={validation || undefined} required={false} />
@@ -346,15 +338,7 @@ function TestStripForm({ tanks, existingLogsMap, onSubmitted }: { tanks: Tank[];
         </div>
       )}
 
-      {tankId && statusInfo.typedKeys.length > 0 && statusInfo.additions.length > 0 && statusInfo.overwrites.length === 0 && (
-        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3.5 text-xs text-blue-900 flex items-start gap-2.5">
-          <span className="text-base leading-none">ℹ️</span>
-          <div>
-            <strong>Parameter Combining Notice ({activeTankNum}):</strong>{' '}
-            {statusInfo.additions.join(', ')} was recorded earlier today. Your new entry will combine cleanly with existing readings in official daily reports.
-          </div>
-        </div>
-      )}
+
 
       <div className="grid grid-cols-2 gap-4">
         {testStripFields.map(f => (
@@ -673,15 +657,7 @@ function BatchEntry({ tanks, existingLogsMap, onSubmitted }: { tanks: Tank[]; ex
             </div>
           )}
 
-          {statusInfo.combineTanks.length > 0 && statusInfo.overwriteTanks.length === 0 && (
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3.5 text-xs text-blue-900 flex items-start gap-2.5">
-              <span className="text-base leading-none">ℹ️</span>
-              <div>
-                <strong>Batch Parameter Combining Notice:</strong>{' '}
-                {statusInfo.combineTanks.join(', ')} has existing daily parameters recorded. Your new batch parameters will combine cleanly with existing readings in official reports.
-              </div>
-            </div>
-          )}
+
 
           <div className="grid grid-cols-2 gap-4">
             {fields.map(f => (
