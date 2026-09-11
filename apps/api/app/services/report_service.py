@@ -110,20 +110,51 @@ class ReportService:
         if tank_id: wq_query["tank_id"] = tank_id
         if project_id: wq_query["project_id"] = project_id
         wq_logs = await WaterQualityLog.find(wq_query).to_list()
+        
+        # Sort chronologically ascending to merge
+        wq_logs.sort(key=lambda x: getattr(x, "created_at", None) or datetime.min.replace(tzinfo=timezone.utc))
+
+        coalesced_wq: Dict[tuple, dict] = {}
         for log in wq_logs:
-            if not date_filter({"date": log.date}): continue
-            fac_name, room_name, tank_name, log_fac_id = resolve_location(log.tank_id)
+            log_date_str = log.date.isoformat() if hasattr(log.date, "isoformat") else str(log.date)
+            key = (str(log.tank_id), log_date_str, getattr(log, "type", "daily"))
+            raw_params = dict(log.parameters or {})
+            if key not in coalesced_wq:
+                coalesced_wq[key] = {
+                    "tank_id": log.tank_id,
+                    "project_id": log.project_id,
+                    "type": getattr(log, "type", "daily"),
+                    "date": log.date,
+                    "parameters": raw_params,
+                    "created_by": log.created_by,
+                    "created_at": log.created_at,
+                }
+            else:
+                existing = coalesced_wq[key]
+                for pk, pv in raw_params.items():
+                    if pv is not None:
+                        existing["parameters"][pk] = pv
+                existing["created_by"] = log.created_by
+                existing["created_at"] = log.created_at
+
+        merged_logs = list(coalesced_wq.values())
+        merged_logs.sort(key=lambda x: x["created_at"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+
+        for log in merged_logs:
+            if not date_filter({"date": log["date"]}): continue
+            fac_name, room_name, tank_name, log_fac_id = resolve_location(log["tank_id"])
             if facility_id and log_fac_id != facility_id: continue
-            proj_obj = proj_map.get(str(log.project_id)) if log.project_id else None
+            proj_obj = proj_map.get(str(log["project_id"])) if log["project_id"] else None
+            user_name = await EntityResolver.resolve_user_name(log["created_by"]) if log.get("created_by") else "Unknown User"
             results.append({
-                "date": log.date.isoformat(),
+                "date": log["date"].isoformat() if hasattr(log["date"], "isoformat") else str(log["date"]),
                 "facility": fac_name, "room": room_name, "tank": tank_name,
-                "project": log.project_id or "",
+                "project": log["project_id"] or "",
                 "aupp_number": proj_obj.aupp_number if proj_obj else "N/A",
                 "event_type": "Water Quality",
-                "summary": f"{log.type}: {log.parameters}",
-                "performed_by": log.created_by,
-                "created_at": log.created_at.isoformat(),
+                "summary": f"{log['type']}: {log['parameters']}",
+                "performed_by": user_name or "Unknown User",
+                "created_at": log["created_at"].isoformat() if hasattr(log["created_at"], "isoformat") else str(log["created_at"]),
             })
 
         # Incident Reports

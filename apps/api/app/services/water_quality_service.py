@@ -28,6 +28,9 @@ class WaterQualityService:
 
     @staticmethod
     async def create_log(body: WaterQualityCreate, current_user: User) -> Dict[str, Any]:
+        if not body.parameters or not isinstance(body.parameters, dict):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "At least one water quality parameter must be provided")
+
         WaterQualityService._authorize(current_user, body.tank_id)
         project_id = await WaterQualityService._get_project_id(body.tank_id)
 
@@ -66,6 +69,8 @@ class WaterQualityService:
     async def create_batch_logs(body: WaterQualityBatchCreate, current_user: User) -> Dict[str, Any]:
         if not body.tank_ids:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "tank_ids cannot be empty")
+        if not body.parameters or not isinstance(body.parameters, dict):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "At least one water quality parameter must be provided")
 
         for tank_id in body.tank_ids:
             WaterQualityService._authorize(current_user, tank_id)
