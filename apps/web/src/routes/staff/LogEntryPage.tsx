@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { getTanks, postWaterQualityLog, postWaterQualityBatch, postIncidentReport } from '../../lib/api';
+import React, { useEffect, useState, useMemo } from 'react';
+import { getTanks, postWaterQualityLog, postWaterQualityBatch, postIncidentReport, getWaterQualityLogs } from '../../lib/api';
 
 
 
@@ -11,6 +11,8 @@ type Tab = 'water' | 'teststrip' | 'incident' | 'batch';
 interface ValidationResult {
   [param: string]: { value: number; in_range: boolean };
 }
+
+export type ExistingLogMap = Record<string, Record<string, { value: number; type: string; created_at?: string }>>;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -103,7 +105,7 @@ function SuccessToast({ msg, onClose }: { msg: string; onClose: () => void }) {
 
 // ─── Water Quality Form ──────────────────────────────────────────────────────
 
-function WaterQualityForm({ tanks }: { tanks: Tank[] }) {
+function WaterQualityForm({ tanks, existingLogsMap, onSubmitted }: { tanks: Tank[]; existingLogsMap: ExistingLogMap; onSubmitted: () => void }) {
   const [tankId, setTankId] = useState('');
   const [date, setDate] = useState(today());
   const [ph, setPh] = useState('');
@@ -114,6 +116,40 @@ function WaterQualityForm({ tanks }: { tanks: Tank[] }) {
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
+
+  const activeTankNum = useMemo(() => {
+    const t = tanks.find(x => (x.id || (x as any)._id) === tankId);
+    return t ? `Tank ${t.tank_number}` : 'Selected Tank';
+  }, [tanks, tankId]);
+
+  const existingForTank = useMemo(() => {
+    if (!tankId || !date) return {};
+    return existingLogsMap[`${tankId}_${date}`] || {};
+  }, [existingLogsMap, tankId, date]);
+
+  const statusInfo = useMemo(() => {
+    const typedKeys: string[] = [];
+    if (ph.trim() !== '') typedKeys.push('ph');
+    if (temp.trim() !== '') typedKeys.push('temperature');
+    if (dissolvedOxygen.trim() !== '') typedKeys.push('dissolved_oxygen');
+
+    const overwrites: string[] = [];
+    const additions: string[] = [];
+
+    for (const k of typedKeys) {
+      if (existingForTank[k]) {
+        overwrites.push(fieldLabel[k] || k);
+      }
+    }
+
+    for (const [k, obj] of Object.entries(existingForTank)) {
+      if (!typedKeys.includes(k) && obj.value !== undefined) {
+        additions.push(`${fieldLabel[k] || k} (${obj.value})`);
+      }
+    }
+
+    return { overwrites, additions, typedKeys };
+  }, [existingForTank, ph, temp, dissolvedOxygen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,6 +175,7 @@ function WaterQualityForm({ tanks }: { tanks: Tank[] }) {
       setValidation(res.data.validation);
       setToast('Daily log created!');
       setPh(''); setTemp(''); setDissolvedOxygen(''); setComments('');
+      onSubmitted();
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Submission failed');
     } finally {
@@ -159,6 +196,27 @@ function WaterQualityForm({ tanks }: { tanks: Tank[] }) {
             className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brandBlue" required />
         </div>
       </div>
+
+      {tankId && statusInfo.overwrites.length > 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-start gap-2.5">
+          <span className="text-base leading-none">⚠️</span>
+          <div>
+            <strong>Parameter Re-entry Notice ({activeTankNum}):</strong>{' '}
+            {statusInfo.overwrites.join(', ')} was already logged for this tank on {date}. Submitting will create a new log and update the daily reported reading to your new input.
+          </div>
+        </div>
+      )}
+
+      {tankId && statusInfo.typedKeys.length > 0 && statusInfo.additions.length > 0 && statusInfo.overwrites.length === 0 && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3.5 text-xs text-blue-900 flex items-start gap-2.5">
+          <span className="text-base leading-none">ℹ️</span>
+          <div>
+            <strong>Parameter Combining Notice ({activeTankNum}):</strong>{' '}
+            {statusInfo.additions.join(', ')} was recorded earlier today. Your new entry will combine cleanly with existing readings in official daily reports.
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-4">
         <FieldInput label={fieldLabel.ph} name="ph" value={ph} onChange={setPh} hint={safeRangeHint.ph} result={validation || undefined} required={false} />
         <FieldInput label={fieldLabel.temperature} name="temperature" value={temp} onChange={setTemp} hint={safeRangeHint.temperature} result={validation || undefined} required={false} />
@@ -190,7 +248,7 @@ function WaterQualityForm({ tanks }: { tanks: Tank[] }) {
 
 const testStripFields = ['nitrate', 'nitrite', 'hardness', 'chlorine', 'alkalinity', 'ph', 'ammonia'] as const;
 
-function TestStripForm({ tanks }: { tanks: Tank[] }) {
+function TestStripForm({ tanks, existingLogsMap, onSubmitted }: { tanks: Tank[]; existingLogsMap: ExistingLogMap; onSubmitted: () => void }) {
   const [tankId, setTankId] = useState('');
   const [date, setDate] = useState(today());
   const [fields, setFields] = useState<Record<string, string>>({});
@@ -201,6 +259,37 @@ function TestStripForm({ tanks }: { tanks: Tank[] }) {
   const [error, setError] = useState('');
 
   const set = (k: string) => (v: string) => setFields(f => ({ ...f, [k]: v }));
+
+  const activeTankNum = useMemo(() => {
+    const t = tanks.find(x => (x.id || (x as any)._id) === tankId);
+    return t ? `Tank ${t.tank_number}` : 'Selected Tank';
+  }, [tanks, tankId]);
+
+  const existingForTank = useMemo(() => {
+    if (!tankId || !date) return {};
+    return existingLogsMap[`${tankId}_${date}`] || {};
+  }, [existingLogsMap, tankId, date]);
+
+  const statusInfo = useMemo(() => {
+    const typedKeys = Object.keys(fields).filter(k => (fields[k] || '').trim() !== '');
+
+    const overwrites: string[] = [];
+    const additions: string[] = [];
+
+    for (const k of typedKeys) {
+      if (existingForTank[k]) {
+        overwrites.push(fieldLabel[k] || k);
+      }
+    }
+
+    for (const [k, obj] of Object.entries(existingForTank)) {
+      if (!typedKeys.includes(k) && obj.value !== undefined) {
+        additions.push(`${fieldLabel[k] || k} (${obj.value})`);
+      }
+    }
+
+    return { overwrites, additions, typedKeys };
+  }, [existingForTank, fields]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -225,6 +314,7 @@ function TestStripForm({ tanks }: { tanks: Tank[] }) {
       setValidation(res.data.validation);
       setToast('Test strip log created!');
       setFields({}); setComments('');
+      onSubmitted();
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Submission failed');
     } finally {
@@ -245,6 +335,27 @@ function TestStripForm({ tanks }: { tanks: Tank[] }) {
             className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brandBlue" required />
         </div>
       </div>
+
+      {tankId && statusInfo.overwrites.length > 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-start gap-2.5">
+          <span className="text-base leading-none">⚠️</span>
+          <div>
+            <strong>Parameter Re-entry Notice ({activeTankNum}):</strong>{' '}
+            {statusInfo.overwrites.join(', ')} was already logged for this tank on {date}. Submitting will update the daily reported reading to your new input.
+          </div>
+        </div>
+      )}
+
+      {tankId && statusInfo.typedKeys.length > 0 && statusInfo.additions.length > 0 && statusInfo.overwrites.length === 0 && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3.5 text-xs text-blue-900 flex items-start gap-2.5">
+          <span className="text-base leading-none">ℹ️</span>
+          <div>
+            <strong>Parameter Combining Notice ({activeTankNum}):</strong>{' '}
+            {statusInfo.additions.join(', ')} was recorded earlier today. Your new entry will combine cleanly with existing readings in official daily reports.
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-4">
         {testStripFields.map(f => (
           <FieldInput key={f} label={fieldLabel[f]} name={f} value={fields[f] ?? ''}
@@ -384,7 +495,7 @@ type BatchStep = 'select' | 'fill' | 'review';
 
 const GROUPS: Record<string, string> = { 'Tanks 1–8': '1-8', 'Tanks 9–14': '9-14', 'Custom': 'custom' };
 
-function BatchEntry({ tanks }: { tanks: Tank[] }) {
+function BatchEntry({ tanks, existingLogsMap, onSubmitted }: { tanks: Tank[]; existingLogsMap: ExistingLogMap; onSubmitted: () => void }) {
   const [step, setStep] = useState<BatchStep>('select');
   const [group, setGroup] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -428,6 +539,44 @@ function BatchEntry({ tanks }: { tanks: Tank[] }) {
 
   const selectedTanks = sortedTanks.filter(t => selectedIds.includes(t.id || (t as any)._id || ''));
 
+  const statusInfo = useMemo(() => {
+    const typedKeys = Object.keys(params).filter(k => (params[k] || '').trim() !== '');
+    if (selectedIds.length === 0 || typedKeys.length === 0) {
+      return { overwriteTanks: [], combineTanks: [] };
+    }
+
+    const overwriteTanks: string[] = [];
+    const combineTanks: string[] = [];
+
+    for (const tId of selectedIds) {
+      const tObj = tanks.find(x => (x.id || (x as any)._id) === tId);
+      const tankLabel = tObj ? `Tank ${tObj.tank_number}` : 'Tank';
+      const existing = existingLogsMap[`${tId}_${date}`] || {};
+
+      let isOverwrite = false;
+      let isCombine = false;
+
+      for (const k of typedKeys) {
+        if (existing[k]) {
+          isOverwrite = true;
+        }
+      }
+
+      if (!isOverwrite) {
+        for (const [k, obj] of Object.entries(existing)) {
+          if (!typedKeys.includes(k) && obj.value !== undefined) {
+            isCombine = true;
+          }
+        }
+      }
+
+      if (isOverwrite) overwriteTanks.push(tankLabel);
+      else if (isCombine) combineTanks.push(tankLabel);
+    }
+
+    return { overwriteTanks, combineTanks };
+  }, [selectedIds, params, date, existingLogsMap, tanks]);
+
   const handleSubmit = async () => {
     setLoading(true); setError(''); setValidation(null);
     const numParams: Record<string, number> = {};
@@ -450,6 +599,7 @@ function BatchEntry({ tanks }: { tanks: Tank[] }) {
       setValidation(res.data.validation);
       setToast(`${res.data.created} Logs Created`);
       setStep('select'); setSelectedIds([]); setParams({});
+      onSubmitted();
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Submission failed');
     } finally {
@@ -512,6 +662,27 @@ function BatchEntry({ tanks }: { tanks: Tank[] }) {
             <input type="date" value={date} onChange={e => setDate(e.target.value)}
               className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brandBlue" />
           </div>
+
+          {statusInfo.overwriteTanks.length > 0 && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-start gap-2.5">
+              <span className="text-base leading-none">⚠️</span>
+              <div>
+                <strong>Batch Parameter Re-entry Notice:</strong>{' '}
+                {statusInfo.overwriteTanks.join(', ')} already has matching parameters recorded on {date}. Submitting this batch log will update the daily reported reading for these tanks.
+              </div>
+            </div>
+          )}
+
+          {statusInfo.combineTanks.length > 0 && statusInfo.overwriteTanks.length === 0 && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3.5 text-xs text-blue-900 flex items-start gap-2.5">
+              <span className="text-base leading-none">ℹ️</span>
+              <div>
+                <strong>Batch Parameter Combining Notice:</strong>{' '}
+                {statusInfo.combineTanks.join(', ')} has existing daily parameters recorded. Your new batch parameters will combine cleanly with existing readings in official reports.
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             {fields.map(f => (
               <FieldInput key={f} label={fieldLabel[f]} name={f} value={params[f] ?? ''}
@@ -528,50 +699,52 @@ function BatchEntry({ tanks }: { tanks: Tank[] }) {
             onClick={() => setStep('review')}
             disabled={selectedIds.length === 0}
             className="w-full rounded-xl bg-brandBlue py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
-            Continue → Review
+            Review Batch Entry ({selectedIds.length} Tanks)
           </button>
         </div>
       )}
 
-      {/* Step 2: Review */}
+      {/* Step 2: Review & Submit */}
       {step === 'review' && (
         <div className="space-y-4">
-          <h3 className="text-base font-bold text-textPrimary">Review Batch Submission</h3>
-          <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-            {selectedTanks.map((t, i) => {
-              const tankId = t.id || (t as any)._id || '';
-              return (
-                <div key={tankId} className="rounded-xl border border-border bg-surface p-4">
-                  <p className="font-semibold text-textPrimary mb-2">Tank {t.tank_number}</p>
-                  <div className="grid grid-cols-2 gap-1 text-sm text-textSecondary">
-                    {fields.map(f => (
-                      <span key={f}><strong>{fieldLabel[f]}:</strong> {params[f] ?? '—'}</span>
-                    ))}
-                    {comments && <span className="col-span-2"><strong>Comments:</strong> {comments}</span>}
-                  </div>
-                  {i < selectedTanks.length - 1 && <hr className="mt-3 border-border" />}
-                </div>
-              );
-            })}
+          <div className="rounded-xl border border-border bg-surface p-4 space-y-2">
+            <p className="text-xs font-bold uppercase text-textSecondary tracking-wide">Batch Summary</p>
+            <p className="text-sm"><strong>Tanks ({selectedTanks.length}):</strong> {selectedTanks.map(t => `Tank ${t.tank_number}`).join(', ')}</p>
+            <p className="text-sm"><strong>Date:</strong> {date}</p>
+            <p className="text-sm"><strong>Log Type:</strong> {logType === 'daily' ? 'Daily Water Quality' : 'Test Strip'}</p>
+            <p className="text-sm font-bold text-brandBlue">Parameters to Apply to ALL selected tanks:</p>
+            <ul className="list-disc list-inside text-sm space-y-0.5 text-textPrimary">
+              {Object.entries(params).filter(([, v]) => v.trim() !== '').map(([k, v]) => (
+                <li key={k}><strong>{fieldLabel[k] || k}:</strong> {v}</li>
+              ))}
+            </ul>
+            {comments && <p className="text-sm text-textSecondary"><strong>Comments:</strong> {comments}</p>}
           </div>
-          <p className="text-xs text-textSecondary text-center">This will create {selectedTanks.length} independent, immutable log entries.</p>
-          <div className="flex gap-3">
-            <button type="button" onClick={() => setStep('select')}
-              className="flex-1 rounded-xl border border-border py-2.5 text-sm font-semibold text-textPrimary hover:bg-surface transition-colors">
-              ← Back
-            </button>
-            <button type="button" onClick={handleSubmit} disabled={loading}
-              className="flex-1 rounded-xl bg-brandBlue py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
-              {loading ? 'Submitting…' : `Submit ${selectedTanks.length} Logs`}
-            </button>
-          </div>
-          {validation && (
-            <div className={`rounded-lg px-4 py-3 text-sm border ${Object.values(validation).some(v => !v.in_range) ? 'bg-red-50 border-red-300 text-red-800' : 'bg-green-50 border-green-300 text-green-800'}`}>
-              {Object.entries(validation).filter(([, v]) => !v.in_range).length > 0
-                ? `⚠ Out of range: ${Object.entries(validation).filter(([, v]) => !v.in_range).map(([k]) => fieldLabel[k] || k).join(', ')}`
-                : '✅ All parameters within safe range.'}
+
+          {statusInfo.overwriteTanks.length > 0 && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-start gap-2.5">
+              <span className="text-base leading-none">⚠️</span>
+              <div>
+                <strong>Re-entry Reminder:</strong> Submitting will overwrite previous daily readings for {statusInfo.overwriteTanks.join(', ')}.
+              </div>
             </div>
           )}
+
+          {validation && (
+            <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
+              <strong>Validation complete.</strong> Batch entries submitted successfully.
+            </div>
+          )}
+          <div className="flex gap-3">
+            <button type="button" onClick={() => setStep('select')}
+              className="flex-1 rounded-xl border border-border py-2.5 text-sm font-bold text-textPrimary hover:bg-surface transition-colors">
+              Back & Edit
+            </button>
+            <button type="button" disabled={loading} onClick={handleSubmit}
+              className="flex-1 rounded-xl bg-brandBlue py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
+              {loading ? 'Submitting…' : `Confirm & Submit (${selectedTanks.length} Logs)`}
+            </button>
+          </div>
         </div>
       )}
       {toast && <SuccessToast msg={toast} onClose={() => setToast('')} />}
@@ -591,6 +764,28 @@ const TABS: { id: Tab; label: string }[] = [
 export const LogEntryPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('water');
   const [tanks, setTanks] = useState<Tank[]>([]);
+  const [existingLogsMap, setExistingLogsMap] = useState<ExistingLogMap>({});
+
+  const fetchExistingLogs = () => {
+    getWaterQualityLogs({ limit: 100 }).then(r => {
+      const map: ExistingLogMap = {};
+      const items = r.data?.items || [];
+      for (const item of items) {
+        if (!item.tank_id || !item.date) continue;
+        const dStr = typeof item.date === 'string' ? item.date.slice(0, 10) : new Date(item.date).toISOString().slice(0, 10);
+        const key = `${item.tank_id}_${dStr}`;
+        if (!map[key]) map[key] = {};
+        if (item.parameters && typeof item.parameters === 'object') {
+          for (const [pk, pv] of Object.entries(item.parameters)) {
+            if (pv !== null && pv !== undefined) {
+              map[key][pk] = { value: pv as number, type: item.type, created_at: item.created_at };
+            }
+          }
+        }
+      }
+      setExistingLogsMap(map);
+    }).catch(() => { });
+  };
 
   useEffect(() => {
     getTanks().then(r => {
@@ -602,6 +797,8 @@ export const LogEntryPage: React.FC = () => {
       });
       setTanks(sorted);
     }).catch(() => { });
+
+    fetchExistingLogs();
   }, []);
 
   return (
@@ -632,10 +829,10 @@ export const LogEntryPage: React.FC = () => {
 
       {/* Form panel */}
       <div className="rounded-2xl border border-border bg-white p-6 shadow-sm">
-        {activeTab === 'water' && <WaterQualityForm tanks={tanks} />}
-        {activeTab === 'teststrip' && <TestStripForm tanks={tanks} />}
+        {activeTab === 'water' && <WaterQualityForm tanks={tanks} existingLogsMap={existingLogsMap} onSubmitted={fetchExistingLogs} />}
+        {activeTab === 'teststrip' && <TestStripForm tanks={tanks} existingLogsMap={existingLogsMap} onSubmitted={fetchExistingLogs} />}
         {activeTab === 'incident' && <IncidentReportForm tanks={tanks} />}
-        {activeTab === 'batch' && <BatchEntry tanks={tanks} />}
+        {activeTab === 'batch' && <BatchEntry tanks={tanks} existingLogsMap={existingLogsMap} onSubmitted={fetchExistingLogs} />}
       </div>
     </div>
   );
