@@ -145,7 +145,6 @@ class ReportService:
             fac_name, room_name, tank_name, log_fac_id = resolve_location(log["tank_id"])
             if facility_id and log_fac_id != facility_id: continue
             proj_obj = proj_map.get(str(log["project_id"])) if log["project_id"] else None
-            user_name = await EntityResolver.resolve_user_name(log["created_by"]) if log.get("created_by") else "Unknown User"
             results.append({
                 "date": log["date"].isoformat() if hasattr(log["date"], "isoformat") else str(log["date"]),
                 "facility": fac_name, "room": room_name, "tank": tank_name,
@@ -153,7 +152,7 @@ class ReportService:
                 "aupp_number": proj_obj.aupp_number if proj_obj else "N/A",
                 "event_type": "Water Quality",
                 "summary": f"{log['type']}: {log['parameters']}",
-                "performed_by": user_name or "Unknown User",
+                "performed_by": log.get("created_by") or "",
                 "created_at": log["created_at"].isoformat() if hasattr(log["created_at"], "isoformat") else str(log["created_at"]),
             })
 
