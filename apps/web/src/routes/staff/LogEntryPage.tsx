@@ -45,10 +45,10 @@ function ValidationBadge({ field, result }: { field: string; result: ValidationR
 }
 
 function FieldInput({
-  label, name, value, onChange, hint, result,
+  label, name, value, onChange, hint, result, required = false,
 }: {
   label: string; name: string; value: string;
-  onChange: (v: string) => void; hint?: string; result?: ValidationResult;
+  onChange: (v: string) => void; hint?: string; result?: ValidationResult; required?: boolean;
 }) {
   const outOfRange = result?.[name]?.in_range === false;
   return (
@@ -65,7 +65,7 @@ function FieldInput({
         onChange={e => onChange(e.target.value)}
         className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brandBlue transition-colors
           ${outOfRange ? 'border-red-500 bg-red-50 focus:ring-red-400' : 'border-border focus:border-brandBlue'}`}
-        required
+        required={required}
       />
     </div>
   );
@@ -118,10 +118,19 @@ function WaterQualityForm({ tanks }: { tanks: Tank[] }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true); setError(''); setValidation(null);
-    try {
-      const params: Record<string, number> = { ph: +ph, temperature: +temp };
-      if (dissolvedOxygen !== '') params.dissolved_oxygen = +dissolvedOxygen;
 
+    const params: Record<string, number> = {};
+    if (ph.trim() !== '') params.ph = +ph;
+    if (temp.trim() !== '') params.temperature = +temp;
+    if (dissolvedOxygen.trim() !== '') params.dissolved_oxygen = +dissolvedOxygen;
+
+    if (Object.keys(params).length === 0) {
+      setError('Please enter at least one parameter (pH, Temperature, or Dissolved Oxygen) to submit.');
+      setLoading(false);
+      return;
+    }
+
+    try {
       const res = await postWaterQualityLog({
         tank_id: tankId, type: 'daily', date,
         parameters: params,
@@ -137,6 +146,8 @@ function WaterQualityForm({ tanks }: { tanks: Tank[] }) {
     }
   };
 
+  const hasAtLeastOneParam = ph.trim() !== '' || temp.trim() !== '' || dissolvedOxygen.trim() !== '';
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && <div className="rounded-lg bg-red-50 border border-red-300 text-red-700 px-4 py-3 text-sm">{error}</div>}
@@ -149,10 +160,11 @@ function WaterQualityForm({ tanks }: { tanks: Tank[] }) {
         </div>
       </div>
       <div className="grid grid-cols-3 gap-4">
-        <FieldInput label={fieldLabel.ph} name="ph" value={ph} onChange={setPh} hint={safeRangeHint.ph} result={validation || undefined} />
-        <FieldInput label={fieldLabel.temperature} name="temperature" value={temp} onChange={setTemp} hint={safeRangeHint.temperature} result={validation || undefined} />
-        <FieldInput label={fieldLabel.dissolved_oxygen} name="dissolved_oxygen" value={dissolvedOxygen} onChange={setDissolvedOxygen} hint={safeRangeHint.dissolved_oxygen} result={validation || undefined} />
+        <FieldInput label={fieldLabel.ph} name="ph" value={ph} onChange={setPh} hint={safeRangeHint.ph} result={validation || undefined} required={false} />
+        <FieldInput label={fieldLabel.temperature} name="temperature" value={temp} onChange={setTemp} hint={safeRangeHint.temperature} result={validation || undefined} required={false} />
+        <FieldInput label={fieldLabel.dissolved_oxygen} name="dissolved_oxygen" value={dissolvedOxygen} onChange={setDissolvedOxygen} hint={safeRangeHint.dissolved_oxygen} result={validation || undefined} required={false} />
       </div>
+      <p className="text-xs text-textSecondary italic">Log any parameter individually or together (pH, Temperature, Dissolved Oxygen).</p>
       <div>
         <label className="block text-xs font-semibold text-textSecondary uppercase tracking-wide mb-1">Comments</label>
         <textarea value={comments} onChange={e => setComments(e.target.value)} rows={2}
@@ -166,7 +178,7 @@ function WaterQualityForm({ tanks }: { tanks: Tank[] }) {
             : 'All parameters within safe range.'}
         </div>
       )}
-      <button type="submit" disabled={loading || !tankId}
+      <button type="submit" disabled={loading || !tankId || !hasAtLeastOneParam}
         className="w-full rounded-xl bg-brandBlue py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
         {loading ? 'Submitting…' : 'Submit Daily Log'}
       </button>
@@ -195,7 +207,17 @@ function TestStripForm({ tanks }: { tanks: Tank[] }) {
     e.preventDefault();
     setLoading(true); setError(''); setValidation(null);
     const params: Record<string, number> = {};
-    for (const k of testStripFields) params[k] = +(fields[k] ?? 0);
+    for (const k of testStripFields) {
+      const v = fields[k];
+      if (v !== undefined && v !== null && v.trim() !== '') {
+        params[k] = +v;
+      }
+    }
+    if (Object.keys(params).length === 0) {
+      setError('Please enter at least one parameter for the test strip log.');
+      setLoading(false);
+      return;
+    }
     try {
       const res = await postWaterQualityLog({
         tank_id: tankId, type: 'test_strip', date, parameters: params,
@@ -410,7 +432,17 @@ function BatchEntry({ tanks }: { tanks: Tank[] }) {
   const handleSubmit = async () => {
     setLoading(true); setError(''); setValidation(null);
     const numParams: Record<string, number> = {};
-    for (const k of fields) numParams[k] = +(params[k] ?? 0);
+    for (const k of fields) {
+      const v = params[k];
+      if (v !== undefined && v !== null && v.trim() !== '') {
+        numParams[k] = +v;
+      }
+    }
+    if (Object.keys(numParams).length === 0) {
+      setError('Please enter at least one parameter value for batch logging.');
+      setLoading(false);
+      return;
+    }
     try {
       const res = await postWaterQualityBatch({
         type: logType, tank_ids: selectedIds, date, parameters: numParams,
