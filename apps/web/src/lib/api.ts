@@ -118,6 +118,9 @@ export const decideExemption = (id: string, data: any) => api.patch(`/quarantine
 export const getAuditLogs = (params?: Record<string, any>) => api.get('/audit-logs', { params });
 export const getReportsSummary = (params?: Record<string, any>) => api.get('/reports/summary', { params });
 export const getExecutiveSummary = (params?: Record<string, any>) => api.get('/reports/executive-facility-summary', { params });
+export const getExecutiveDetails = (params: { category: 'arrivals' | 'deaths'; date_from?: string; date_to?: string }) =>
+  api.get('/reports/executive-details', { params });
+
 
 // Notifications
 export const getNotifications = (window: 'all' | 'recent' = 'all') =>

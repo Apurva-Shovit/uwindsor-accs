@@ -34,3 +34,14 @@ async def get_executive_facility_summary(
     current: User = Depends(require_manager_plus),
 ):
     return await ReportService.get_executive_facility_summary(date_from, date_to, granularity, current)
+
+
+@router.get("/executive-details")
+async def get_executive_details(
+    category: str = Query(...),
+    date_from: Optional[datetime] = Query(None),
+    date_to: Optional[datetime] = Query(None),
+    current: User = Depends(require_manager_plus),
+):
+    return await ReportService.get_executive_details(category, date_from, date_to, current)
+

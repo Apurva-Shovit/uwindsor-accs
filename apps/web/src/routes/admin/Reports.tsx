@@ -1,7 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { formatDate } from '../../utils/formatters';
-import { getExecutiveSummary, getReportsSummary, getProjects, getProjectReport } from '../../lib/api';
+import { getExecutiveSummary, getReportsSummary, getProjects, getProjectReport, getExecutiveDetails } from '../../lib/api';
 import { Paginator } from '../../components/ui/Paginator';
 import { useDebounce } from '../../hooks/useDebounce';
 import { ProtectedView, triggerAuthorizedPrint } from '../../components/security/ProtectedView';
@@ -17,6 +17,24 @@ export const Reports: React.FC = () => {
   const [page, setPage] = React.useState(1);
   const [limit, setLimit] = React.useState(20);
 
+  // Detail Modal breakdown state
+  const [detailModalCategory, setDetailModalCategory] = React.useState<'arrivals' | 'deaths' | null>(null);
+  const [detailSearch, setDetailSearch] = React.useState('');
+  const [detailSubFilter, setDetailSubFilter] = React.useState<'all' | 'arrival' | 'hatch'>('all');
+
+  const { data: detailData, isLoading: isDetailLoading } = useQuery({
+    queryKey: ['executiveDetails', detailModalCategory, dateFrom, dateTo],
+    queryFn: async () => {
+      if (!detailModalCategory) return null;
+      const params: Record<string, any> = { category: detailModalCategory };
+      if (dateFrom) params.date_from = new Date(dateFrom + 'T00:00:00').toISOString();
+      if (dateTo) params.date_to = new Date(dateTo + 'T23:59:59').toISOString();
+      const res = await getExecutiveDetails(params as any);
+      return res.data;
+    },
+    enabled: !!detailModalCategory,
+  });
+
   // Executive summary query
   const { data: execSummary } = useQuery({
     queryKey: ['execFacilitySummary', dateFrom, dateTo, granularity],
@@ -29,6 +47,7 @@ export const Reports: React.FC = () => {
       return res.data;
     }
   });
+
 
   const { data: reportsResponse, isLoading } = useQuery({
     queryKey: ['reportsSummary', dateFrom, dateTo, eventFilter, debouncedAupp, page, limit],
@@ -212,14 +231,40 @@ export const Reports: React.FC = () => {
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Start Fish (Date X)</span>
           <span className="text-xl font-extrabold text-slate-900 mt-1 block">{execSummary?.starting_fish_count ?? 0}</span>
         </div>
-        <div className="bg-white border border-emerald-100 bg-emerald-50/50 rounded-xl p-3.5 shadow-sm">
-          <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">+ Total Arrivals</span>
+        <button
+          type="button"
+          onClick={() => setDetailModalCategory('arrivals')}
+          className="text-left bg-white border border-emerald-200 hover:border-emerald-400 bg-emerald-50/40 hover:bg-emerald-50/80 rounded-xl p-3.5 shadow-sm transition-all duration-200 cursor-pointer active:scale-[0.98] group relative flex flex-col justify-between"
+          title="Click to view detailed breakdown of arrivals and hatches"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">+ Total Arrivals</span>
+            <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded opacity-80 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+              View
+              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
+              </svg>
+            </span>
+          </div>
           <span className="text-xl font-extrabold text-emerald-600 mt-1 block">+{execSummary?.total_arrivals ?? 0}</span>
-        </div>
-        <div className="bg-white border border-red-100 bg-red-50/50 rounded-xl p-3.5 shadow-sm">
-          <span className="text-[10px] font-bold text-red-700 uppercase tracking-wider block">- Total Deaths</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setDetailModalCategory('deaths')}
+          className="text-left bg-white border border-red-200 hover:border-red-400 bg-red-50/40 hover:bg-red-50/80 rounded-xl p-3.5 shadow-sm transition-all duration-200 cursor-pointer active:scale-[0.98] group relative flex flex-col justify-between"
+          title="Click to view detailed breakdown of mortality (deaths)"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-red-700 uppercase tracking-wider block">- Total Deaths</span>
+            <span className="text-[10px] font-bold bg-red-100 text-red-800 px-1.5 py-0.5 rounded opacity-80 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+              View
+              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
+              </svg>
+            </span>
+          </div>
           <span className="text-xl font-extrabold text-red-600 mt-1 block">-{execSummary?.total_mortality ?? 0}</span>
-        </div>
+        </button>
         <div className="bg-white border border-amber-100 bg-amber-50/50 rounded-xl p-3.5 shadow-sm" title="Permanent removals from facility (e.g. euthanized, manual reductions). Excludes internal transfers.">
           <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">- Reductions</span>
           <span className="text-xl font-extrabold text-amber-600 mt-1 block">-{execSummary?.total_dispositions ?? 0}</span>
@@ -932,7 +977,7 @@ export const Reports: React.FC = () => {
                                   {pageIncidents.map((inc: any) => (
                                     <tr key={inc.id} className="border-b border-slate-400">
                                       <td className="border border-slate-900 p-2 font-semibold whitespace-nowrap">{fmtDMY(inc.date || inc.created_at)}</td>
-                                      <td className="border border-slate-900 p-2 whitespace-nowrap text-slate-700">{fmtTime(inc.date || inc.created_at)}</td>
+                                      <td className="border border-slate-900 p-2 whitespace-nowrap text-slate-700">{inc.time || fmtTime(inc.date || inc.created_at)}</td>
                                       <td className="border border-slate-900 p-2 whitespace-nowrap text-slate-700">{dateEst}</td>
                                       <td className="border border-slate-900 p-2 font-bold text-[#005596] text-center">{inc.tank_number}</td>
                                       <td className="border border-slate-900 p-2">{inc.description}</td>
@@ -970,7 +1015,238 @@ export const Reports: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Executive Breakdown Modal (Arrivals / Deaths) */}
+      {detailModalCategory && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto print:hidden">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-7xl max-h-[90vh] flex flex-col overflow-hidden animate-fade-in">
+            {/* Modal Header */}
+            <div className={`px-6 py-4 border-b flex items-center justify-between ${
+              detailModalCategory === 'arrivals'
+                ? 'bg-emerald-50/80 border-emerald-200 text-emerald-900'
+                : 'bg-red-50/80 border-red-200 text-red-900'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className={`p-2.5 rounded-xl ${
+                  detailModalCategory === 'arrivals' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                }`}>
+                  {detailModalCategory === 'arrivals' ? (
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                  ) : (
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4" />
+                    </svg>
+                  )}
+                </div>
+                <div>
+                  <h2 className="text-xl font-extrabold tracking-tight">
+                    {detailModalCategory === 'arrivals' ? 'Arrivals & Hatches Breakdown' : 'Mortality (Deaths) Breakdown'}
+                  </h2>
+                  <p className="text-xs font-medium opacity-80 mt-0.5">
+                    {dateFrom || dateTo
+                      ? `Range: ${dateFrom || 'Start'} to ${dateTo || 'Today'}`
+                      : 'All Historical Records'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="hidden sm:flex items-center gap-2 text-xs font-semibold">
+                  <span className="px-2.5 py-1 rounded-full bg-white shadow-sm border border-slate-200">
+                    {detailData?.total_records ?? 0} Events
+                  </span>
+                  <span className={`px-2.5 py-1 rounded-full text-white ${
+                    detailModalCategory === 'arrivals' ? 'bg-emerald-600' : 'bg-red-600'
+                  }`}>
+                    {detailModalCategory === 'arrivals' ? '+' : '-'}{detailData?.total_fish ?? 0} Fish
+                  </span>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setDetailModalCategory(null);
+                    setDetailSearch('');
+                    setDetailSubFilter('all');
+                  }}
+                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Controls / Search */}
+            <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="relative w-full sm:w-72">
+                <svg className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Search AUPP, Tank, Actor..."
+                  value={detailSearch}
+                  onChange={(e) => setDetailSearch(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#005596]"
+                />
+              </div>
+
+              {detailModalCategory === 'arrivals' && (
+                <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 text-xs">
+                  <button
+                    onClick={() => setDetailSubFilter('all')}
+                    className={`px-2.5 py-1 rounded-md font-semibold transition-colors ${
+                      detailSubFilter === 'all' ? 'bg-[#005596] text-white' : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    All Types
+                  </button>
+                  <button
+                    onClick={() => setDetailSubFilter('arrival')}
+                    className={`px-2.5 py-1 rounded-md font-semibold transition-colors ${
+                      detailSubFilter === 'arrival' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    Arrivals Only
+                  </button>
+                  <button
+                    onClick={() => setDetailSubFilter('hatch')}
+                    className={`px-2.5 py-1 rounded-md font-semibold transition-colors ${
+                      detailSubFilter === 'hatch' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    Hatches Only
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Body / Table */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-4">
+              {isDetailLoading ? (
+                <div className="flex flex-col items-center justify-center py-12 text-slate-400 gap-3">
+                  <div className="w-8 h-8 border-3 border-[#005596] border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-sm font-medium">Fetching event breakdown...</span>
+                </div>
+              ) : (() => {
+                const items: any[] = detailData?.items || [];
+                const filtered = items.filter((item) => {
+                  if (detailSubFilter !== 'all' && item.event_type !== detailSubFilter) return false;
+                  if (!detailSearch.trim()) return true;
+                  const q = detailSearch.toLowerCase();
+                  return (
+                    item.aupp_number?.toLowerCase().includes(q) ||
+                    item.tank_number?.toLowerCase().includes(q) ||
+                    item.project_title?.toLowerCase().includes(q) ||
+                    item.actor_name?.toLowerCase().includes(q) ||
+                    item.notes?.toLowerCase().includes(q) ||
+                    item.reason?.toLowerCase().includes(q)
+                  );
+                });
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl">
+                      <p className="text-sm font-semibold text-slate-500">No records found matching criteria.</p>
+                      <p className="text-xs text-slate-400 mt-1">Try adjusting your date range or search terms.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-sm">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold">
+                          <th className="py-3 px-4">Date & Time</th>
+                          <th className="py-3 px-4">Event</th>
+                          <th className="py-3 px-4">AUPP / Project</th>
+                          <th className="py-3 px-4">Location</th>
+                          <th className="py-3 px-4 text-right">Quantity</th>
+                          <th className="py-3 px-4">Logged By</th>
+                          <th className="py-3 px-4">Notes / Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                        {filtered.map((item, idx) => (
+                          <tr key={item.record_key || idx} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="py-3 px-4 whitespace-nowrap">
+                              <span className="font-semibold text-slate-900 block">
+                                {formatDate(item.created_at || item.date)}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 whitespace-nowrap">
+                              {item.event_type === 'arrival' && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-100 text-emerald-800">
+                                  Arrival
+                                </span>
+                              )}
+                              {item.event_type === 'hatch' && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-teal-100 text-teal-800">
+                                  Hatch
+                                </span>
+                              )}
+                              {item.event_type === 'death' && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-100 text-rose-800">
+                                  Death
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="font-bold text-[#005596]">{item.aupp_number}</div>
+                              <div className="text-[11px] text-slate-500 max-w-xs truncate" title={item.project_title}>
+                                {item.project_title}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 whitespace-nowrap">
+                              <div className="font-semibold text-slate-800">{item.tank_number}</div>
+                              {item.room_number && (
+                                <div className="text-[11px] text-slate-400">{item.room_number}</div>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-right whitespace-nowrap">
+                              <span className={`font-extrabold text-sm ${
+                                detailModalCategory === 'arrivals' ? 'text-emerald-600' : 'text-red-600'
+                              }`}>
+                                {item.change > 0 ? `+${item.change}` : item.change}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 whitespace-nowrap">
+                              <span className="font-medium text-slate-800">{item.actor_name}</span>
+                            </td>
+                            <td className="py-3 px-4 text-slate-500 text-[11px]">
+                              {item.notes || item.reason || '-'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex justify-between items-center text-xs text-slate-500">
+              <span>Showing filtered breakdown for executive summary</span>
+              <button
+                onClick={() => {
+                  setDetailModalCategory(null);
+                  setDetailSearch('');
+                  setDetailSubFilter('all');
+                }}
+                className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold px-4 py-1.5 rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </ProtectedView>
+
   );
 };
 

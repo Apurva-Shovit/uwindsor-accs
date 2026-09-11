@@ -156,13 +156,25 @@ class ProjectService:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid end_date format, expected YYYY-MM-DD")
 
         def get_dt(obj):
-            dt = getattr(obj, "created_at", None)
-            if not dt and hasattr(obj, "date"):
+            dt = None
+            if hasattr(obj, "date"):
                 d = getattr(obj, "date")
-                if isinstance(d, datetime):
+                t_str = getattr(obj, "time", None)
+                if isinstance(d, date) and not isinstance(d, datetime):
+                    if t_str and ":" in str(t_str):
+                        try:
+                            from datetime import time as time_cls
+                            parts = str(t_str).split(":")
+                            h, m = int(parts[0]), int(parts[1])
+                            dt = datetime.combine(d, time_cls(h, m)).replace(tzinfo=timezone.utc)
+                        except Exception:
+                            dt = datetime.combine(d, datetime.min.time()).replace(tzinfo=timezone.utc)
+                    else:
+                        dt = datetime.combine(d, datetime.min.time()).replace(tzinfo=timezone.utc)
+                elif isinstance(d, datetime):
                     dt = d
-                elif isinstance(d, date):
-                    dt = datetime.combine(d, datetime.min.time()).replace(tzinfo=timezone.utc)
+            if not dt:
+                dt = getattr(obj, "created_at", None)
             if not dt:
                 dt = getattr(obj, "timestamp", None)
             if dt and dt.tzinfo is None:
@@ -297,7 +309,8 @@ class ProjectService:
                 "status": getattr(inc, "status", "Closed Log"),
                 "notes": notes,
                 "reported_by_name": reporter or "Unknown User",
-                "date": inc_date
+                "date": inc_date,
+                "time": getattr(inc, "time", None)
             })
 
         # 4. Water quality logs for assigned tanks (Daily and Test Strip logs)

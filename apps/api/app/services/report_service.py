@@ -316,3 +316,83 @@ class ReportService:
             "active_projects_count": active_projects,
             "total_events_logged": len(window_census),
         }
+
+    @staticmethod
+    async def get_executive_details(
+        category: str,
+        date_from: Optional[datetime],
+        date_to: Optional[datetime],
+        current_user: User
+    ) -> Dict[str, Any]:
+        if category not in ("arrivals", "deaths"):
+            raise HTTPException(status_code=400, detail="Invalid category. Must be 'arrivals' or 'deaths'.")
+
+        all_census = await CensusEvent.find_all().to_list()
+        tanks_list = await Tank.find_all().to_list()
+        rooms_list = await Room.find_all().to_list()
+        projects_list = await Project.find_all().to_list()
+
+        tank_map = {str(t.id): t for t in tanks_list}
+        room_map = {str(r.id): r for r in rooms_list}
+        proj_map = {str(p.id): p for p in projects_list}
+
+        df_date = date_from.date() if date_from else None
+        dt_date = date_to.date() if date_to else None
+
+        filtered_events = []
+        for c in all_census:
+            if df_date and c.date < df_date:
+                continue
+            if dt_date and c.date > dt_date:
+                continue
+
+            if category == "arrivals" and c.event_type in ("arrival", "hatch"):
+                filtered_events.append(c)
+            elif category == "deaths" and c.event_type == "death":
+                filtered_events.append(c)
+
+        user_ids = {c.created_by for c in filtered_events if c.created_by}
+        user_map = await EntityResolver.resolve_users_by_ids(list(user_ids))
+
+        filtered_events.sort(key=lambda x: x.created_at or datetime.combine(x.date, datetime.min.time()), reverse=True)
+
+        items = []
+        for idx, c in enumerate(filtered_events):
+            t_obj = tank_map.get(str(c.tank_id))
+            tank_label = f"Tank {t_obj.tank_number}" if t_obj else "Unknown Tank"
+            room_label = ""
+            if t_obj and t_obj.room_id in room_map:
+                room_label = f"Room {room_map[t_obj.room_id].room_number}"
+
+            p_obj = proj_map.get(str(c.project_id))
+            aupp_number = p_obj.aupp_number if p_obj else "N/A"
+            project_title = p_obj.title if p_obj else "Unknown Project"
+
+            actor_name = user_map.get(c.created_by, "System") if c.created_by else "System"
+
+            items.append({
+                "record_key": f"{c.event_type}_{idx}_{c.date.isoformat()}",
+                "date": c.date.isoformat(),
+                "created_at": c.created_at.isoformat() if c.created_at else c.date.isoformat(),
+                "event_type": c.event_type,
+                "change": c.change,
+                "tank_number": tank_label,
+                "room_number": room_label,
+                "aupp_number": aupp_number,
+                "project_title": project_title,
+                "actor_name": actor_name,
+                "reason": c.reason or "",
+                "notes": c.notes or "",
+            })
+
+        total_fish = sum(abs(item["change"]) for item in items)
+
+        return {
+            "category": category,
+            "date_from": df_date.isoformat() if df_date else None,
+            "date_to": dt_date.isoformat() if dt_date else None,
+            "total_records": len(items),
+            "total_fish": total_fish,
+            "items": items,
+        }
+
