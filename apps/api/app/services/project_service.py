@@ -405,7 +405,7 @@ class ProjectService:
                 "vet_contacted": "Yes" if getattr(inc, "vet_contacted", False) else "No",
                 "status": getattr(inc, "status", "Closed Log"),
                 "notes": notes,
-                "reported_by_name": reporter,
+                "reported_by_name": reporter or "Unknown User",
                 "date": inc_date,
                 "time": getattr(inc, "time", None)
             })
