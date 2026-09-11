@@ -103,7 +103,8 @@ export const Reports: React.FC = () => {
 
   const [showOfficialModal, setShowOfficialModal] = React.useState(false);
   const [selectedForm, setSelectedForm] = React.useState<'appendix6' | 'appendix7' | 'incidents'>('appendix6');
-  const [selectedProjectId, setSelectedProjectId] = React.useState('');
+  const [selectedProjectIds, setSelectedProjectIds] = React.useState<string[]>([]);
+  const [isConfigExpanded, setIsConfigExpanded] = React.useState(true);
 
   // Projects list for official report
   const { data: projectsResponse } = useQuery({
@@ -116,20 +117,24 @@ export const Reports: React.FC = () => {
 
   const projectsList = Array.isArray(projectsResponse) ? projectsResponse : (projectsResponse?.items || []);
 
+  const hasInitializedProjectsRef = React.useRef(false);
+
   React.useEffect(() => {
-    if (projectsList && projectsList.length > 0 && !selectedProjectId) {
-      setSelectedProjectId(projectsList[0].id || projectsList[0]._id);
+    if (projectsList && projectsList.length > 0 && !hasInitializedProjectsRef.current) {
+      hasInitializedProjectsRef.current = true;
+      setSelectedProjectIds(projectsList.map((p: any) => String(p.id || p._id)));
     }
-  }, [projectsList, selectedProjectId]);
+  }, [projectsList]);
 
   // Official Report Data query (fetches all available project logs for generator)
   const timePeriodParam = 'all';
+  const selectedProjectIdsParam = [...selectedProjectIds].sort().join(',');
   const { data: sopReportData } = useQuery({
-    queryKey: ['sopReportData', selectedProjectId, timePeriodParam, dateFrom, dateTo],
+    queryKey: ['sopReportData', selectedProjectIdsParam, timePeriodParam, dateFrom, dateTo],
     queryFn: async () => {
-      if (!selectedProjectId) return null;
+      if (!selectedProjectIdsParam) return null;
       const res = await getProjectReport(
-        selectedProjectId,
+        selectedProjectIdsParam,
         timePeriodParam,
         1,
         1000,
@@ -138,7 +143,7 @@ export const Reports: React.FC = () => {
       );
       return res.data;
     },
-    enabled: !!selectedProjectId && showOfficialModal
+    enabled: selectedProjectIds.length > 0 && showOfficialModal
   });
 
   const sopProject = sopReportData?.project;
@@ -483,39 +488,128 @@ export const Reports: React.FC = () => {
               </div>
             </div>
 
-            {/* Template & Project Selection (Hidden during print) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-semibold print:hidden bg-slate-50 p-4 rounded-xl border border-slate-200">
-              <div>
-                <label className="block text-[10px] font-extrabold text-slate-400 uppercase mb-1">Select SOP Form Template</label>
-                <select
-                  value={selectedForm}
-                  onChange={(e) => setSelectedForm(e.target.value as any)}
-                  className="w-full rounded-xl border border-slate-300 bg-white p-2 text-xs font-bold text-slate-800 shadow-sm focus:ring-2 focus:ring-[#005596]"
-                >
-                  <option value="appendix6">Appendix 6: Daily Water Quality Log Sheet</option>
-                  <option value="appendix7">Appendix 7: Water Quality Test Strip Log Sheet</option>
-                  <option value="incidents">Aquatic Incident Report Form</option>
-                </select>
-              </div>
+            {/* Foldable Template & Project Selection Panel (Hidden during print) */}
+            <div className="border border-slate-200 rounded-2xl bg-slate-50/80 overflow-hidden shadow-sm print:hidden">
+              <button
+                type="button"
+                onClick={() => setIsConfigExpanded(!isConfigExpanded)}
+                className="w-full px-4 py-3 bg-slate-100/80 hover:bg-slate-100 flex items-center justify-between transition-colors text-left font-bold text-xs text-slate-800 cursor-pointer"
+              >
+                <div className="flex items-center gap-2 flex-wrap">
+                  <svg className="w-4 h-4 text-[#005596]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                  </svg>
+                  <span className="font-extrabold text-[#005596] uppercase text-[11px] tracking-wider">Report Options & AUPP Filter</span>
+                  <span className="text-slate-300 font-normal">•</span>
+                  <span className="bg-white px-2.5 py-0.5 rounded-full border border-slate-200 text-slate-700 text-[11px]">
+                    {selectedForm === 'appendix6' ? 'Appendix 6 (Daily WQ)' : selectedForm === 'appendix7' ? 'Appendix 7 (Test Strips)' : 'Aquatic Incidents'}
+                  </span>
+                  <span className="bg-blue-50 text-[#005596] px-2.5 py-0.5 rounded-full border border-blue-200 text-[11px] font-bold">
+                    {selectedProjectIds.length} AUPP{selectedProjectIds.length !== 1 ? 's' : ''} Selected
+                  </span>
+                </div>
 
-              <div>
-                <label className="block text-[10px] font-extrabold text-slate-400 uppercase mb-1">Select Research Project (AUPP)</label>
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 bg-white p-2 text-xs font-bold text-slate-800 shadow-sm focus:ring-2 focus:ring-[#005596]"
-                >
-                  {projectsList?.map((p: any) => (
-                    <option key={p.id || p._id} value={p.id || p._id}>
-                      {p.title} (AUPP: {p.aupp_number})
-                    </option>
-                  ))}
-                </select>
-              </div>
+                <div className="flex items-center gap-1.5 text-slate-500 hover:text-slate-800 text-[11px] font-semibold">
+                  <span>{isConfigExpanded ? 'Collapse' : 'Expand'}</span>
+                  <svg
+                    className={`w-4 h-4 transition-transform duration-200 ${isConfigExpanded ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </button>
+
+              {isConfigExpanded && (
+                <div className="p-4 border-t border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-semibold bg-white">
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase mb-1.5">Select SOP Form Template</label>
+                    <select
+                      value={selectedForm}
+                      onChange={(e) => setSelectedForm(e.target.value as any)}
+                      className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-bold text-slate-800 shadow-sm focus:ring-2 focus:ring-[#005596]"
+                    >
+                      <option value="appendix6">Appendix 6: Daily Water Quality Log Sheet</option>
+                      <option value="appendix7">Appendix 7: Water Quality Test Strip Log Sheet</option>
+                      <option value="incidents">Aquatic Incident Report Form</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[10px] font-extrabold text-slate-400 uppercase">
+                        Select Research Projects (AUPP) ({selectedProjectIds.length} of {projectsList?.length || 0})
+                      </label>
+                      <div className="flex items-center gap-2 text-[10px] font-bold">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProjectIds(projectsList.map((p: any) => String(p.id || p._id)))}
+                          className="text-[#005596] hover:underline cursor-pointer"
+                        >
+                          Select All
+                        </button>
+                        <span className="text-slate-300">|</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProjectIds([])}
+                          className="text-slate-500 hover:underline cursor-pointer"
+                        >
+                          Clear All
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl bg-slate-50/50 p-2 space-y-1.5">
+                      {projectsList && projectsList.length > 0 ? (
+                        projectsList.map((p: any) => {
+                          const pId = String(p.id || p._id);
+                          const isChecked = selectedProjectIds.includes(pId);
+                          return (
+                            <label
+                              key={pId}
+                              className={`flex items-center gap-2 p-2 rounded-lg border transition-all cursor-pointer text-xs font-semibold ${
+                                isChecked ? 'bg-white border-blue-300 text-slate-900 shadow-sm' : 'bg-slate-50 border-transparent text-slate-500 hover:bg-white'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedProjectIds((prev) => [...prev, pId]);
+                                  } else {
+                                    setSelectedProjectIds((prev) => prev.filter((id) => id !== pId));
+                                  }
+                                }}
+                                className="rounded text-[#005596] focus:ring-[#005596] h-4 w-4 border-slate-300"
+                              />
+                              <span className="font-mono font-bold text-[#005596] bg-blue-50 border border-blue-200 px-2 py-0.5 rounded text-[11px]">
+                                AUPP: {p.aupp_number}
+                              </span>
+                              <span className="truncate flex-1">{p.title}</span>
+                              {p.pi_name && <span className="text-[10px] text-slate-400 font-normal hidden sm:inline">PI: {p.pi_name}</span>}
+                            </label>
+                          );
+                        })
+                      ) : (
+                        <div className="text-center text-slate-400 py-3 text-xs">No projects found</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
+            {selectedProjectIds.length === 0 && (
+              <div className="p-8 text-center bg-amber-50 rounded-xl border border-amber-200 text-amber-800 text-sm font-semibold">
+                Please expand the options header above and select at least one AUPP project checkbox to generate the official compliance report.
+              </div>
+            )}
+
             {/* Rendered Form Document (Isolated for Print) */}
-            {sopProject && (
+            {sopProject && selectedProjectIds.length > 0 && (
               <div id="official-sop-print-area" className="bg-white text-slate-900 font-sans">
                 <style>{`
                   @media print {
