@@ -117,14 +117,38 @@ export const Reports: React.FC = () => {
 
   const projectsList = Array.isArray(projectsResponse) ? projectsResponse : (projectsResponse?.items || []);
 
+  const filteredProjectsList = React.useMemo(() => {
+    if (!projectsList || projectsList.length === 0) return [];
+
+    let rangeStart: Date | null = null;
+    if (dateFrom) {
+      rangeStart = new Date(dateFrom + 'T00:00:00');
+    } else {
+      rangeStart = new Date(Date.now() - 35 * 86400 * 1000);
+    }
+
+    return projectsList.filter((p: any) => {
+      const isClosed = p.status === 'closed' || !!p.closed_at;
+      if (isClosed && p.closed_at && rangeStart) {
+        const closedDate = new Date(p.closed_at);
+        if (!isNaN(closedDate.getTime())) {
+          if (closedDate < rangeStart) {
+            return false;
+          }
+        }
+      }
+      return true;
+    });
+  }, [projectsList, dateFrom]);
+
   const hasInitializedProjectsRef = React.useRef(false);
 
   React.useEffect(() => {
-    if (projectsList && projectsList.length > 0 && !hasInitializedProjectsRef.current) {
+    if (filteredProjectsList && filteredProjectsList.length > 0 && !hasInitializedProjectsRef.current) {
       hasInitializedProjectsRef.current = true;
-      setSelectedProjectIds(projectsList.map((p: any) => String(p.id || p._id)));
+      setSelectedProjectIds(filteredProjectsList.map((p: any) => String(p.id || p._id)));
     }
-  }, [projectsList]);
+  }, [filteredProjectsList]);
 
   // Official Report Data query (fetches all available project logs for generator)
   const timePeriodParam = 'all';
@@ -540,12 +564,12 @@ export const Reports: React.FC = () => {
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="text-[10px] font-extrabold text-slate-400 uppercase">
-                        Select Research Projects (AUPP) ({selectedProjectIds.length} of {projectsList?.length || 0})
+                        Select Research Projects (AUPP) ({selectedProjectIds.length} of {filteredProjectsList?.length || 0})
                       </label>
                       <div className="flex items-center gap-2 text-[10px] font-bold">
                         <button
                           type="button"
-                          onClick={() => setSelectedProjectIds(projectsList.map((p: any) => String(p.id || p._id)))}
+                          onClick={() => setSelectedProjectIds(filteredProjectsList.map((p: any) => String(p.id || p._id)))}
                           className="text-[#005596] hover:underline cursor-pointer"
                         >
                           Select All
@@ -562,15 +586,15 @@ export const Reports: React.FC = () => {
                     </div>
 
                     <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl bg-slate-50/50 p-2 space-y-1.5">
-                      {projectsList && projectsList.length > 0 ? (
-                        projectsList.map((p: any) => {
+                      {filteredProjectsList && filteredProjectsList.length > 0 ? (
+                        filteredProjectsList.map((p: any) => {
                           const pId = String(p.id || p._id);
                           const isChecked = selectedProjectIds.includes(pId);
                           return (
                             <label
                               key={pId}
                               className={`flex items-center gap-2 p-2 rounded-lg border transition-all cursor-pointer text-xs font-semibold ${
-                                isChecked ? 'bg-white border-blue-300 text-slate-900 shadow-sm' : 'bg-slate-50 border-transparent text-slate-500 hover:bg-white'
+                                isChecked ? 'bg-white border-blue-300 text-slate-900 shadow-sm' : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-50'
                               }`}
                             >
                               <input
@@ -589,14 +613,22 @@ export const Reports: React.FC = () => {
                                 AUPP: {p.aupp_number}
                               </span>
                               <span className="truncate flex-1">{p.title}</span>
+                              {p.status === 'closed' && (
+                                <span className="text-[9px] font-bold uppercase bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
+                                  Closed
+                                </span>
+                              )}
                               {p.pi_name && <span className="text-[10px] text-slate-400 font-normal hidden sm:inline">PI: {p.pi_name}</span>}
                             </label>
                           );
                         })
                       ) : (
-                        <div className="text-center text-slate-400 py-3 text-xs">No projects found</div>
+                        <div className="text-center text-slate-400 py-3 text-xs">No active or relevant projects found for this date range</div>
                       )}
                     </div>
+                    <p className="text-[10px] text-slate-400 mt-1 italic">
+                      Note: Projects closed prior to the selected date range are automatically excluded.
+                    </p>
                   </div>
                 </div>
               )}
