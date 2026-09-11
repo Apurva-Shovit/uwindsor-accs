@@ -197,12 +197,16 @@ class ProjectService:
         all_assignments_hist = await TankAssignment.find({"project_id": project_id}).to_list()
         assigned_tank_ids = list(set([a.tank_id for a in all_assignments_hist if a.tank_id]))
 
+        occ_tank_oids = [ObjectId(a.tank_id) for a in assignments if a.tank_id and ObjectId.is_valid(a.tank_id)]
+        tanks_by_oid_list = await Tank.find({"_id": {"$in": occ_tank_oids}}).to_list() if occ_tank_oids else []
+        tanks_by_oid_map = {str(t.id): t for t in tanks_by_oid_list}
+
         occupied_tanks = []
         total_fish_count = 0
 
         for a in assignments:
             total_fish_count += a.current_count
-            tank = await Tank.get(a.tank_id)
+            tank = tanks_by_oid_map.get(str(a.tank_id))
             occupied_tanks.append({
                 "tank_assignment_id": str(a.id),
                 "tank_id": a.tank_id,
@@ -214,64 +218,11 @@ class ProjectService:
                 "status": tank.status if tank else "active"
             })
 
-        # 2. Census events (all & deaths & quarantine)
+        # 2. Fetch Census events
         census_events = await CensusEvent.find({"project_id": project_id}).to_list()
         census_events.sort(key=lambda x: get_dt(x) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
 
-        census_list = []
-        deaths_list = []
-        quarantine_list = []
-        total_deaths = 0
-
-        for c in census_events:
-            c_dt = get_dt(c)
-            if not is_in_range(c_dt):
-                continue
-
-            actor = await EntityResolver.resolve_user_name(c.created_by)
-            tank_num = await EntityResolver.resolve_tank_number(c.tank_id)
-            date_str = c_dt.strftime("%a, %b %d, %Y, %I:%M %p") if c_dt else str(c.date)
-            
-            c_dict = {
-                "id": str(c.id),
-                "event_type": c.event_type,
-                "change": c.change,
-                "tank_number": tank_num,
-                "reason": c.reason or "-",
-                "notes": c.notes or "-",
-                "date": date_str,
-                "actor_name": actor or "Unknown User",
-                "created_at": c.created_at.isoformat() if getattr(c, "created_at", None) else None
-            }
-            census_list.append(c_dict)
-
-            if c.event_type == "death":
-                death_count = abs(c.change)
-                total_deaths += death_count
-                deaths_list.append({
-                    "id": str(c.id),
-                    "count": death_count,
-                    "tank_number": tank_num,
-                    "reason": c.reason or "Unspecified Mortality",
-                    "notes": c.notes or "-",
-                    "date": date_str,
-                    "reported_by_name": actor or "Unknown User"
-                })
-
-            if c.event_type in ["quarantine_placed", "quarantine_lifted"]:
-                quarantine_list.append({
-                    "id": str(c.id),
-                    "event_type": c.event_type,
-                    "action_name": "Quarantine Placed" if c.event_type == "quarantine_placed" else "Quarantine Lifted",
-                    "tank_number": tank_num,
-                    "reason": c.reason or "-",
-                    "notes": c.notes or "-",
-                    "date": date_str,
-                    "actor_name": actor or "Unknown User",
-                    "created_at": c.created_at.isoformat() if getattr(c, "created_at", None) else None
-                })
-
-        # 3. Incident reports
+        # 3. Fetch Incident reports
         try:
             incidents = await IncidentReport.find({"project_id": project_id}).to_list()
         except Exception:
@@ -280,41 +231,7 @@ class ProjectService:
 
         incidents.sort(key=lambda x: get_dt(x) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
 
-        incidents_list = []
-        for inc in incidents:
-            inc_dt = get_dt(inc)
-            if not is_in_range(inc_dt):
-                continue
-
-            creator_id = getattr(inc, "created_by", getattr(inc, "reported_by", None))
-            reporter = await EntityResolver.resolve_user_name(creator_id)
-            tank_num = await EntityResolver.resolve_tank_number(inc.tank_id)
-            inc_date = inc_dt.strftime("%a, %b %d, %Y, %I:%M %p") if inc_dt else "-"
-
-            problem = getattr(inc, "problem", getattr(inc, "description", "Aquatic Incident"))
-            comments = getattr(inc, "comments", getattr(inc, "notes", "-"))
-            treatment = getattr(inc, "treatment", None)
-            if treatment:
-                notes = f"Treatment: {treatment}. Notes: {comments}" if comments != "-" else f"Treatment: {treatment}"
-            else:
-                notes = comments
-
-            incidents_list.append({
-                "id": str(inc.id),
-                "incident_type": problem,
-                "severity": getattr(inc, "severity", "Standard"),
-                "tank_number": tank_num,
-                "description": problem,
-                "vet_contacted": "Yes" if getattr(inc, "vet_contacted", False) else "No",
-                "status": getattr(inc, "status", "Closed Log"),
-                "notes": notes,
-                "reported_by_name": reporter or "Unknown User",
-                "date": inc_date,
-                "time": getattr(inc, "time", None)
-            })
-
-        # 4. Water quality logs for assigned tanks (Daily and Test Strip logs)
-        wq_logs = []
+        # 4. Fetch Water quality logs for assigned tanks (Daily and Test Strip logs)
         wq_records = []
         if assigned_tank_ids:
             try:
@@ -351,11 +268,9 @@ class ProjectService:
                 }
             else:
                 existing = coalesced_map[group_key]
-                # Merge parameters: later non-null values overwrite earlier ones
                 for pk, pv in raw_params.items():
                     if pv is not None:
                         existing["parameters"][pk] = pv
-                # Update latest metadata
                 existing["id"] = str(wq.id)
                 existing["wq_dt"] = wq_dt
                 existing["created_by"] = getattr(wq, "created_by", getattr(wq, "logged_by", None))
@@ -363,14 +278,143 @@ class ProjectService:
                 if comment:
                     existing["notes_list"].append(comment)
 
-        # Convert coalesced items back to list and sort descending by date
         coalesced_items = list(coalesced_map.values())
         coalesced_items.sort(key=lambda x: x["wq_dt"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
 
+        # 5. Fetch Project audit logs
+        try:
+            audits = await AuditLog.find({"$or": [
+                {"entity_type": "project", "entity_id": project_id},
+                {"entity_type": "tank_assignment", "after.project_id": project_id},
+                {"entity_type": "census_event", "after.project_id": project_id},
+                {"entity_type": "incident_report", "after.project_id": project_id}
+            ]}).to_list()
+        except Exception:
+            all_audits = await AuditLog.find_all().to_list()
+            audits = [a for a in all_audits if (getattr(a, "entity_type", "") == "project" and getattr(a, "entity_id", "") == project_id) or (isinstance(getattr(a, "after", None), dict) and a.after.get("project_id") == project_id)]
+
+        audits.sort(key=lambda x: get_dt(x) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+
+        # --- BATCH ENTITY RESOLUTION ---
+        all_user_ids = set()
+        all_tank_ids = set()
+
+        for c in census_events:
+            if is_in_range(get_dt(c)):
+                if c.created_by: all_user_ids.add(str(c.created_by))
+                if c.tank_id: all_tank_ids.add(str(c.tank_id))
+
+        for inc in incidents:
+            if is_in_range(get_dt(inc)):
+                creator_id = getattr(inc, "created_by", getattr(inc, "reported_by", None))
+                if creator_id: all_user_ids.add(str(creator_id))
+                if inc.tank_id: all_tank_ids.add(str(inc.tank_id))
+
+        for c_item in coalesced_items:
+            if c_item.get("created_by"): all_user_ids.add(str(c_item["created_by"]))
+            if c_item.get("tank_id"): all_tank_ids.add(str(c_item["tank_id"]))
+
+        for a in audits:
+            if is_in_range(get_dt(a)):
+                if getattr(a, "actor_id", None): all_user_ids.add(str(a.actor_id))
+
+        user_map = await EntityResolver.resolve_users_by_ids(list(all_user_ids))
+        tank_map = await EntityResolver.resolve_tanks_by_ids(list(all_tank_ids))
+
+        # --- PROCESS CENSUS EVENTS ---
+        census_list = []
+        deaths_list = []
+        quarantine_list = []
+        total_deaths = 0
+
+        for c in census_events:
+            c_dt = get_dt(c)
+            if not is_in_range(c_dt):
+                continue
+
+            actor = user_map.get(str(c.created_by)) or user_map.get(c.created_by) or "Unknown User"
+            tank_num = tank_map.get(str(c.tank_id)) or tank_map.get(c.tank_id) or "Unknown Tank"
+            date_str = c_dt.strftime("%a, %b %d, %Y, %I:%M %p") if c_dt else str(c.date)
+            
+            c_dict = {
+                "id": str(c.id),
+                "event_type": c.event_type,
+                "change": c.change,
+                "tank_number": tank_num,
+                "reason": c.reason or "-",
+                "notes": c.notes or "-",
+                "date": date_str,
+                "actor_name": actor,
+                "created_at": c.created_at.isoformat() if getattr(c, "created_at", None) else None
+            }
+            census_list.append(c_dict)
+
+            if c.event_type == "death":
+                death_count = abs(c.change)
+                total_deaths += death_count
+                deaths_list.append({
+                    "id": str(c.id),
+                    "count": death_count,
+                    "tank_number": tank_num,
+                    "reason": c.reason or "Unspecified Mortality",
+                    "notes": c.notes or "-",
+                    "date": date_str,
+                    "reported_by_name": actor
+                })
+
+            if c.event_type in ["quarantine_placed", "quarantine_lifted"]:
+                quarantine_list.append({
+                    "id": str(c.id),
+                    "event_type": c.event_type,
+                    "action_name": "Quarantine Placed" if c.event_type == "quarantine_placed" else "Quarantine Lifted",
+                    "tank_number": tank_num,
+                    "reason": c.reason or "-",
+                    "notes": c.notes or "-",
+                    "date": date_str,
+                    "actor_name": actor,
+                    "created_at": c.created_at.isoformat() if getattr(c, "created_at", None) else None
+                })
+
+        # --- PROCESS INCIDENT REPORTS ---
+        incidents_list = []
+        for inc in incidents:
+            inc_dt = get_dt(inc)
+            if not is_in_range(inc_dt):
+                continue
+
+            creator_id = getattr(inc, "created_by", getattr(inc, "reported_by", None))
+            reporter = user_map.get(str(creator_id)) or user_map.get(creator_id) or "Unknown User"
+            tank_num = tank_map.get(str(inc.tank_id)) or tank_map.get(inc.tank_id) or "Unknown Tank"
+            inc_date = inc_dt.strftime("%a, %b %d, %Y, %I:%M %p") if inc_dt else "-"
+
+            problem = getattr(inc, "problem", getattr(inc, "description", "Aquatic Incident"))
+            comments = getattr(inc, "comments", getattr(inc, "notes", "-"))
+            treatment = getattr(inc, "treatment", None)
+            if treatment:
+                notes = f"Treatment: {treatment}. Notes: {comments}" if comments != "-" else f"Treatment: {treatment}"
+            else:
+                notes = comments
+
+            incidents_list.append({
+                "id": str(inc.id),
+                "incident_type": problem,
+                "severity": getattr(inc, "severity", "Standard"),
+                "tank_number": tank_num,
+                "description": problem,
+                "vet_contacted": "Yes" if getattr(inc, "vet_contacted", False) else "No",
+                "status": getattr(inc, "status", "Closed Log"),
+                "notes": notes,
+                "reported_by_name": reporter,
+                "date": inc_date,
+                "time": getattr(inc, "time", None)
+            })
+
+        # --- PROCESS WATER QUALITY LOGS ---
+        wq_logs = []
         for c_item in coalesced_items:
             wq_dt = c_item["wq_dt"]
-            logger = await EntityResolver.resolve_user_name(c_item["created_by"])
-            tank_num = await EntityResolver.resolve_tank_number(c_item["tank_id"])
+            logger = user_map.get(str(c_item["created_by"])) or user_map.get(c_item["created_by"]) or "Unknown User"
+            tank_num = tank_map.get(str(c_item["tank_id"])) or tank_map.get(c_item["tank_id"]) or "Unknown Tank"
             wq_date = wq_dt.strftime("%a, %b %d, %Y, %I:%M %p") if wq_dt else "-"
 
             params = c_item["parameters"]
@@ -393,40 +437,27 @@ class ProjectService:
                 "pH": ph_val,
                 "dissolved_oxygen": do_val,
                 "parameters": params,
-                "logged_by_name": logger or "Unknown User",
+                "logged_by_name": logger,
                 "date": wq_date,
                 "iso_date": wq_dt.strftime("%Y-%m-%d") if wq_dt else "",
                 "day_of_week": day_col,
                 "notes": notes_str
             })
 
-        # 5. Project audit logs
-        try:
-            audits = await AuditLog.find({"$or": [
-                {"entity_type": "project", "entity_id": project_id},
-                {"entity_type": "tank_assignment", "after.project_id": project_id},
-                {"entity_type": "census_event", "after.project_id": project_id},
-                {"entity_type": "incident_report", "after.project_id": project_id}
-            ]}).to_list()
-        except Exception:
-            all_audits = await AuditLog.find_all().to_list()
-            audits = [a for a in all_audits if (getattr(a, "entity_type", "") == "project" and getattr(a, "entity_id", "") == project_id) or (isinstance(getattr(a, "after", None), dict) and a.after.get("project_id") == project_id)]
-
-        audits.sort(key=lambda x: get_dt(x) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
-
+        # --- PROCESS AUDIT LOGS ---
         audit_list = []
         for a in audits:
             aud_dt = get_dt(a)
             if not is_in_range(aud_dt):
                 continue
 
-            actor = await EntityResolver.resolve_user_name(a.actor_id)
+            actor = user_map.get(str(a.actor_id)) or user_map.get(a.actor_id) or "System User"
             ts_str = aud_dt.strftime("%a, %b %d, %Y, %I:%M %p") if aud_dt else "-"
             clean_before = await EntityResolver.resolve_payload_ids(a.before)
             clean_after = await EntityResolver.resolve_payload_ids(a.after)
             audit_list.append({
                 "id": str(a.id),
-                "actor_name": actor or "System User",
+                "actor_name": actor,
                 "actor_role": a.actor_role or "Staff",
                 "action": a.action,
                 "entity_type": a.entity_type,

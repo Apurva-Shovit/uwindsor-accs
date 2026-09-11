@@ -70,6 +70,33 @@ class EntityResolver:
         return str(tank_id)
 
     @classmethod
+    async def resolve_tanks_by_ids(cls, tank_ids: List[str]) -> Dict[str, str]:
+        if not tank_ids:
+            return {}
+        unique_ids = list(set([str(tid) for tid in tank_ids if tid]))
+        valid_oids = [ObjectId(tid) for tid in unique_ids if ObjectId.is_valid(tid)]
+        raw_num_ids = [tid for tid in unique_ids if not ObjectId.is_valid(tid)]
+
+        tanks_by_oid = await Tank.find({"_id": {"$in": valid_oids}}).to_list() if valid_oids else []
+        tanks_by_num = await Tank.find({"tank_number": {"$in": raw_num_ids}}).to_list() if raw_num_ids else []
+
+        tank_map: Dict[str, str] = {}
+        for t in tanks_by_oid:
+            tank_map[str(t.id)] = f"Tank {t.tank_number}"
+        for t in tanks_by_num:
+            tank_map[str(t.tank_number)] = f"Tank {t.tank_number}"
+
+        res: Dict[str, str] = {}
+        for tid in unique_ids:
+            if tid in tank_map:
+                res[tid] = tank_map[tid]
+            elif ObjectId.is_valid(tid):
+                res[tid] = "Unknown Tank"
+            else:
+                res[tid] = f"Tank {tid}" if not str(tid).lower().startswith("tank") else str(tid)
+        return res
+
+    @classmethod
     async def resolve_room_number(cls, room_id: Optional[str]) -> Optional[str]:
         if not room_id:
             return None
