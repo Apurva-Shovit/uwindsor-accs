@@ -1,5 +1,6 @@
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
+from bson import ObjectId
 from fastapi import HTTPException, status
 from beanie.operators import In, Or
 from ..models.user import User, RoleEnum
