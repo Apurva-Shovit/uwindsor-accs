@@ -103,7 +103,7 @@ export const Reports: React.FC = () => {
 
   const [showOfficialModal, setShowOfficialModal] = React.useState(false);
   const [selectedForm, setSelectedForm] = React.useState<'appendix6' | 'appendix7' | 'incidents'>('appendix6');
-  const [selectedProjectId, setSelectedProjectId] = React.useState('');
+  const [selectedProjectIds, setSelectedProjectIds] = React.useState<string[]>([]);
 
   // Projects list for official report
   const { data: projectsResponse } = useQuery({
@@ -117,19 +117,20 @@ export const Reports: React.FC = () => {
   const projectsList = Array.isArray(projectsResponse) ? projectsResponse : (projectsResponse?.items || []);
 
   React.useEffect(() => {
-    if (projectsList && projectsList.length > 0 && !selectedProjectId) {
-      setSelectedProjectId(projectsList[0].id || projectsList[0]._id);
+    if (projectsList && projectsList.length > 0 && selectedProjectIds.length === 0) {
+      setSelectedProjectIds(projectsList.map((p: any) => String(p.id || p._id)));
     }
-  }, [projectsList, selectedProjectId]);
+  }, [projectsList, selectedProjectIds.length]);
 
   // Official Report Data query (fetches all available project logs for generator)
   const timePeriodParam = 'all';
+  const selectedProjectIdsParam = [...selectedProjectIds].sort().join(',');
   const { data: sopReportData } = useQuery({
-    queryKey: ['sopReportData', selectedProjectId, timePeriodParam, dateFrom, dateTo],
+    queryKey: ['sopReportData', selectedProjectIdsParam, timePeriodParam, dateFrom, dateTo],
     queryFn: async () => {
-      if (!selectedProjectId) return null;
+      if (!selectedProjectIdsParam) return null;
       const res = await getProjectReport(
-        selectedProjectId,
+        selectedProjectIdsParam,
         timePeriodParam,
         1,
         1000,
@@ -138,7 +139,7 @@ export const Reports: React.FC = () => {
       );
       return res.data;
     },
-    enabled: !!selectedProjectId && showOfficialModal
+    enabled: selectedProjectIds.length > 0 && showOfficialModal
   });
 
   const sopProject = sopReportData?.project;
@@ -484,13 +485,13 @@ export const Reports: React.FC = () => {
             </div>
 
             {/* Template & Project Selection (Hidden during print) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-semibold print:hidden bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-semibold print:hidden bg-slate-50 p-4 rounded-xl border border-slate-200">
               <div>
                 <label className="block text-[10px] font-extrabold text-slate-400 uppercase mb-1">Select SOP Form Template</label>
                 <select
                   value={selectedForm}
                   onChange={(e) => setSelectedForm(e.target.value as any)}
-                  className="w-full rounded-xl border border-slate-300 bg-white p-2 text-xs font-bold text-slate-800 shadow-sm focus:ring-2 focus:ring-[#005596]"
+                  className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-bold text-slate-800 shadow-sm focus:ring-2 focus:ring-[#005596]"
                 >
                   <option value="appendix6">Appendix 6: Daily Water Quality Log Sheet</option>
                   <option value="appendix7">Appendix 7: Water Quality Test Strip Log Sheet</option>
@@ -499,23 +500,76 @@ export const Reports: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[10px] font-extrabold text-slate-400 uppercase mb-1">Select Research Project (AUPP)</label>
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 bg-white p-2 text-xs font-bold text-slate-800 shadow-sm focus:ring-2 focus:ring-[#005596]"
-                >
-                  {projectsList?.map((p: any) => (
-                    <option key={p.id || p._id} value={p.id || p._id}>
-                      {p.title} (AUPP: {p.aupp_number})
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[10px] font-extrabold text-slate-400 uppercase">
+                    Select Research Projects (AUPP) ({selectedProjectIds.length} of {projectsList?.length || 0} selected)
+                  </label>
+                  <div className="flex items-center gap-2 text-[10px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedProjectIds(projectsList.map((p: any) => String(p.id || p._id)))}
+                      className="text-[#005596] hover:underline cursor-pointer"
+                    >
+                      Select All
+                    </button>
+                    <span className="text-slate-300">|</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedProjectIds([])}
+                      className="text-slate-500 hover:underline cursor-pointer"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                </div>
+
+                <div className="max-h-36 overflow-y-auto border border-slate-300 rounded-xl bg-white p-2 space-y-1 shadow-inner">
+                  {projectsList && projectsList.length > 0 ? (
+                    projectsList.map((p: any) => {
+                      const pId = String(p.id || p._id);
+                      const isChecked = selectedProjectIds.includes(pId);
+                      return (
+                        <label
+                          key={pId}
+                          className={`flex items-center gap-2 p-1.5 rounded-lg border transition-colors cursor-pointer text-xs font-semibold ${
+                            isChecked ? 'bg-blue-50/60 border-blue-200 text-slate-900' : 'bg-white border-transparent text-slate-500 hover:bg-slate-50'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedProjectIds((prev) => [...prev, pId]);
+                              } else {
+                                setSelectedProjectIds((prev) => prev.filter((id) => id !== pId));
+                              }
+                            }}
+                            className="rounded text-[#005596] focus:ring-[#005596] h-4 w-4 border-slate-300"
+                          />
+                          <span className="font-mono font-bold text-[#005596] bg-blue-100/60 px-1.5 py-0.5 rounded text-[11px]">
+                            AUPP: {p.aupp_number}
+                          </span>
+                          <span className="truncate flex-1">{p.title}</span>
+                          {p.pi_name && <span className="text-[10px] text-slate-400 font-normal hidden sm:inline">PI: {p.pi_name}</span>}
+                        </label>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center text-slate-400 py-2 text-xs">No projects found</div>
+                  )}
+                </div>
               </div>
             </div>
 
+            {selectedProjectIds.length === 0 && (
+              <div className="p-8 text-center bg-amber-50 rounded-xl border border-amber-200 text-amber-800 text-sm font-semibold">
+                Please select at least one AUPP project checkbox above to generate the official compliance report.
+              </div>
+            )}
+
             {/* Rendered Form Document (Isolated for Print) */}
-            {sopProject && (
+            {sopProject && selectedProjectIds.length > 0 && (
               <div id="official-sop-print-area" className="bg-white text-slate-900 font-sans">
                 <style>{`
                   @media print {

@@ -116,8 +116,9 @@ class ProjectService:
         limit: int = 10
     ) -> Dict[str, Any]:
         await lift_expired_quarantines()
-        p = await Project.get(project_id)
-        if not p:
+        
+        project_ids = [pid.strip() for pid in project_id.split(",") if pid.strip()]
+        if not project_ids:
             raise HTTPException(404, "Project not found")
 
         from ..models.facility import Tank
@@ -125,10 +126,42 @@ class ProjectService:
         from ..utils.entity_resolver import EntityResolver
         from datetime import datetime, timezone, timedelta, date
 
-        p_data = p.model_dump(mode="json")
-        p_data["id"] = str(p.id)
-        p_data["pi_name"] = getattr(p, "pi_name", None) or await EntityResolver.resolve_user_name(getattr(p, "pi_id", None)) or "N/A"
-        p_data["sex"] = getattr(p, "sex", None) or "both"
+        projects = []
+        for pid in project_ids:
+            if ObjectId.is_valid(pid):
+                proj = await Project.get(pid)
+                if proj:
+                    projects.append(proj)
+        
+        if not projects:
+            projects = await Project.find({"id": {"$in": project_ids}}).to_list()
+        
+        if not projects:
+            raise HTTPException(404, "Project not found")
+
+        aupps = []
+        pis = []
+        rooms = []
+        species_list = []
+
+        for proj in projects:
+            if getattr(proj, "aupp_number", None) and proj.aupp_number not in aupps:
+                aupps.append(str(proj.aupp_number))
+            pi_name = getattr(proj, "pi_name", None) or await EntityResolver.resolve_user_name(getattr(proj, "pi_id", None))
+            if pi_name and pi_name not in pis:
+                pis.append(pi_name)
+            if getattr(proj, "room_number", None) and proj.room_number not in rooms:
+                rooms.append(str(proj.room_number))
+            if getattr(proj, "species", None) and proj.species not in species_list:
+                species_list.append(str(proj.species))
+
+        p_data = projects[0].model_dump(mode="json")
+        p_data["id"] = ",".join([str(p.id) for p in projects])
+        p_data["aupp_number"] = ", ".join(aupps) if aupps else (getattr(projects[0], "aupp_number", "N/A") or "N/A")
+        p_data["pi_name"] = ", ".join(pis) if pis else "N/A"
+        p_data["room_number"] = ", ".join(rooms) if rooms else (getattr(projects[0], "room_number", "") or "")
+        p_data["species"] = ", ".join(species_list) if species_list else (getattr(projects[0], "species", "") or "")
+        p_data["sex"] = getattr(projects[0], "sex", None) or "both"
 
 
         # Calculate time period cutoff or custom start_date/end_date range
@@ -194,8 +227,8 @@ class ProjectService:
             return True
 
         # 1. Occupied Tanks
-        assignments = await TankAssignment.find({"project_id": project_id, "current_count": {"$gt": 0}}).to_list()
-        all_assignments_hist = await TankAssignment.find({"project_id": project_id}).to_list()
+        assignments = await TankAssignment.find({"project_id": {"$in": project_ids}, "current_count": {"$gt": 0}}).to_list()
+        all_assignments_hist = await TankAssignment.find({"project_id": {"$in": project_ids}}).to_list()
         assigned_tank_ids = list(set([a.tank_id for a in all_assignments_hist if a.tank_id]))
 
         occ_tank_oids = [ObjectId(a.tank_id) for a in assignments if a.tank_id and ObjectId.is_valid(a.tank_id)]
@@ -220,27 +253,27 @@ class ProjectService:
             })
 
         # 2. Fetch Census events
-        census_events = await CensusEvent.find({"project_id": project_id}).to_list()
+        census_events = await CensusEvent.find({"project_id": {"$in": project_ids}}).to_list()
         census_events.sort(key=lambda x: get_dt(x) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
 
         # 3. Fetch Incident reports
         try:
-            incidents = await IncidentReport.find({"project_id": project_id}).to_list()
+            incidents = await IncidentReport.find({"project_id": {"$in": project_ids}}).to_list()
         except Exception:
             all_incidents = await IncidentReport.find_all().to_list()
-            incidents = [i for i in all_incidents if getattr(i, "project_id", None) == project_id]
+            incidents = [i for i in all_incidents if getattr(i, "project_id", None) in project_ids]
 
         incidents.sort(key=lambda x: get_dt(x) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
 
         # 4. Fetch Water quality logs for assigned tanks (Daily and Test Strip logs)
         wq_records = []
-        if assigned_tank_ids:
+        if assigned_tank_ids or project_ids:
             try:
                 wq_records = await WaterQualityLog.find(
-                    Or(In(WaterQualityLog.project_id, [project_id]), In(WaterQualityLog.tank_id, assigned_tank_ids))
+                    {"$or": [{"project_id": {"$in": project_ids}}, {"tank_id": {"$in": assigned_tank_ids}}]}
                 ).to_list()
             except Exception:
-                wq_records = await WaterQualityLog.find(In(WaterQualityLog.tank_id, assigned_tank_ids)).to_list()
+                wq_records = await WaterQualityLog.find({"tank_id": {"$in": assigned_tank_ids}}).to_list()
 
         # Coalesce logs by (tank_id, iso_date, log_type) chronologically
         wq_records.sort(key=lambda x: get_dt(x) or datetime.min.replace(tzinfo=timezone.utc))
@@ -285,14 +318,14 @@ class ProjectService:
         # 5. Fetch Project audit logs
         try:
             audits = await AuditLog.find({"$or": [
-                {"entity_type": "project", "entity_id": project_id},
-                {"entity_type": "tank_assignment", "after.project_id": project_id},
-                {"entity_type": "census_event", "after.project_id": project_id},
-                {"entity_type": "incident_report", "after.project_id": project_id}
+                {"entity_type": "project", "entity_id": {"$in": project_ids}},
+                {"entity_type": "tank_assignment", "after.project_id": {"$in": project_ids}},
+                {"entity_type": "census_event", "after.project_id": {"$in": project_ids}},
+                {"entity_type": "incident_report", "after.project_id": {"$in": project_ids}}
             ]}).to_list()
         except Exception:
             all_audits = await AuditLog.find_all().to_list()
-            audits = [a for a in all_audits if (getattr(a, "entity_type", "") == "project" and getattr(a, "entity_id", "") == project_id) or (isinstance(getattr(a, "after", None), dict) and a.after.get("project_id") == project_id)]
+            audits = [a for a in all_audits if (getattr(a, "entity_type", "") == "project" and getattr(a, "entity_id", "") in project_ids) or (isinstance(getattr(a, "after", None), dict) and a.after.get("project_id") in project_ids)]
 
         audits.sort(key=lambda x: get_dt(x) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
 
