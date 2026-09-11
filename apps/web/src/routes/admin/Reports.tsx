@@ -146,7 +146,7 @@ export const Reports: React.FC = () => {
   React.useEffect(() => {
     if (filteredProjectsList && filteredProjectsList.length > 0 && !hasInitializedProjectsRef.current) {
       hasInitializedProjectsRef.current = true;
-      setSelectedProjectIds(filteredProjectsList.map((p: any) => String(p.id || p._id)));
+      setSelectedProjectIds([String(filteredProjectsList[0].id || filteredProjectsList[0]._id)]);
     }
   }, [filteredProjectsList]);
 
