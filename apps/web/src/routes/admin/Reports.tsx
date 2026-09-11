@@ -116,11 +116,14 @@ export const Reports: React.FC = () => {
 
   const projectsList = Array.isArray(projectsResponse) ? projectsResponse : (projectsResponse?.items || []);
 
+  const hasInitializedProjectsRef = React.useRef(false);
+
   React.useEffect(() => {
-    if (projectsList && projectsList.length > 0 && selectedProjectIds.length === 0) {
+    if (projectsList && projectsList.length > 0 && !hasInitializedProjectsRef.current) {
+      hasInitializedProjectsRef.current = true;
       setSelectedProjectIds(projectsList.map((p: any) => String(p.id || p._id)));
     }
-  }, [projectsList, selectedProjectIds.length]);
+  }, [projectsList]);
 
   // Official Report Data query (fetches all available project logs for generator)
   const timePeriodParam = 'all';
