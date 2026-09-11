@@ -324,33 +324,70 @@ class ProjectService:
             except Exception:
                 wq_records = await WaterQualityLog.find(In(WaterQualityLog.tank_id, assigned_tank_ids)).to_list()
 
-        wq_records.sort(key=lambda x: get_dt(x) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
-
+        # Coalesce logs by (tank_id, iso_date, log_type) chronologically
+        wq_records.sort(key=lambda x: get_dt(x) or datetime.min.replace(tzinfo=timezone.utc))
+        coalesced_map: Dict[tuple, dict] = {}
         for wq in wq_records:
             wq_dt = get_dt(wq)
             if not is_in_range(wq_dt):
                 continue
+            date_key = wq_dt.strftime("%Y-%m-%d") if wq_dt else ""
+            type_key = getattr(wq, "type", "daily")
+            group_key = (str(wq.tank_id), date_key, type_key)
 
-            creator_id = getattr(wq, "created_by", getattr(wq, "logged_by", None))
-            logger = await EntityResolver.resolve_user_name(creator_id)
-            tank_num = await EntityResolver.resolve_tank_number(wq.tank_id)
+            raw_params = getattr(wq, "parameters", {}) or {}
+            if not isinstance(raw_params, dict):
+                raw_params = {}
+
+            if group_key not in coalesced_map:
+                coalesced_map[group_key] = {
+                    "id": str(wq.id),
+                    "tank_id": wq.tank_id,
+                    "type": type_key,
+                    "wq_dt": wq_dt,
+                    "created_by": getattr(wq, "created_by", getattr(wq, "logged_by", None)),
+                    "parameters": dict(raw_params),
+                    "notes_list": [getattr(wq, "comments", getattr(wq, "notes", "")) or ""]
+                }
+            else:
+                existing = coalesced_map[group_key]
+                # Merge parameters: later non-null values overwrite earlier ones
+                for pk, pv in raw_params.items():
+                    if pv is not None:
+                        existing["parameters"][pk] = pv
+                # Update latest metadata
+                existing["id"] = str(wq.id)
+                existing["wq_dt"] = wq_dt
+                existing["created_by"] = getattr(wq, "created_by", getattr(wq, "logged_by", None))
+                comment = getattr(wq, "comments", getattr(wq, "notes", "")) or ""
+                if comment:
+                    existing["notes_list"].append(comment)
+
+        # Convert coalesced items back to list and sort descending by date
+        coalesced_items = list(coalesced_map.values())
+        coalesced_items.sort(key=lambda x: x["wq_dt"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+
+        for c_item in coalesced_items:
+            wq_dt = c_item["wq_dt"]
+            logger = await EntityResolver.resolve_user_name(c_item["created_by"])
+            tank_num = await EntityResolver.resolve_tank_number(c_item["tank_id"])
             wq_date = wq_dt.strftime("%a, %b %d, %Y, %I:%M %p") if wq_dt else "-"
 
-            params = getattr(wq, "parameters", {}) or {}
-            if not isinstance(params, dict):
-                params = {}
-
-            ph_val = params.get("ph") if "ph" in params else params.get("pH") if "pH" in params else getattr(wq, "pH", getattr(wq, "ph", None))
-            temp_val = params.get("temperature") if "temperature" in params else params.get("temperature_celsius") if "temperature_celsius" in params else getattr(wq, "temperature_celsius", getattr(wq, "temperature", None))
-            do_val = params.get("dissolved_oxygen") if "dissolved_oxygen" in params else params.get("do") if "do" in params else getattr(wq, "dissolved_oxygen", getattr(wq, "do", None))
+            params = c_item["parameters"]
+            ph_val = params.get("ph") if "ph" in params else params.get("pH") if "pH" in params else None
+            temp_val = params.get("temperature") if "temperature" in params else params.get("temperature_celsius") if "temperature_celsius" in params else None
+            do_val = params.get("dissolved_oxygen") if "dissolved_oxygen" in params else params.get("do") if "do" in params else None
 
             day_abbr = wq_dt.strftime("%a") if wq_dt else ""
             day_map = {"Mon": "Mon", "Tue": "Tues", "Wed": "Wed", "Thu": "Thurs", "Fri": "Fri", "Sat": "Sat", "Sun": "Sun"}
             day_col = day_map.get(day_abbr, day_abbr)
 
+            clean_notes = [n for n in c_item["notes_list"] if n and n != "-"]
+            notes_str = " | ".join(clean_notes) if clean_notes else "-"
+
             wq_logs.append({
-                "id": str(wq.id),
-                "type": getattr(wq, "type", "daily"),
+                "id": c_item["id"],
+                "type": c_item["type"],
                 "tank_number": tank_num,
                 "temperature_celsius": temp_val,
                 "pH": ph_val,
@@ -360,7 +397,7 @@ class ProjectService:
                 "date": wq_date,
                 "iso_date": wq_dt.strftime("%Y-%m-%d") if wq_dt else "",
                 "day_of_week": day_col,
-                "notes": getattr(wq, "comments", getattr(wq, "notes", "-")) or "-"
+                "notes": notes_str
             })
 
         # 5. Project audit logs

@@ -164,7 +164,6 @@ function WaterQualityForm({ tanks }: { tanks: Tank[] }) {
         <FieldInput label={fieldLabel.temperature} name="temperature" value={temp} onChange={setTemp} hint={safeRangeHint.temperature} result={validation || undefined} required={false} />
         <FieldInput label={fieldLabel.dissolved_oxygen} name="dissolved_oxygen" value={dissolvedOxygen} onChange={setDissolvedOxygen} hint={safeRangeHint.dissolved_oxygen} result={validation || undefined} required={false} />
       </div>
-      <p className="text-xs text-textSecondary italic">Log any parameter individually or together (pH, Temperature, Dissolved Oxygen).</p>
       <div>
         <label className="block text-xs font-semibold text-textSecondary uppercase tracking-wide mb-1">Comments</label>
         <textarea value={comments} onChange={e => setComments(e.target.value)} rows={2}
@@ -602,7 +601,7 @@ export const LogEntryPage: React.FC = () => {
         return (a.tank_number || '').localeCompare(b.tank_number || '', undefined, { numeric: true, sensitivity: 'base' });
       });
       setTanks(sorted);
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   return (
