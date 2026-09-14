@@ -82,7 +82,6 @@ export const AccountPage: React.FC = () => {
   // System Email Notification State (Manager & Higher Positions)
   const [emailNotifEnabled, setEmailNotifEnabled] = useState<boolean>(user?.email_notifications_enabled ?? true);
   const [emailNotifPending, setEmailNotifPending] = useState<boolean>(false);
-  const [emailNotifSuccess, setEmailNotifSuccess] = useState<string>('');
   const [emailNotifError, setEmailNotifError] = useState<string>('');
 
   React.useEffect(() => {
@@ -93,16 +92,10 @@ export const AccountPage: React.FC = () => {
 
   const handleToggleEmailNotifications = async (newVal: boolean) => {
     setEmailNotifError('');
-    setEmailNotifSuccess('');
     try {
       setEmailNotifPending(true);
       await updateEmailNotifications(newVal);
       setEmailNotifEnabled(newVal);
-      setEmailNotifSuccess(
-        newVal
-          ? 'System email notifications enabled successfully.'
-          : 'System email notifications disabled. You will no longer receive emails from the system.'
-      );
       await refetchUser();
     } catch (err: any) {
       const msg = err.response?.data?.detail || 'Failed to update email notification preferences.';
@@ -304,139 +297,124 @@ export const AccountPage: React.FC = () => {
 
       {/* 2-COLUMN LAYOUT */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
-        {/* LEFT COLUMN: HIERARCHICAL ASSIGNED TANKS */}
-        <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
-              <Database className="h-5 w-5 text-[#005596]" />
-              My Assigned Tanks
-            </h2>
-            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-700">
-              {assignedTanks.length} {assignedTanks.length === 1 ? 'Tank' : 'Tanks'} Total
-            </span>
+        {/* LEFT COLUMN: ASSIGNED TANKS + SYSTEM EMAIL NOTIFICATIONS */}
+        <div className="space-y-6">
+          {/* MY ASSIGNED TANKS CARD */}
+          <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
+                <Database className="h-5 w-5 text-[#005596]" />
+                My Assigned Tanks
+              </h2>
+              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-700">
+                {assignedTanks.length} {assignedTanks.length === 1 ? 'Tank' : 'Tanks'} Total
+              </span>
+            </div>
+
+            {assignedTanks.length === 0 ? (
+              <div className="py-12 text-center text-slate-400">
+                <Database className="mx-auto mb-2 h-8 w-8 text-slate-300" />
+                <p className="text-xs font-semibold text-slate-600">No tanks currently assigned</p>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Tanks assigned to your account by a manager or administrator will appear here grouped by facility and room.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-5 pt-1">
+                {Object.entries(groupedTanks).map(([facilityName, rooms]) => (
+                  <div key={facilityName} className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+                    {/* Facility Header */}
+                    <div className="flex items-center gap-2 border-b border-slate-200/80 pb-2">
+                      <Building2 className="h-4 w-4 text-[#005596]" />
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                        {facilityName}
+                      </h3>
+                    </div>
+
+                    {/* Rooms List */}
+                    <div className="space-y-3 pl-1">
+                      {Object.entries(rooms).map(([roomNumber, tanks]) => (
+                        <div key={roomNumber} className="space-y-2">
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                            <Layers className="h-3.5 w-3.5 text-slate-400" />
+                            <span>{roomNumber}</span>
+                          </div>
+
+                          {/* Tank Pills (NO STATUS TAGS) */}
+                          <div className="flex flex-wrap gap-2 pl-5">
+                            {tanks.map((tank) => (
+                              <div
+                                key={tank.id}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 shadow-2xs transition-colors hover:border-blue-300 hover:bg-blue-50/40"
+                              >
+                                <span>Tank {tank.tank_number}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {assignedTanks.length === 0 ? (
-            <div className="py-12 text-center text-slate-400">
-              <Database className="mx-auto mb-2 h-8 w-8 text-slate-300" />
-              <p className="text-xs font-semibold text-slate-600">No tanks currently assigned</p>
-              <p className="mt-1 text-[11px] text-slate-400">
-                Tanks assigned to your account by a manager or administrator will appear here grouped by facility and room.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-5 pt-1">
-              {Object.entries(groupedTanks).map(([facilityName, rooms]) => (
-                <div key={facilityName} className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/50 p-4">
-                  {/* Facility Header */}
-                  <div className="flex items-center gap-2 border-b border-slate-200/80 pb-2">
-                    <Building2 className="h-4 w-4 text-[#005596]" />
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                      {facilityName}
-                    </h3>
-                  </div>
-
-                  {/* Rooms List */}
-                  <div className="space-y-3 pl-1">
-                    {Object.entries(rooms).map(([roomNumber, tanks]) => (
-                      <div key={roomNumber} className="space-y-2">
-                        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                          <Layers className="h-3.5 w-3.5 text-slate-400" />
-                          <span>{roomNumber}</span>
-                        </div>
-
-                        {/* Tank Pills (NO STATUS TAGS) */}
-                        <div className="flex flex-wrap gap-2 pl-5">
-                          {tanks.map((tank) => (
-                            <div
-                              key={tank.id}
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 shadow-2xs transition-colors hover:border-blue-300 hover:bg-blue-50/40"
-                            >
-                              <span>Tank {tank.tank_number}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* RIGHT COLUMN: EMAIL NOTIFICATIONS (MANAGER+), CHANGE EMAIL, CHANGE PASSWORD */}
-        <div className="space-y-6">
-          {/* SYSTEM EMAIL NOTIFICATIONS CARD (MANAGER & HIGHER POSITIONS) */}
+          {/* SYSTEM EMAIL NOTIFICATIONS CARD (BELOW ASSIGNED TANKS) */}
           {isManagerPlus && (
-            <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="flex flex-col gap-3 border-b border-slate-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
-                    <Bell className="h-5 w-5 text-[#005596]" />
-                    System Email Notifications
-                  </h2>
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    Enable or disable automated system alert emails sent to your inbox.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${
-                      emailNotifEnabled
-                        ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
-                        : 'border border-slate-200 bg-slate-100 text-slate-600'
-                    }`}
-                  >
-                    {emailNotifEnabled ? 'Emails Enabled' : 'Emails Disabled'}
-                  </span>
-                </div>
-              </div>
-
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               {emailNotifError && (
-                <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-700">
+                <div className="mb-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-700">
                   <AlertCircle className="h-4 w-4 flex-shrink-0" />
                   <span>{emailNotifError}</span>
                 </div>
               )}
 
-              {emailNotifSuccess && (
-                <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-700">
-                  <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
-                  <span>{emailNotifSuccess}</span>
-                </div>
-              )}
+              <div className="flex items-center justify-between">
+                <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
+                  <Bell className="h-5 w-5 text-[#005596]" />
+                  System Email Notifications
+                </h2>
 
-              <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/60 p-4">
-                <div className="space-y-0.5 pr-4">
-                  <span className="text-xs font-bold text-slate-800">
-                    Receive System Email Alerts
-                  </span>
-                  <p className="text-[11px] text-slate-500">
-                    When turned off, you will not receive system alert emails or CC notifications.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  disabled={emailNotifPending}
-                  onClick={() => handleToggleEmailNotifications(!emailNotifEnabled)}
-                  className={`relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#005596] focus:ring-offset-2 disabled:opacity-50 ${
-                    emailNotifEnabled ? 'bg-[#005596]' : 'bg-slate-300'
-                  }`}
-                  role="switch"
-                  aria-checked={emailNotifEnabled}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                      emailNotifEnabled ? 'translate-x-5' : 'translate-x-0'
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    disabled={emailNotifPending}
+                    onClick={() => handleToggleEmailNotifications(!emailNotifEnabled)}
+                    className={`relative inline-flex h-7 w-14 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#005596] focus:ring-offset-2 disabled:opacity-50 ${
+                      emailNotifEnabled ? 'bg-[#005596]' : 'bg-slate-300'
                     }`}
-                  />
-                </button>
+                    role="switch"
+                    aria-checked={emailNotifEnabled}
+                  >
+                    <span
+                      className={`pointer-events-none absolute top-1 text-[9px] font-black uppercase tracking-wider transition-opacity duration-200 ${
+                        emailNotifEnabled ? 'left-2 text-white opacity-100' : 'right-2 text-slate-700 opacity-100'
+                      }`}
+                    >
+                      {emailNotifEnabled ? 'ON' : 'OFF'}
+                    </span>
+                    <span
+                      className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                        emailNotifEnabled ? 'translate-x-7' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                  <span
+                    className={`text-xs font-black uppercase tracking-wider ${
+                      emailNotifEnabled ? 'text-[#005596]' : 'text-slate-500'
+                    }`}
+                  >
+                    {emailNotifEnabled ? 'ON' : 'OFF'}
+                  </span>
+                </div>
               </div>
             </div>
           )}
+        </div>
 
+        {/* RIGHT COLUMN: CHANGE EMAIL + CHANGE PASSWORD */}
+        <div className="space-y-6">
           {/* 3. CHANGE EMAIL CARD */}
           <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="border-b border-slate-100 pb-3">
