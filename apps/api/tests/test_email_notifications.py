@@ -161,3 +161,39 @@ async def test_update_notification_settings_sender_email(email_env):
 
     record = await NotificationSettingsStore.get()
     assert record.sender_email == "facility-alerts@uwindsor.ca"
+
+
+@pytest.mark.asyncio
+async def test_manager_toggle_email_notifications(email_env, monkeypatch):
+    from app.config import settings
+    from app.services.auth_service import AuthService
+    monkeypatch.setattr(settings, "SMTP_HOST", "")
+    monkeypatch.setattr(settings, "RESEND_API_KEY", "")
+
+    manager = email_env["manager"]
+    chair = email_env["chair"]
+    staff = email_env["staff"]
+
+    # Toggle off for manager
+    res = await AuthService.update_email_notifications(manager, False)
+    assert res["email_notifications_enabled"] is False
+
+    # Check manager user state in DB
+    updated_manager = await User.get(manager.id)
+    assert updated_manager.email_notifications_enabled is False
+
+    # Staff user attempting to change email notifications should be rejected with 403
+    with pytest.raises(Exception) as excinfo:
+        await AuthService.update_email_notifications(staff, False)
+    assert "403" in str(excinfo.value) or "Only managers and higher roles" in str(excinfo.value)
+
+    # When sweep dispatches, manager email should not be in CC list
+    now = datetime.now(timezone.utc)
+    sweep_res = await NotificationService.sweep(now=now, force=True)
+    assert sweep_res["status"] == "completed"
+
+    logs = await EmailLog.find_all().to_list()
+    staff_log = next((l for l in logs if l.recipient_email == STAFF_EMAIL), None)
+    if staff_log:
+        assert MANAGER_EMAIL not in staff_log.cc_emails
+        assert CHAIR_EMAIL in staff_log.cc_emails

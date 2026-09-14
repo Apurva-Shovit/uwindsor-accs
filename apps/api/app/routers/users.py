@@ -3,7 +3,8 @@ from fastapi import APIRouter, Depends, Query
 from ..models.user import User
 from ..schemas.user import (
     ApproveRequest, RejectRequest, PendingUserResponse,
-    UserRoleUpdate, UserStatusUpdate, UserTankAssignmentsUpdate
+    UserRoleUpdate, UserStatusUpdate, UserTankAssignmentsUpdate,
+    UserEmailNotificationsUpdate
 )
 from ..services.user_service import UserService
 from ..core.permissions import get_current_user, require_chair_or_admin, require_manager_plus
@@ -47,4 +48,14 @@ async def update_user_status(user_id: str, body: UserStatusUpdate, current: User
 async def update_tank_assignments(user_id: str, body: UserTankAssignmentsUpdate, current: User = Depends(require_manager_plus)):
     return await UserService.update_tank_assignments(
         user_id, body.assigned_tank_ids, current, expected_tank_ids=body.expected_tank_ids
+    )
+
+@router.patch("/{user_id}/email-notifications")
+async def update_user_email_notifications(
+    user_id: str,
+    body: UserEmailNotificationsUpdate,
+    current: User = Depends(require_manager_plus)
+):
+    return await UserService.update_user_email_notifications(
+        user_id, body.email_notifications_enabled, current
     )

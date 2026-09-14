@@ -14,9 +14,10 @@ import {
   Layers,
   Lock,
   Unlock,
+  Bell,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { changePassword, changeEmail, verifyPassword, getMe } from '../lib/api';
+import { changePassword, changeEmail, verifyPassword, getMe, updateEmailNotifications } from '../lib/api';
 import { formatDate } from '../utils/formatters';
 
 interface AssignedTankDetail {
@@ -75,6 +76,41 @@ export const AccountPage: React.FC = () => {
   const [emailPending, setEmailPending] = useState(false);
   const [emailSuccess, setEmailSuccess] = useState('');
   const [emailError, setEmailError] = useState('');
+
+  const isManagerPlus = ['super_admin', 'chair', 'admin', 'manager'].includes(user?.role?.toLowerCase() || '');
+
+  // System Email Notification State (Manager & Higher Positions)
+  const [emailNotifEnabled, setEmailNotifEnabled] = useState<boolean>(user?.email_notifications_enabled ?? true);
+  const [emailNotifPending, setEmailNotifPending] = useState<boolean>(false);
+  const [emailNotifSuccess, setEmailNotifSuccess] = useState<string>('');
+  const [emailNotifError, setEmailNotifError] = useState<string>('');
+
+  React.useEffect(() => {
+    if (user?.email_notifications_enabled !== undefined) {
+      setEmailNotifEnabled(user.email_notifications_enabled);
+    }
+  }, [user?.email_notifications_enabled]);
+
+  const handleToggleEmailNotifications = async (newVal: boolean) => {
+    setEmailNotifError('');
+    setEmailNotifSuccess('');
+    try {
+      setEmailNotifPending(true);
+      await updateEmailNotifications(newVal);
+      setEmailNotifEnabled(newVal);
+      setEmailNotifSuccess(
+        newVal
+          ? 'System email notifications enabled successfully.'
+          : 'System email notifications disabled. You will no longer receive emails from the system.'
+      );
+      await refetchUser();
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || 'Failed to update email notification preferences.';
+      setEmailNotifError(msg);
+    } finally {
+      setEmailNotifPending(false);
+    }
+  };
 
   // Role display label formatter
   const formatRole = (role?: string | null) => {
@@ -329,8 +365,78 @@ export const AccountPage: React.FC = () => {
           )}
         </div>
 
-        {/* RIGHT COLUMN: CHANGE EMAIL (TOP) + CHANGE PASSWORD (BOTTOM) */}
+        {/* RIGHT COLUMN: EMAIL NOTIFICATIONS (MANAGER+), CHANGE EMAIL, CHANGE PASSWORD */}
         <div className="space-y-6">
+          {/* SYSTEM EMAIL NOTIFICATIONS CARD (MANAGER & HIGHER POSITIONS) */}
+          {isManagerPlus && (
+            <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex flex-col gap-3 border-b border-slate-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
+                    <Bell className="h-5 w-5 text-[#005596]" />
+                    System Email Notifications
+                  </h2>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    Enable or disable automated system alert emails sent to your inbox.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${
+                      emailNotifEnabled
+                        ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                        : 'border border-slate-200 bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {emailNotifEnabled ? 'Emails Enabled' : 'Emails Disabled'}
+                  </span>
+                </div>
+              </div>
+
+              {emailNotifError && (
+                <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-700">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                  <span>{emailNotifError}</span>
+                </div>
+              )}
+
+              {emailNotifSuccess && (
+                <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-700">
+                  <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+                  <span>{emailNotifSuccess}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+                <div className="space-y-0.5 pr-4">
+                  <span className="text-xs font-bold text-slate-800">
+                    Receive System Email Alerts
+                  </span>
+                  <p className="text-[11px] text-slate-500">
+                    When turned off, you will not receive system alert emails or CC notifications.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={emailNotifPending}
+                  onClick={() => handleToggleEmailNotifications(!emailNotifEnabled)}
+                  className={`relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#005596] focus:ring-offset-2 disabled:opacity-50 ${
+                    emailNotifEnabled ? 'bg-[#005596]' : 'bg-slate-300'
+                  }`}
+                  role="switch"
+                  aria-checked={emailNotifEnabled}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      emailNotifEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* 3. CHANGE EMAIL CARD */}
           <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="border-b border-slate-100 pb-3">

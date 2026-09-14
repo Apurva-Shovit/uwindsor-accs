@@ -31,6 +31,7 @@ class User(Document, MutableBaseFields):
     approved_by: str | None = None
     approved_at: str | None = None
     rejection_reason: str | None = None
+    email_notifications_enabled: bool = True
 
     class Settings:
         name = "users"

@@ -41,9 +41,13 @@ class MeResponse(BaseModel):
     last_name: str
     role: str | None
     status: str
+    email_notifications_enabled: bool = True
     assigned_tank_ids: list[str]
     assigned_tanks: list[AssignedTankDetail] = []
     created_at: str | None = None
+
+class UpdateEmailNotificationsRequest(BaseModel):
+    email_notifications_enabled: bool
 
 class ChangePasswordRequest(BaseModel):
     old_password: str

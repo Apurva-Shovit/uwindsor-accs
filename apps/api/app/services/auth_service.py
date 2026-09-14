@@ -150,10 +150,36 @@ class AuthService:
             last_name=current_user.last_name,
             role=current_user.role.value if current_user.role else None,
             status=current_user.status.value,
+            email_notifications_enabled=getattr(current_user, 'email_notifications_enabled', True),
             assigned_tank_ids=current_user.assigned_tank_ids,
             assigned_tanks=assigned_tanks,
             created_at=current_user.created_at.isoformat() if current_user.created_at else None
         )
+
+    @staticmethod
+    async def update_email_notifications(current_user: User, enabled: bool) -> dict:
+        MANAGER_PLUS = {RoleEnum.manager, RoleEnum.chair, RoleEnum.admin, RoleEnum.super_admin}
+        if not current_user.role or current_user.role not in MANAGER_PLUS:
+            raise HTTPException(403, "Only managers and higher roles can change email notification preferences")
+
+        old_val = getattr(current_user, 'email_notifications_enabled', True)
+        current_user.email_notifications_enabled = enabled
+        await current_user.save()
+
+        await AuditRepository.insert(AuditLog(
+            actor_id=str(current_user.id),
+            actor_role=current_user.role.value if current_user.role else "none",
+            action="update_email_notifications",
+            entity_type="user",
+            entity_id=str(current_user.id),
+            before={"email_notifications_enabled": old_val},
+            after={"email_notifications_enabled": enabled}
+        ))
+
+        return {
+            "message": "Email notification settings updated successfully",
+            "email_notifications_enabled": current_user.email_notifications_enabled
+        }
 
     @staticmethod
     async def change_password(current_user: User, body: ChangePasswordRequest) -> dict:
