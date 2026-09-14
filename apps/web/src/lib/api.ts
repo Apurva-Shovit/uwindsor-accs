@@ -159,4 +159,11 @@ export const changePassword = (data: { old_password: string; new_password: strin
 export const changeEmail = (data: { new_email: string; current_password: string }) =>
   api.post('/auth/change-email', data);
 
+export const updateEmailNotifications = (enabled: boolean) =>
+  api.patch('/auth/email-notifications', { email_notifications_enabled: enabled });
+
+export const updateUserEmailNotifications = (userId: string, enabled: boolean) =>
+  api.patch(`/users/${userId}/email-notifications`, { email_notifications_enabled: enabled });
+
+
 

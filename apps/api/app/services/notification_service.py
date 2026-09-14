@@ -766,7 +766,10 @@ class NotificationService:
         sender_email = settings_rec.sender_email or settings.DEFAULT_SENDER_EMAIL or "acare-alerts@uwindsor.ca"
 
         active_users = await User.find({"status": StatusEnum.active.value}).to_list()
-        manager_users = [u for u in active_users if u.role in MANAGER_PLUS]
+        manager_users = [
+            u for u in active_users
+            if u.role in MANAGER_PLUS and getattr(u, 'email_notifications_enabled', True)
+        ]
         cc_emails = list({u.email.strip() for u in manager_users if u.email and u.email.strip()})
 
         sent_count = mock_count = failed_count = 0
@@ -796,7 +799,7 @@ class NotificationService:
                 assigned = set(staff.assigned_tank_ids or [])
                 assigned_tank_ids_set.update(assigned)
                 staff_missing = [t for t in missing_tanks if str(t.id) in assigned]
-                if not staff_missing or not staff.email:
+                if not staff_missing or not staff.email or not getattr(staff, 'email_notifications_enabled', True):
                     continue
 
                 email_key = f"email:{WATER_QUALITY_MISSING}:{missing_date_str}:{str(staff.id)}"

@@ -4,7 +4,8 @@ from ..config import settings
 from ..models.user import User
 from ..schemas.auth import (
     SignupRequest, LoginRequest, TokenResponse, MeResponse,
-    ChangePasswordRequest, ChangeEmailRequest, VerifyPasswordRequest
+    ChangePasswordRequest, ChangeEmailRequest, VerifyPasswordRequest,
+    UpdateEmailNotificationsRequest
 )
 from ..services.auth_service import AuthService
 from ..core.permissions import get_current_user
@@ -41,6 +42,13 @@ async def logout(response: Response, current: User = Depends(get_current_user)):
 @router.get("/me", response_model=MeResponse)
 async def me(user: User = Depends(get_current_user)):
     return await AuthService.get_me(user)
+
+@router.patch("/email-notifications")
+async def update_email_notifications(
+    body: UpdateEmailNotificationsRequest,
+    current: User = Depends(get_current_user),
+):
+    return await AuthService.update_email_notifications(current, body.email_notifications_enabled)
 
 @router.post("/verify-password")
 async def verify_password(body: VerifyPasswordRequest, current: User = Depends(get_current_user)):

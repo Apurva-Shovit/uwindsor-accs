@@ -14,6 +14,7 @@ export interface UserRecord {
   requested_role: string | null;
   role: string | null;
   status: string;
+  email_notifications_enabled?: boolean;
   assigned_tank_ids: string[];
   approved_by?: string;
   approved_at?: string;

@@ -9,6 +9,7 @@ interface User {
   last_name: string;
   role: string | null;
   status: string;
+  email_notifications_enabled?: boolean;
   assigned_tank_ids: string[];
 }
 

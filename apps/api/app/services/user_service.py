@@ -218,6 +218,7 @@ class UserService:
                 "requested_role": u.requested_role.value if u.requested_role else None,
                 "role": u.role.value if u.role else None,
                 "status": u.status.value if u.status else "pending",
+                "email_notifications_enabled": getattr(u, "email_notifications_enabled", True),
                 "assigned_tank_ids": assigned_ids,
                 "approved_by": u.approved_by,
                 "approved_at": u.approved_at,
@@ -407,3 +408,35 @@ class UserService:
             after=target.model_dump()
         ))
         return {"id": str(target.id), "assigned_tank_ids": target.assigned_tank_ids}
+
+    @staticmethod
+    async def update_user_email_notifications(
+        user_id: str,
+        enabled: bool,
+        current_user: User,
+    ) -> Dict[str, Any]:
+        MANAGER_PLUS = {RoleEnum.manager, RoleEnum.chair, RoleEnum.admin, RoleEnum.super_admin}
+        if not current_user.role or current_user.role not in MANAGER_PLUS:
+            raise HTTPException(403, "Only managers and higher roles can change email notification preferences")
+
+        target = await UserRepository.get_by_id(user_id)
+        if not target:
+            raise HTTPException(404, "User not found")
+
+        if not target.role or target.role not in MANAGER_PLUS:
+            raise HTTPException(403, "Email notification preferences can only be set for Manager and higher roles")
+
+        old_val = getattr(target, 'email_notifications_enabled', True)
+        target.email_notifications_enabled = enabled
+        await target.save()
+
+        await AuditRepository.insert(AuditLog(
+            actor_id=str(current_user.id),
+            actor_role=current_user.role.value if current_user.role else "none",
+            action="user_email_notifications_update",
+            entity_type="user",
+            entity_id=user_id,
+            before={"email_notifications_enabled": old_val},
+            after={"email_notifications_enabled": enabled}
+        ))
+        return {"id": str(target.id), "email_notifications_enabled": target.email_notifications_enabled}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { UserCheck, UserX, Shield, Database, Search, AlertCircle, X } from 'lucide-react';
+import { UserCheck, UserX, Shield, Database, Search, AlertCircle, X, Mail } from 'lucide-react';
 import { formatDate } from '../../utils/formatters';
 import {
   getUsers,
@@ -10,6 +10,7 @@ import {
   updateUserStatus,
   updateTankAssignments,
   approveUser,
+  updateUserEmailNotifications,
 } from '../../lib/api';
 import { isConflict } from '../../lib/submission';
 import { Paginator } from '../../components/ui/Paginator';
@@ -32,7 +33,7 @@ export const UserManagement: React.FC = () => {
 
   // Modals state
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
-  const [modalType, setModalType] = useState<'role' | 'status' | 'tanks' | 'approve' | null>(null);
+  const [modalType, setModalType] = useState<'role' | 'status' | 'tanks' | 'approve' | 'email' | null>(null);
 
   // Form states
   const [newRole, setNewRole] = useState<string>('staff');
@@ -174,6 +175,19 @@ export const UserManagement: React.FC = () => {
     onError: handleActionError
   });
 
+  // Email Notifications Mutation
+  const emailMutation = useMutation({
+    mutationFn: async ({ userId, enabled }: { userId: string; enabled: boolean }) => {
+      const res = await updateUserEmailNotifications(userId, enabled);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminUsersList'] });
+      closeModal();
+    },
+    onError: handleActionError
+  });
+
   const closeModal = () => {
     setSelectedUser(null);
     setModalType(null);
@@ -181,7 +195,7 @@ export const UserManagement: React.FC = () => {
     setBaseline(null);
   };
 
-  const openModal = (user: any, type: 'role' | 'status' | 'tanks' | 'approve') => {
+  const openModal = (user: any, type: 'role' | 'status' | 'tanks' | 'approve' | 'email') => {
     setSelectedUser(user);
     setModalType(type);
     setActionError('');
@@ -291,6 +305,7 @@ export const UserManagement: React.FC = () => {
                   <th className="p-4">User</th>
                   <th className="p-4">Assigned Role</th>
                   <th className="p-4">Status</th>
+                  <th className="p-4">System Email</th>
                   <th className="p-4">Tank Access</th>
                   <th className="p-4">Registration Date</th>
                   <th className="p-4 text-right">Actions</th>
@@ -332,6 +347,21 @@ export const UserManagement: React.FC = () => {
                     </td>
 
                     <td className="p-4">
+                      {['super_admin', 'chair', 'admin', 'manager'].includes(u.role) ? (
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-bold border ${
+                          u.email_notifications_enabled !== false
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}>
+                          <Mail className="w-3 h-3" />
+                          {u.email_notifications_enabled !== false ? 'Enabled' : 'Disabled'}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 italic text-[11px]">Mandatory</span>
+                      )}
+                    </td>
+
+                    <td className="p-4">
                       {u.assigned_tank_ids && u.assigned_tank_ids.length > 0 ? (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-[#005596] border border-blue-100">
                           <Database className="w-3 h-3 mr-1" />
@@ -365,6 +395,15 @@ export const UserManagement: React.FC = () => {
                               className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-[#005596] font-bold rounded-lg border border-blue-200 transition-colors text-xs"
                             >
                               Edit Role
+                            </button>
+                          )}
+
+                          {['super_admin', 'chair', 'admin', 'manager'].includes(u.role) && (
+                            <button
+                              onClick={() => openModal(u, 'email')}
+                              className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-lg border border-amber-200 transition-colors text-xs"
+                            >
+                              Email Toggle
                             </button>
                           )}
 
@@ -413,6 +452,7 @@ export const UserManagement: React.FC = () => {
                 {modalType === 'role' && `Promote / Change Role: ${selectedUser.first_name}`}
                 {modalType === 'status' && `Account Status Control: ${selectedUser.first_name}`}
                 {modalType === 'tanks' && `Assign Tank Permissions: ${selectedUser.first_name}`}
+                {modalType === 'email' && `System Email Preference: ${selectedUser.first_name} ${selectedUser.last_name}`}
               </h3>
               <button onClick={closeModal} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
@@ -571,6 +611,53 @@ export const UserManagement: React.FC = () => {
                     className="px-4 py-2 bg-[#005596] text-white rounded-lg font-bold"
                   >
                     {tanksMutation.isPending ? 'Saving...' : 'Save Tank Access'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* System Email Notifications Modal */}
+            {modalType === 'email' && (
+              <div className="space-y-4 text-xs font-medium">
+                <p className="text-slate-600">
+                  Manage system email notifications for <strong>{selectedUser.first_name} {selectedUser.last_name}</strong> ({selectedUser.email}).
+                </p>
+
+                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="space-y-0.5">
+                    <span className="font-bold text-slate-800">System Email Status</span>
+                    <p className="text-[11px] text-slate-500">
+                      When turned off, this user will not receive system alert emails or CC notifications.
+                    </p>
+                  </div>
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                    selectedUser.email_notifications_enabled !== false
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                      : 'bg-amber-100 text-amber-800 border border-amber-200'
+                  }`}>
+                    {selectedUser.email_notifications_enabled !== false ? 'Enabled' : 'Disabled'}
+                  </span>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3 border-t">
+                  <button onClick={closeModal} className="px-4 py-2 bg-slate-100 rounded-lg font-bold">Cancel</button>
+                  <button
+                    onClick={() =>
+                      emailMutation.mutate({
+                        userId: selectedUser.id || selectedUser._id,
+                        enabled: selectedUser.email_notifications_enabled === false ? true : false,
+                      })
+                    }
+                    disabled={emailMutation.isPending}
+                    className={`px-4 py-2 text-white rounded-lg font-bold ${
+                      selectedUser.email_notifications_enabled === false ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-amber-600 hover:bg-amber-700'
+                    }`}
+                  >
+                    {emailMutation.isPending
+                      ? 'Updating...'
+                      : selectedUser.email_notifications_enabled === false
+                      ? 'Enable Email Notifications'
+                      : 'Disable Email Notifications'}
                   </button>
                 </div>
               </div>

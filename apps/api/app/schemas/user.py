@@ -46,3 +46,6 @@ class UserStatusUpdate(BaseModel):
 class UserTankAssignmentsUpdate(BaseModel):
     assigned_tank_ids: list[str] = []
     expected_tank_ids: Optional[list[str]] = None
+
+class UserEmailNotificationsUpdate(BaseModel):
+    email_notifications_enabled: bool
