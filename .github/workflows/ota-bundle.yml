@@ -101,15 +101,24 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release create "${{ steps.pkg.outputs.tag }}" \
-            "${{ steps.pkg.outputs.zip }}" \
-            --title "Web bundle ${{ steps.pkg.outputs.version }}" \
-            --notes "OTA bundle for the ACARE Android app.
+          TAG="${{ steps.pkg.outputs.tag }}"
+          ZIP="${{ steps.pkg.outputs.zip }}"
+          VERSION="${{ steps.pkg.outputs.version }}"
+          CHECKSUM="${{ steps.pkg.outputs.checksum }}"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; updating asset with --clobber"
+            gh release upload "$TAG" "$ZIP" --clobber
+          else
+            gh release create "$TAG" "$ZIP" \
+              --title "Web bundle $VERSION" \
+              --notes "OTA bundle for the ACARE Android app.
 
           Commit: ${{ github.sha }}
-          SHA-256: \`${{ steps.pkg.outputs.checksum }}\`
+          SHA-256: \`$CHECKSUM\`
 
           Applied automatically by installed apps on next launch."
+          fi
 
       - name: Resolve bundle URL
         id: url
@@ -203,12 +212,15 @@ jobs:
               echo "Registered and activated."
               cat /tmp/reg.json
               exit 0
+            elif [ "$CODE" = "409" ]; then
+              echo "Bundle version already registered in database (HTTP 409)."
+              cat /tmp/reg.json
+              exit 0
             fi
 
             echo "Attempt $attempt failed (HTTP $CODE):"; cat /tmp/reg.json || true
-            # Settled answers - the secret is wrong, the version is taken, or
-            # publishing is switched off. Retrying only wastes minutes.
-            case "$CODE" in 401|409|503) break ;; esac
+            # Settled answers - the secret is wrong or publishing is switched off.
+            case "$CODE" in 401|503) break ;; esac
             sleep $((attempt * 20))
           done
 
