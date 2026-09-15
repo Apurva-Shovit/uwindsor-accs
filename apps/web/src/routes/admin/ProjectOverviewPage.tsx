@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { BookOpen, AlertTriangle, Search, Calendar, Users, Activity, Plus, X } from 'lucide-react';
+import { BookOpen, AlertTriangle, Search, Calendar, Users, Activity, Plus, X, Lock, CheckCircle2 } from 'lucide-react';
 import SpeciesDropdown from '../../components/SpeciesDropdown';
-import { createProject, closeProject, getProjectsOverview } from '../../lib/api';
+import { createProject, getProjectsOverview } from '../../lib/api';
 import { formatDate } from '../../utils/formatters';
 import { useDebounce } from '../../hooks/useDebounce';
+import CloseProjectModal, { DISPOSITION_LABELS } from '../../components/CloseProjectModal';
 
 export const ProjectOverviewPage: React.FC = () => {
   const navigate = useNavigate();
@@ -19,30 +20,11 @@ export const ProjectOverviewPage: React.FC = () => {
 
   // Close Project State
   const [closeModalProject, setCloseModalProject] = useState<any | null>(null);
-  const [dispositionType, setDispositionType] = useState<'euthanized' | 'adopted' | 'transferred_external' | 'other'>('euthanized');
-  const [dispositionNotes, setDispositionNotes] = useState('');
-  const [closeSubmitting, setCloseSubmitting] = useState(false);
-  const [closeError, setCloseError] = useState('');
 
-  const handleCloseProjectSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!closeModalProject) return;
-    const pid = closeModalProject.id || closeModalProject._id;
-    setCloseSubmitting(true);
-    setCloseError('');
-    try {
-      await closeProject(pid, {
-        disposition_type: dispositionType,
-        notes: dispositionNotes || undefined,
-      });
-      queryClient.invalidateQueries({ queryKey: ['projectsOverview'] });
-      setCloseModalProject(null);
-      setSelectedProject(null);
-    } catch (err: any) {
-      setCloseError(err.response?.data?.detail || 'Failed to close project');
-    } finally {
-      setCloseSubmitting(false);
-    }
+  const handleProjectClosed = () => {
+    queryClient.invalidateQueries({ queryKey: ['projectsOverview'] });
+    setCloseModalProject(null);
+    setSelectedProject(null);
   };
 
   // New Project Form State
@@ -256,6 +238,7 @@ export const ProjectOverviewPage: React.FC = () => {
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
                   <th className="p-4">Project Title & AUPP</th>
+                  <th className="p-4">Status</th>
                   <th className="p-4">Principal Investigator</th>
                   <th className="p-4">Species</th>
                   <th className="p-4">Tanks Assigned</th>
@@ -266,45 +249,85 @@ export const ProjectOverviewPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
-                {projects.map((p: any) => (
-
-                  <tr key={p.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-4">
-                      <div className="font-bold text-slate-900">{p.title}</div>
-                      <div className="text-xs font-mono text-slate-500 mt-0.5">AUPP# {p.aupp_number}</div>
-                    </td>
-                    <td className="p-4 font-semibold text-slate-700">{p.pi_name}</td>
-                    <td className="p-4 text-slate-600 capitalize">{p.species}</td>
-                    <td className="p-4 font-medium text-slate-800">{p.assigned_tanks_count} tanks</td>
-                    <td className="p-4">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        {p.total_animals} fish
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      <div className="text-xs space-y-0.5">
-                        <span className="font-medium text-slate-700">{p.total_incidents} Incidents</span>
-                        <span className="text-slate-400 block">{p.total_mortality} Deaths</span>
-                      </div>
-                    </td>
-                    <td className="p-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold ${
-                        p.is_expiring ? 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse' : 'bg-slate-100 text-slate-700'
-                      }`}>
-                        <Calendar className="w-3.5 h-3.5" />
-                        {formatDate(p.aupp_expiry_date)}
-                      </span>
-                    </td>
-                    <td className="p-4 text-right">
-                      <button
-                        onClick={() => setSelectedProject(p)}
-                        className="px-3 py-1.5 text-xs font-semibold bg-brandBlueTint text-brandBlueDark hover:bg-[#005596] hover:text-white rounded-lg transition-colors"
-                      >
-                        View Details
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {projects.map((p: any) => {
+                  const isClosed = p.status === 'closed';
+                  return (
+                    <tr
+                      key={p.id}
+                      className={`transition-colors border-l-4 ${
+                        isClosed
+                          ? 'bg-slate-50/70 hover:bg-slate-100/80 border-l-slate-400 text-slate-600'
+                          : 'hover:bg-slate-50 border-l-emerald-500'
+                      }`}
+                    >
+                      <td className="p-4">
+                        <div className="flex items-center gap-2">
+                          <span className={`font-bold ${isClosed ? 'text-slate-700' : 'text-slate-900'}`}>{p.title}</span>
+                          {isClosed && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 bg-slate-200/80 border border-slate-300 px-1.5 py-0.5 rounded-md">
+                              <Lock className="w-3 h-3 text-slate-500" />
+                              Closed
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs font-mono text-slate-500 mt-0.5">AUPP# {p.aupp_number}</div>
+                      </td>
+                      <td className="p-4 whitespace-nowrap">
+                        {isClosed ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                            <span className="w-2 h-2 rounded-full bg-slate-500" />
+                            Closed / Archived
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            Active
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-4 font-semibold text-slate-700">{p.pi_name}</td>
+                      <td className="p-4 text-slate-600 capitalize">{p.species}</td>
+                      <td className="p-4 font-medium text-slate-800">{p.assigned_tanks_count} tanks</td>
+                      <td className="p-4">
+                        {isClosed ? (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                            {p.total_animals} fish (Closed)
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            {p.total_animals} fish
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-4">
+                        <div className="text-xs space-y-0.5">
+                          <span className="font-medium text-slate-700">{p.total_incidents} Incidents</span>
+                          <span className="text-slate-400 block">{p.total_mortality} Deaths</span>
+                        </div>
+                      </td>
+                      <td className="p-4 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold ${
+                            p.is_expiring && !isClosed
+                              ? 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          <Calendar className="w-3.5 h-3.5" />
+                          {formatDate(p.aupp_expiry_date)}
+                        </span>
+                      </td>
+                      <td className="p-4 text-right">
+                        <button
+                          onClick={() => setSelectedProject(p)}
+                          className="px-3 py-1.5 text-xs font-semibold bg-brandBlueTint text-brandBlueDark hover:bg-[#005596] hover:text-white rounded-lg transition-colors"
+                        >
+                          View Details
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -318,10 +341,24 @@ export const ProjectOverviewPage: React.FC = () => {
 
             <div className="flex justify-between items-start border-b border-slate-100 pb-3">
               <div>
-                <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase mb-1 ${
-                  selectedProject.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                }`}>
-                  {selectedProject.status}
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-extrabold uppercase mb-1.5 ${
+                    selectedProject.status === 'active'
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      : 'bg-slate-100 text-slate-700 border border-slate-300'
+                  }`}
+                >
+                  {selectedProject.status === 'active' ? (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      Active Protocol
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-3.5 h-3.5 text-slate-500" />
+                      Closed / Archived Protocol
+                    </>
+                  )}
                 </span>
                 <h3 className="text-xl font-bold text-[#005596]">{selectedProject.title}</h3>
                 <span className="text-xs font-mono text-slate-400">AUPP# {selectedProject.aupp_number}</span>
@@ -333,6 +370,37 @@ export const ProjectOverviewPage: React.FC = () => {
                 ✕
               </button>
             </div>
+
+            {selectedProject.status === 'closed' && (
+              <div className="bg-slate-100 border border-slate-300 rounded-xl p-4 flex items-center justify-between gap-3 text-slate-800 shadow-2xs">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-slate-200 text-slate-700 rounded-lg">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-sm text-slate-900 uppercase tracking-wide">
+                        Closed & Archived Protocol
+                      </span>
+                      <span className="px-2 py-0.5 text-[10px] font-bold bg-slate-200 text-slate-700 rounded-md border border-slate-300">
+                        Read-Only
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      Closed At: <strong>{formatDate(selectedProject.closed_at)}</strong> • Disposition:{' '}
+                      <strong>
+                        {DISPOSITION_LABELS[selectedProject.disposition_type] ||
+                          selectedProject.disposition_type ||
+                          'Recorded'}
+                      </strong>
+                    </p>
+                    {selectedProject.disposition_notes && (
+                      <p className="text-xs text-slate-500 italic mt-0.5">Notes: {selectedProject.disposition_notes}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* KPI Summary Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -477,12 +545,7 @@ export const ProjectOverviewPage: React.FC = () => {
                 </button>
                 {selectedProject.status === 'active' && (
                   <button
-                    onClick={() => {
-                      setCloseModalProject(selectedProject);
-                      setDispositionType('euthanized');
-                      setDispositionNotes('');
-                      setCloseError('');
-                    }}
+                    onClick={() => setCloseModalProject(selectedProject)}
                     className="w-full sm:w-auto px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg shadow transition-colors"
                   >
                     Close Project &amp; Disposition
@@ -502,150 +565,11 @@ export const ProjectOverviewPage: React.FC = () => {
 
       {/* Close Project Modal */}
       {closeModalProject && (
-        <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5">
-            <div className="flex justify-between items-start border-b border-slate-100 pb-3">
-              <div>
-                <span className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold uppercase bg-red-100 text-red-800 mb-1">
-                  Project Termination / Closure
-                </span>
-                <h3 className="text-xl font-bold text-red-900">{closeModalProject.title}</h3>
-                <span className="text-xs font-mono text-slate-500">AUPP# {closeModalProject.aupp_number}</span>
-              </div>
-              <button
-                onClick={() => setCloseModalProject(null)}
-                className="text-slate-400 hover:text-slate-600 text-lg font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-1 text-xs text-amber-900">
-              <div className="font-bold flex items-center gap-1.5 text-amber-800">
-                <AlertTriangle className="w-4 h-4 text-amber-600" /> Confirm Final Project Closure
-              </div>
-              <p>
-                Closing this project will set all remaining fish counts to 0, mark occupied tanks as <strong>Empty</strong>, and record a final project closure audit event.
-              </p>
-              <div className="pt-1 flex gap-4 font-semibold text-amber-800">
-                <span>Remaining Fish: {closeModalProject.total_fish_count ?? closeModalProject.total_animals ?? 0}</span>
-                <span>Occupied Tanks: {closeModalProject.occupied_tanks?.length || 0}</span>
-              </div>
-            </div>
-
-            <form onSubmit={handleCloseProjectSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase text-slate-600 block">
-                  Fish Disposition Method <span className="text-red-500">*</span>
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <label className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${
-                    dispositionType === 'euthanized' ? 'border-red-500 bg-red-50/50 text-red-900 font-bold' : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                  }`}>
-                    <input
-                      type="radio"
-                      name="disposition"
-                      value="euthanized"
-                      checked={dispositionType === 'euthanized'}
-                      onChange={(e) => setDispositionType(e.target.value as any)}
-                      className="text-red-600 focus:ring-red-500"
-                    />
-                    <div className="text-xs">
-                      <div>Euthanized</div>
-                      <div className="text-[10px] font-normal text-slate-500">Protocol Termination</div>
-                    </div>
-                  </label>
-
-                  <label className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${
-                    dispositionType === 'adopted' ? 'border-emerald-500 bg-emerald-50/50 text-emerald-900 font-bold' : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                  }`}>
-                    <input
-                      type="radio"
-                      name="disposition"
-                      value="adopted"
-                      checked={dispositionType === 'adopted'}
-                      onChange={(e) => setDispositionType(e.target.value as any)}
-                      className="text-emerald-600 focus:ring-emerald-500"
-                    />
-                    <div className="text-xs">
-                      <div>Adopted</div>
-                      <div className="text-[10px] font-normal text-slate-500">Approved Adoption</div>
-                    </div>
-                  </label>
-
-                  <label className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${
-                    dispositionType === 'transferred_external' ? 'border-indigo-500 bg-indigo-50/50 text-indigo-900 font-bold' : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                  }`}>
-                    <input
-                      type="radio"
-                      name="disposition"
-                      value="transferred_external"
-                      checked={dispositionType === 'transferred_external'}
-                      onChange={(e) => setDispositionType(e.target.value as any)}
-                      className="text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <div className="text-xs">
-                      <div>Transferred</div>
-                      <div className="text-[10px] font-normal text-slate-500">External Lab / Off-site</div>
-                    </div>
-                  </label>
-
-                  <label className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${
-                    dispositionType === 'other' ? 'border-slate-500 bg-slate-100 text-slate-900 font-bold' : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                  }`}>
-                    <input
-                      type="radio"
-                      name="disposition"
-                      value="other"
-                      checked={dispositionType === 'other'}
-                      onChange={(e) => setDispositionType(e.target.value as any)}
-                      className="text-slate-600 focus:ring-slate-500"
-                    />
-                    <div className="text-xs">
-                      <div>Other</div>
-                      <div className="text-[10px] font-normal text-slate-500">Custom Details</div>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold uppercase text-slate-600 block">
-                  Disposition &amp; Closure Notes
-                </label>
-                <textarea
-                  value={dispositionNotes}
-                  onChange={(e) => setDispositionNotes(e.target.value)}
-                  placeholder="Describe the final disposition procedure, SOP guidelines followed, or transfer recipient..."
-                  className="w-full border border-slate-200 rounded-xl p-3 text-xs focus:ring-2 focus:ring-red-500 focus:outline-none min-h-[80px]"
-                />
-              </div>
-
-              {closeError && (
-                <div className="p-3 rounded-lg bg-red-50 text-red-700 border border-red-200 text-xs font-semibold">
-                  {closeError}
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setCloseModalProject(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={closeSubmitting}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg shadow transition-colors disabled:opacity-50"
-                >
-                  {closeSubmitting ? 'Closing Project...' : 'Confirm & Close Project'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <CloseProjectModal
+          project={closeModalProject}
+          onClose={() => setCloseModalProject(null)}
+          onClosed={handleProjectClosed}
+        />
       )}
 
       {/* Create Project Modal */}

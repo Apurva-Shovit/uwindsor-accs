@@ -1,3 +1,4 @@
+import uuid
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
 from bson import ObjectId
@@ -10,10 +11,10 @@ from ..models.tank_assignment import TankAssignment
 from ..models.census_event import CensusEvent
 from ..models.incident_report import IncidentReport
 from ..models.facility import Tank
-from ..schemas.project import ProjectCreate, ProjectClose
+from ..schemas.project import ProjectCreate, ProjectClose, InternalTransferAllocation
 from ..repositories.base_repository import BaseRepository
 from ..repositories.audit_repository import AuditRepository
-from ..utils.atomic import claim, drain_count
+from ..utils.atomic import claim, drain_count, adjust_count, get_or_create_assignment, Compensation
 from ..utils.quarantine_utils import lift_expired_quarantines
 
 class ProjectService:
@@ -715,6 +716,23 @@ class ProjectService:
 
         before = p.model_dump(mode="json")
 
+        active_assignments = await TankAssignment.find({
+            "project_id": str(p.id),
+            "current_count": {"$gt": 0}
+        }).to_list()
+
+        # Validated up front, before the close is claimed, so a bad split
+        # (wrong totals, an inactive or incompatible destination) fails
+        # without the project ever flipping to closed. The authoritative
+        # per-tank recheck still happens in _execute_internal_transfers,
+        # since fish can move between this read and execution.
+        allocations_by_tank: Dict[str, List[InternalTransferAllocation]] = {}
+        dest_projects_cache: Dict[str, Project] = {}
+        if body.disposition_type == "transferred_internal" and active_assignments:
+            allocations_by_tank = await ProjectService._validate_internal_transfers(
+                p, active_assignments, body.internal_transfers or [], dest_projects_cache
+            )
+
         closed_at = datetime.now(timezone.utc)
         # Claim the close before disposing of anything. The status check above
         # reads a value that two concurrent closes both see as "active", so
@@ -741,66 +759,65 @@ class ProjectService:
         p.disposition_type = body.disposition_type
         p.disposition_notes = body.notes
 
-        active_assignments = await TankAssignment.find({
-            "project_id": str(p.id),
-            "current_count": {"$gt": 0}
-        }).to_list()
-
         if active_assignments:
-            event_mapping = {
-                "euthanized": "death",
-                "transferred_external": "transfer_out",
-                "adopted": "transfer_out",
-                "other": "manual_adjustment"
-            }
-            census_type = event_mapping.get(body.disposition_type, "manual_adjustment")
-            reason = f"Project Closed: {body.disposition_type.capitalize()}"
-
-            for ta in active_assignments:
-                # Empty the row first and record what was actually in it. The
-                # count read into active_assignments a moment ago may already
-                # be out of date, and the ledger must name the number that
-                # really left the tank.
-                removed = await drain_count(ta.id)
-                if removed == 0:
-                    continue
-
-                ev = CensusEvent(
-                    tank_id=ta.tank_id,
-                    tank_assignment_id=str(ta.id),
-                    project_id=str(p.id),
-                    event_type=census_type,
-                    change=-removed,
-                    reason=reason,
-                    notes=body.notes,
-                    date=datetime.now(timezone.utc).date(),
-                    created_by=str(current_user.id)
+            if body.disposition_type == "transferred_internal":
+                await ProjectService._execute_internal_transfers(
+                    p, active_assignments, allocations_by_tank, dest_projects_cache, body.notes, current_user
                 )
-                await ev.insert()
+            else:
+                event_mapping = {
+                    "euthanized": "death",
+                    "adopted": "transfer_out",
+                    "other": "manual_adjustment"
+                }
+                census_type = event_mapping.get(body.disposition_type, "manual_adjustment")
+                reason = f"Project Closed: {body.disposition_type.capitalize()}"
 
-                await AuditRepository.insert(AuditLog(
-                    actor_id=str(current_user.id),
-                    actor_role=str(current_user.role.value if current_user.role else "none"),
-                    action="create",
-                    entity_type="census_event",
-                    entity_id=str(ev.id),
-                    before=None,
-                    after=ev.model_dump(mode="json")
-                ))
-                
-                ta.current_count = removed
-                before_ta = ta.model_dump(mode="json")
-                ta.current_count = 0
+                for ta in active_assignments:
+                    # Empty the row first and record what was actually in it. The
+                    # count read into active_assignments a moment ago may already
+                    # be out of date, and the ledger must name the number that
+                    # really left the tank.
+                    removed = await drain_count(ta.id)
+                    if removed == 0:
+                        continue
 
-                await AuditRepository.insert(AuditLog(
-                    actor_id=str(current_user.id),
-                    actor_role=str(current_user.role.value if current_user.role else "none"),
-                    action="update",
-                    entity_type="tank_assignment",
-                    entity_id=str(ta.id),
-                    before=before_ta,
-                    after=ta.model_dump(mode="json")
-                ))
+                    ev = CensusEvent(
+                        tank_id=ta.tank_id,
+                        tank_assignment_id=str(ta.id),
+                        project_id=str(p.id),
+                        event_type=census_type,
+                        change=-removed,
+                        reason=reason,
+                        notes=body.notes,
+                        date=datetime.now(timezone.utc).date(),
+                        created_by=str(current_user.id)
+                    )
+                    await ev.insert()
+
+                    await AuditRepository.insert(AuditLog(
+                        actor_id=str(current_user.id),
+                        actor_role=str(current_user.role.value if current_user.role else "none"),
+                        action="create",
+                        entity_type="census_event",
+                        entity_id=str(ev.id),
+                        before=None,
+                        after=ev.model_dump(mode="json")
+                    ))
+
+                    ta.current_count = removed
+                    before_ta = ta.model_dump(mode="json")
+                    ta.current_count = 0
+
+                    await AuditRepository.insert(AuditLog(
+                        actor_id=str(current_user.id),
+                        actor_role=str(current_user.role.value if current_user.role else "none"),
+                        action="update",
+                        entity_type="tank_assignment",
+                        entity_id=str(ta.id),
+                        before=before_ta,
+                        after=ta.model_dump(mode="json")
+                    ))
 
         after = p.model_dump(mode="json")
         await AuditRepository.insert(AuditLog(
@@ -812,5 +829,256 @@ class ProjectService:
             before=before,
             after=after,
         ))
-        
+
         return p
+
+    @staticmethod
+    async def _validate_internal_transfers(
+        project: Project,
+        active_assignments: List[TankAssignment],
+        allocations: List[InternalTransferAllocation],
+        dest_projects_cache: Dict[str, Project],
+    ) -> Dict[str, List[InternalTransferAllocation]]:
+        """Check a proposed internal-transfer split before anything moves.
+
+        Returns the allocations grouped by source tank assignment id. Raises
+        a 400/404 naming the problem for anything a manager needs to fix in
+        the UI; the 409 for a population that has drifted since is raised
+        later, in _execute_internal_transfers, where the authoritative count
+        is read.
+        """
+        if not allocations:
+            raise HTTPException(
+                400,
+                "Select at least one destination AUPP to split this project's fish into",
+            )
+
+        assignments_by_id = {str(ta.id): ta for ta in active_assignments}
+        by_tank: Dict[str, List[InternalTransferAllocation]] = {}
+
+        for alloc in allocations:
+            ta = assignments_by_id.get(alloc.source_tank_assignment_id)
+            if ta is None:
+                raise HTTPException(
+                    400,
+                    "One of the source tanks is not currently occupied by this project",
+                )
+            if alloc.mode == "move" and alloc.destination_tank_id == ta.tank_id:
+                raise HTTPException(
+                    400,
+                    "Moving fish to their current tank is a relabel, not a move",
+                )
+            by_tank.setdefault(alloc.source_tank_assignment_id, []).append(alloc)
+
+        dest_tank_owner: Dict[str, str] = {}
+
+        for ta_id, rows in by_tank.items():
+            ta = assignments_by_id[ta_id]
+
+            total = sum(r.count for r in rows)
+            if total != ta.current_count:
+                raise HTTPException(
+                    400,
+                    f"Tank {ta.tank_id} holds {ta.current_count} fish but the split allocates "
+                    f"{total}. The full population must be accounted for before closing.",
+                )
+
+            if sum(1 for r in rows if r.mode == "relabel") > 1:
+                raise HTTPException(
+                    400,
+                    "Only one destination per tank can keep the same physical tank (relabel); "
+                    "every other split from that tank must move to a different tank",
+                )
+
+            for row in rows:
+                dest_project = dest_projects_cache.get(row.destination_project_id)
+                if dest_project is None:
+                    if not ObjectId.is_valid(row.destination_project_id):
+                        raise HTTPException(404, f"Destination project {row.destination_project_id} not found")
+                    dest_project = await Project.get(row.destination_project_id)
+                    if not dest_project:
+                        raise HTTPException(404, f"Destination project {row.destination_project_id} not found")
+                    dest_projects_cache[row.destination_project_id] = dest_project
+
+                if str(dest_project.id) == str(project.id):
+                    raise HTTPException(400, "Cannot transfer fish to the project being closed")
+                if dest_project.status != "active":
+                    raise HTTPException(400, f"Destination project '{dest_project.title}' is not active")
+
+                src_species = (project.species or "").strip().lower()
+                dst_species = (dest_project.species or "").strip().lower()
+                if src_species != dst_species:
+                    raise HTTPException(
+                        400,
+                        f"Species mismatch: '{project.title}' is {project.species or 'unspecified'}, "
+                        f"'{dest_project.title}' is {dest_project.species or 'unspecified'}. "
+                        "Internal transfers require matching species.",
+                    )
+
+                src_sex = project.sex or "both"
+                dst_sex = dest_project.sex or "both"
+                if src_sex != "both" and dst_sex != "both" and src_sex != dst_sex:
+                    raise HTTPException(
+                        400,
+                        f"Sex mismatch: '{project.title}' is {src_sex}, '{dest_project.title}' is {dst_sex}. "
+                        "Internal transfers require compatible sex.",
+                    )
+
+                dest_tank_id = row.destination_tank_id if row.mode == "move" else ta.tank_id
+                prior_owner = dest_tank_owner.get(dest_tank_id)
+                if prior_owner and prior_owner != row.destination_project_id:
+                    raise HTTPException(
+                        400,
+                        f"Tank {dest_tank_id} is targeted by two different destination projects in this split",
+                    )
+                dest_tank_owner[dest_tank_id] = row.destination_project_id
+
+                if row.mode == "move":
+                    # Friendly early check, same shape as TransferService's --
+                    # the authoritative one is the partial unique index that
+                    # adjust_count/get_or_create_assignment hit at execution
+                    # time, which also catches a tank claimed after this read.
+                    occupant = await TankAssignment.find_one({
+                        "tank_id": row.destination_tank_id,
+                        "current_count": {"$gt": 0},
+                    })
+                    if occupant and occupant.project_id != row.destination_project_id:
+                        raise HTTPException(
+                            409,
+                            f"Tank {row.destination_tank_id} is already occupied by a different AUPP project",
+                        )
+
+        return by_tank
+
+    @staticmethod
+    async def _execute_internal_transfers(
+        project: Project,
+        active_assignments: List[TankAssignment],
+        allocations_by_tank: Dict[str, List[InternalTransferAllocation]],
+        dest_projects_cache: Dict[str, Project],
+        notes: Optional[str],
+        current_user: User,
+    ) -> None:
+        """Drain each occupied tank and route its fish to the validated destinations.
+
+        Mirrors the debit/credit-with-compensation shape of
+        TransferService.create_tank_transfer, extended to many destinations
+        per source: each successful drain or credit registers its inverse
+        immediately, so a failure partway through (a destination tank claimed
+        by a third project in the meantime, a population that moved since
+        validation) unwinds everything already moved in this closure instead
+        of stranding fish between tanks.
+        """
+        actor_role = str(current_user.role.value if current_user.role else "none")
+        comp = Compensation()
+
+        try:
+            for ta in active_assignments:
+                rows = allocations_by_tank.get(str(ta.id))
+                if not rows:
+                    continue
+
+                removed = await drain_count(ta.id)
+                if removed == 0:
+                    continue
+                comp.add(lambda ta_id=ta.id, n=removed: adjust_count(ta_id, n, allow_negative=True))
+
+                if removed != sum(r.count for r in rows):
+                    raise HTTPException(
+                        409,
+                        f"Tank {ta.tank_id}'s population changed since this split was prepared. "
+                        "Refresh and try again.",
+                    )
+
+                source_tank_obj = await Tank.get(ta.tank_id)
+                source_tank_num = source_tank_obj.tank_number if source_tank_obj else ta.tank_id
+
+                ta.current_count = removed
+                before_ta = ta.model_dump(mode="json")
+                ta.current_count = 0
+                await AuditRepository.insert(AuditLog(
+                    actor_id=str(current_user.id), actor_role=actor_role, action="update",
+                    entity_type="tank_assignment", entity_id=str(ta.id),
+                    before=before_ta, after=ta.model_dump(mode="json"),
+                ))
+
+                transfer_group_id = str(uuid.uuid4())
+                dest_titles = ", ".join(sorted({dest_projects_cache[r.destination_project_id].title for r in rows}))
+                ev_out = CensusEvent(
+                    tank_id=ta.tank_id,
+                    tank_assignment_id=str(ta.id),
+                    project_id=str(project.id),
+                    event_type="transfer_out",
+                    change=-removed,
+                    reason="Project Closed: Internal Transfer",
+                    notes=notes or f"Split internally on closure to {dest_titles}",
+                    transfer_group_id=transfer_group_id,
+                    date=datetime.now(timezone.utc).date(),
+                    created_by=str(current_user.id),
+                )
+                await ev_out.insert()
+                await AuditRepository.insert(AuditLog(
+                    actor_id=str(current_user.id), actor_role=actor_role, action="create",
+                    entity_type="census_event", entity_id=str(ev_out.id),
+                    before=None, after=ev_out.model_dump(mode="json"),
+                ))
+
+                for row in rows:
+                    dest_project = dest_projects_cache[row.destination_project_id]
+                    dest_tank_id = row.destination_tank_id if row.mode == "move" else ta.tank_id
+
+                    dest_ta, dest_is_new = await get_or_create_assignment(
+                        dest_tank_id, str(dest_project.id),
+                        created_by=str(current_user.id),
+                        pi_name=dest_project.pi_name,
+                        aupp_number=dest_project.aupp_number,
+                    )
+                    before_dest = dest_ta.model_dump(mode="json") if not dest_is_new else None
+
+                    new_dest_count = await adjust_count(dest_ta.id, row.count)
+                    comp.add(lambda dta_id=dest_ta.id, n=row.count: adjust_count(dta_id, -n, allow_negative=True))
+
+                    dest_ta.current_count = new_dest_count
+                    await AuditRepository.insert(AuditLog(
+                        actor_id=str(current_user.id), actor_role=actor_role,
+                        action="update" if not dest_is_new else "create",
+                        entity_type="tank_assignment", entity_id=str(dest_ta.id),
+                        before=before_dest, after=dest_ta.model_dump(mode="json"),
+                    ))
+
+                    if row.mode == "move" and source_tank_obj and source_tank_obj.is_quarantined:
+                        dest_tank_obj = await Tank.get(dest_tank_id)
+                        if dest_tank_obj and not dest_tank_obj.is_quarantined:
+                            before_dest_tank = dest_tank_obj.model_dump(mode="json")
+                            dest_tank_obj.is_quarantined = True
+                            dest_tank_obj.quarantine_start_date = source_tank_obj.quarantine_start_date
+                            dest_tank_obj.quarantine_end_date = source_tank_obj.quarantine_end_date
+                            await dest_tank_obj.save()
+                            await AuditRepository.insert(AuditLog(
+                                actor_id=str(current_user.id), actor_role=actor_role,
+                                action="placed_in_quarantine", entity_type="tank",
+                                entity_id=str(dest_tank_obj.id),
+                                before=before_dest_tank, after=dest_tank_obj.model_dump(mode="json"),
+                            ))
+
+                    ev_in = CensusEvent(
+                        tank_id=dest_tank_id,
+                        tank_assignment_id=str(dest_ta.id),
+                        project_id=str(dest_project.id),
+                        event_type="transfer_in",
+                        change=row.count,
+                        reason="Internal Transfer: Project Closure",
+                        notes=notes or f"Received from '{project.title}' (AUPP {project.aupp_number}), Tank {source_tank_num}, on project closure",
+                        transfer_group_id=transfer_group_id,
+                        date=datetime.now(timezone.utc).date(),
+                        created_by=str(current_user.id),
+                    )
+                    await ev_in.insert()
+                    await AuditRepository.insert(AuditLog(
+                        actor_id=str(current_user.id), actor_role=actor_role, action="create",
+                        entity_type="census_event", entity_id=str(ev_in.id),
+                        before=None, after=ev_in.model_dump(mode="json"),
+                    ))
+        except Exception:
+            await comp.rollback()
+            raise

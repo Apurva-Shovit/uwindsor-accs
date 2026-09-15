@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getProjects, createProject, closeProject, getProjectDetails } from '../../lib/api';
+import { Lock, CheckCircle2 } from 'lucide-react';
+import { getProjects, createProject, getProjectDetails } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import SpeciesDropdown from '../../components/SpeciesDropdown';
+import CloseProjectModal, { DISPOSITION_LABELS } from '../../components/CloseProjectModal';
 
 interface Project {
   id?: string;
@@ -51,8 +53,6 @@ export const ProjectDetailsPage: React.FC = () => {
   const [rfidTrackingEnabled, setRfidTrackingEnabled] = useState(false);
 
   // Closing form state
-  const [dispositionType, setDispositionType] = useState<'euthanized' | 'transferred_external' | 'adopted' | 'other'>('euthanized');
-  const [dispositionNotes, setDispositionNotes] = useState('');
   const [showCloseModal, setShowCloseModal] = useState(false);
 
   const [loading, setLoading] = useState(false);
@@ -126,24 +126,10 @@ export const ProjectDetailsPage: React.FC = () => {
     }
   };
 
-  const handleCloseProject = async () => {
-    if (!selectedProj) return;
-    setLoading(true);
-    setError('');
-    try {
-      await closeProject(getId(selectedProj), {
-        disposition_type: dispositionType,
-        notes: dispositionNotes || undefined,
-      });
-      setToast('Project closed and disposition recorded!');
-      setShowCloseModal(false);
-      setDispositionNotes('');
-      await loadProjects();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to close project');
-    } finally {
-      setLoading(false);
-    }
+  const handleProjectClosed = async () => {
+    setToast('Project closed and disposition recorded!');
+    setShowCloseModal(false);
+    await loadProjects();
   };
 
   const formatDate = (dateStr?: string) => {
@@ -172,18 +158,41 @@ export const ProjectDetailsPage: React.FC = () => {
 
         <div className="rounded-xl border border-border bg-white p-4 shadow-sm space-y-2 flex-1 overflow-hidden flex flex-col max-h-[80vh]">
           <h3 className="text-sm font-bold text-textPrimary border-b border-border pb-2">Protocols List</h3>
-          <div className="space-y-1 overflow-y-auto flex-1 pr-1">
-            {projects.map(p => (
-              <button key={getId(p)} onClick={() => setSelectedProj(p)}
-                className={`w-full text-left p-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-between
-                  ${selectedProj && getId(selectedProj) === getId(p) ? 'bg-brandBlueTint text-brandBlueDark font-bold' : 'text-textPrimary hover:bg-surface'}`}>
-                <span>{p.title} ({p.aupp_number})</span>
-                <span className={`inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase
-                  ${p.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                  {p.status}
-                </span>
-              </button>
-            ))}
+          <div className="space-y-1.5 overflow-y-auto flex-1 pr-1">
+            {projects.map(p => {
+              const isSelected = selectedProj && getId(selectedProj) === getId(p);
+              const isClosed = p.status === 'closed';
+              return (
+                <button
+                  key={getId(p)}
+                  onClick={() => setSelectedProj(p)}
+                  className={`w-full text-left p-2.5 rounded-lg text-xs font-medium transition-all flex items-center justify-between border ${
+                    isSelected
+                      ? 'bg-brandBlueTint text-brandBlueDark font-bold border-brandBlue/30 shadow-xs'
+                      : isClosed
+                      ? 'bg-slate-50/80 text-slate-500 hover:bg-slate-100 border-slate-200/60'
+                      : 'bg-white text-textPrimary hover:bg-slate-50 border-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 min-w-0 pr-2">
+                    {isClosed && <Lock className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />}
+                    <span className="truncate">
+                      {p.title} <span className="font-mono text-[10px] text-slate-400">({p.aupp_number})</span>
+                    </span>
+                  </div>
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase flex-shrink-0 ${
+                      isClosed
+                        ? 'bg-slate-200/80 text-slate-700 border border-slate-300/70'
+                        : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${isClosed ? 'bg-slate-500' : 'bg-emerald-500'}`} />
+                    {p.status}
+                  </span>
+                </button>
+              );
+            })}
             {projects.length === 0 && <p className="text-xs text-textSecondary p-2">No projects registered yet.</p>}
           </div>
         </div>
@@ -280,12 +289,29 @@ export const ProjectDetailsPage: React.FC = () => {
             </div>
           )
         ) : (
-          <div className="rounded-2xl border border-border bg-white p-6 shadow-sm space-y-6">
+          <div className={`rounded-2xl border bg-white p-6 shadow-sm space-y-6 ${
+            selectedProj.status === 'closed' ? 'border-slate-300' : 'border-border'
+          }`}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4">
               <div>
-                <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold uppercase mb-1
-                  ${selectedProj.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                  {selectedProj.status}
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-extrabold uppercase mb-1.5 ${
+                    selectedProj.status === 'active'
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      : 'bg-slate-100 text-slate-700 border border-slate-300'
+                  }`}
+                >
+                  {selectedProj.status === 'active' ? (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      Active Protocol
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-3.5 h-3.5 text-slate-500" />
+                      Closed / Archived Protocol
+                    </>
+                  )}
                 </span>
                 <h2 className="text-xl font-bold text-textPrimary">{selectedProj.title}</h2>
                 <span className="text-xs text-textSecondary font-mono block">AUPP# {selectedProj.aupp_number}</span>
@@ -335,14 +361,18 @@ export const ProjectDetailsPage: React.FC = () => {
             </div>
 
             {selectedProj.status === 'closed' && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-1">
-                <span className="block text-xs font-bold text-red-800 uppercase">Project Closed</span>
-                <p className="text-sm text-red-700 font-medium">
-                  No further fish movement or population updates are permitted.
+              <div className="rounded-xl border border-slate-300 bg-slate-100 p-4 space-y-2 shadow-2xs">
+                <div className="flex items-center gap-2 text-slate-800 font-extrabold text-xs">
+                  <Lock className="w-4 h-4 text-slate-600" />
+                  <span>CLOSED & ARCHIVED PROTOCOL</span>
+                  <span className="ml-auto text-[10px] uppercase font-bold bg-slate-200 text-slate-700 px-2 py-0.5 rounded border border-slate-300">Read-Only</span>
+                </div>
+                <p className="text-xs text-slate-600 font-medium">
+                  No further fish movement, tank assignments, or census updates are permitted on this protocol.
                 </p>
-                <div className="text-xs text-red-600 mt-2">
-                  <div><strong>Closed At:</strong> {formatDate(selectedProj.closed_at)}</div>
-                  <div><strong>Disposition:</strong> <span className="capitalize">{selectedProj.disposition_type}</span></div>
+                <div className="text-xs text-slate-700 pt-2 border-t border-slate-200 space-y-1">
+                  <div><strong>Closed Date:</strong> {formatDate(selectedProj.closed_at)}</div>
+                  <div><strong>Final Disposition:</strong> <span>{DISPOSITION_LABELS[selectedProj.disposition_type || ''] || selectedProj.disposition_type || 'Recorded'}</span></div>
                   {selectedProj.disposition_notes && <div><strong>Notes:</strong> {selectedProj.disposition_notes}</div>}
                 </div>
               </div>
@@ -447,50 +477,15 @@ export const ProjectDetailsPage: React.FC = () => {
 
       {/* Close project Modal */}
       {showCloseModal && selectedProj && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <form
-            onSubmit={(e) => { e.preventDefault(); handleCloseProject(); }}
-            className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl space-y-4"
-          >
-            <h3 className="text-lg font-bold text-textPrimary">Close Project & Disposition</h3>
-            <p className="text-xs text-textSecondary">
-              Closing Project <strong>{selectedProj.title}</strong> permanently. This action cannot be undone.
-            </p>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-textSecondary uppercase">Disposition Type</label>
-                <select value={dispositionType} onChange={e => setDispositionType(e.target.value as any)}
-                  className="w-full rounded border border-border px-3 py-1.5 text-xs focus:outline-none">
-                  <option value="euthanized">Euthanized</option>
-                  <option value="transferred_external">Transferred External</option>
-                  <option value="adopted">Adopted</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-textSecondary uppercase">Notes / Explanations</label>
-                <textarea rows={3} value={dispositionNotes} onChange={e => setDispositionNotes(e.target.value)} required
-                  placeholder="Explain final disposition outcome..."
-                  className="w-full rounded border border-border px-3 py-1.5 text-xs focus:outline-none" />
-              </div>
-            </div>
-
-            {error && <p className="text-xs text-red-600 font-medium bg-red-50 p-2 rounded">{error}</p>}
-
-            <div className="flex justify-end space-x-3 pt-2">
-              <button type="button" onClick={() => setShowCloseModal(false)}
-                className="rounded-md border border-border px-4 py-2 text-sm font-medium text-textPrimary hover:bg-surface">
-                Cancel
-              </button>
-              <button type="submit" disabled={loading}
-                className="rounded-md bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                Confirm Close
-              </button>
-            </div>
-          </form>
-        </div>
+        <CloseProjectModal
+          project={{
+            ...selectedProj,
+            occupied_tanks: projDetails?.occupied_tanks,
+            total_fish_count: projDetails?.total_fish_count,
+          }}
+          onClose={() => setShowCloseModal(false)}
+          onClosed={handleProjectClosed}
+        />
       )}
 
       {toast && (

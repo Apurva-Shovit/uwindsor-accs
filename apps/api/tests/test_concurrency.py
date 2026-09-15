@@ -23,7 +23,7 @@ from app.models.project import Project
 from app.models.tank_assignment import TankAssignment
 from app.models.user import User, RoleEnum, StatusEnum
 from app.schemas.census import CensusEventCreate
-from app.schemas.project import ProjectClose
+from app.schemas.project import InternalTransferAllocation, ProjectClose
 from app.schemas.transfer import TankTransferCreate
 from app.services.census_service import CensusService
 from app.services.intake_service import IntakeRequest, IntakeService
@@ -355,6 +355,228 @@ async def test_close_records_what_was_really_in_the_tank(env):
     assert ta.current_count == ledger, (
         f"count {ta.current_count} disagrees with the ledger {ledger}"
     )
+
+
+@pytest.mark.asyncio
+async def test_internal_transfer_splits_fish_across_destinations(env):
+    """Closing with an internal-transfer split relabels one destination and
+    physically moves another; each destination's ledger shows the arrival."""
+    ta = await _stock(env, env["tank_a"], env["project"], 30)
+
+    third = Project(
+        title="Concurrency Probe Three",
+        pi_name="Dr Probe",
+        aupp_number="AUPP-CONC-3",
+        status="active",
+        created_by=str(env["manager"].id),
+    )
+    await third.insert()
+    try:
+        await ProjectService.close_project(
+            str(env["project"].id),
+            ProjectClose(
+                disposition_type="transferred_internal",
+                notes="split on closure",
+                internal_transfers=[
+                    InternalTransferAllocation(
+                        source_tank_assignment_id=str(ta.id),
+                        destination_project_id=str(env["other_project"].id),
+                        count=20,
+                        mode="relabel",
+                    ),
+                    InternalTransferAllocation(
+                        source_tank_assignment_id=str(ta.id),
+                        destination_project_id=str(third.id),
+                        count=10,
+                        mode="move",
+                        destination_tank_id=str(env["tank_b"].id),
+                    ),
+                ],
+            ),
+            env["manager"],
+        )
+
+        source_ta = await TankAssignment.get(ta.id)
+        assert source_ta.current_count == 0
+
+        relabeled = await TankAssignment.find_one({
+            "tank_id": str(env["tank_a"].id), "project_id": str(env["other_project"].id)
+        })
+        assert relabeled is not None and relabeled.current_count == 20
+
+        moved = await TankAssignment.find_one({
+            "tank_id": str(env["tank_b"].id), "project_id": str(third.id)
+        })
+        assert moved is not None and moved.current_count == 10
+
+        out_events = await CensusEvent.find({
+            "project_id": str(env["project"].id), "event_type": "transfer_out"
+        }).to_list()
+        assert len(out_events) == 1
+        assert out_events[0].change == -30
+
+        in_events = await CensusEvent.find({
+            "event_type": "transfer_in",
+            "project_id": {"$in": [str(env["other_project"].id), str(third.id)]},
+        }).to_list()
+        assert sorted(e.change for e in in_events) == [10, 20]
+        assert all(e.transfer_group_id == out_events[0].transfer_group_id for e in in_events)
+
+        closed = await Project.get(env["project"].id)
+        assert closed.status == "closed"
+        assert closed.disposition_type == "transferred_internal"
+    finally:
+        await CensusEvent.find({"project_id": str(third.id)}).delete()
+        await TankAssignment.find({"project_id": str(third.id)}).delete()
+        await third.delete()
+
+
+@pytest.mark.asyncio
+async def test_internal_transfer_blocks_species_mismatch(env):
+    """A destination AUPP raising a different species must refuse the split
+    before the project is ever claimed as closed."""
+    ta = await _stock(env, env["tank_a"], env["project"], 10)
+    env["project"].species = "Zebrafish"
+    await env["project"].save()
+    env["other_project"].species = "Medaka"
+    await env["other_project"].save()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await ProjectService.close_project(
+            str(env["project"].id),
+            ProjectClose(
+                disposition_type="transferred_internal",
+                internal_transfers=[
+                    InternalTransferAllocation(
+                        source_tank_assignment_id=str(ta.id),
+                        destination_project_id=str(env["other_project"].id),
+                        count=10,
+                        mode="relabel",
+                    ),
+                ],
+            ),
+            env["manager"],
+        )
+    assert exc_info.value.status_code == 400
+
+    still_active = await Project.get(env["project"].id)
+    assert still_active.status == "active"
+    ta_after = await TankAssignment.get(ta.id)
+    assert ta_after.current_count == 10
+
+
+@pytest.mark.asyncio
+async def test_internal_transfer_blocks_incomplete_allocation(env):
+    """A split that doesn't account for every fish in the tank must be refused."""
+    ta = await _stock(env, env["tank_a"], env["project"], 10)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await ProjectService.close_project(
+            str(env["project"].id),
+            ProjectClose(
+                disposition_type="transferred_internal",
+                internal_transfers=[
+                    InternalTransferAllocation(
+                        source_tank_assignment_id=str(ta.id),
+                        destination_project_id=str(env["other_project"].id),
+                        count=6,
+                        mode="relabel",
+                    ),
+                ],
+            ),
+            env["manager"],
+        )
+    assert exc_info.value.status_code == 400
+
+    still_active = await Project.get(env["project"].id)
+    assert still_active.status == "active"
+
+
+@pytest.mark.asyncio
+async def test_internal_transfer_blocks_destination_tank_already_occupied(env):
+    """Moving fish into a tank another AUPP already occupies must be refused,
+    even though the destination tank the request names is otherwise free."""
+    ta = await _stock(env, env["tank_a"], env["project"], 10)
+    await _stock(env, env["tank_b"], env["other_project"], 5)  # blocks tank_b
+
+    third = Project(
+        title="Concurrency Probe Three",
+        pi_name="Dr Probe",
+        aupp_number="AUPP-CONC-3",
+        status="active",
+        created_by=str(env["manager"].id),
+    )
+    await third.insert()
+    try:
+        with pytest.raises(HTTPException) as exc_info:
+            await ProjectService.close_project(
+                str(env["project"].id),
+                ProjectClose(
+                    disposition_type="transferred_internal",
+                    internal_transfers=[
+                        InternalTransferAllocation(
+                            source_tank_assignment_id=str(ta.id),
+                            destination_project_id=str(third.id),
+                            count=10,
+                            mode="move",
+                            destination_tank_id=str(env["tank_b"].id),
+                        ),
+                    ],
+                ),
+                env["manager"],
+            )
+        assert exc_info.value.status_code == 409
+
+        still_active = await Project.get(env["project"].id)
+        assert still_active.status == "active"
+    finally:
+        await Project.find_one({"_id": third.id}).delete()
+
+
+@pytest.mark.asyncio
+async def test_internal_transfer_survives_a_late_arrival_race(env):
+    """A death or arrival landing mid-close must not lose or duplicate fish,
+    whichever side of the drain it lands on."""
+    ta = await _stock(env, env["tank_a"], env["project"], 30)
+
+    results = await asyncio.gather(
+        ProjectService.close_project(
+            str(env["project"].id),
+            ProjectClose(
+                disposition_type="transferred_internal",
+                internal_transfers=[
+                    InternalTransferAllocation(
+                        source_tank_assignment_id=str(ta.id),
+                        destination_project_id=str(env["other_project"].id),
+                        count=30,
+                        mode="relabel",
+                    ),
+                ],
+            ),
+            env["manager"],
+        ),
+        adjust_count(ta.id, 5),
+        return_exceptions=True,
+    )
+
+    close_result, _arrival_result = results
+    dest_ta = await TankAssignment.find_one({
+        "tank_id": str(env["tank_a"].id), "project_id": str(env["other_project"].id)
+    })
+    source_ta = await TankAssignment.get(ta.id)
+
+    if isinstance(close_result, HTTPException):
+        # The population moved between validation and drain: the close was
+        # refused and rolled back to exactly what it was before closing.
+        assert close_result.status_code == 409
+        assert dest_ta is None
+        assert source_ta.current_count == 35
+    else:
+        # The arrival landed after the drain: the extra 5 sit in the
+        # now-reopened source assignment, the same outcome the existing
+        # single-disposition path produces for the same race.
+        assert dest_ta.current_count == 30
+        assert source_ta.current_count == 5
 
 
 @pytest.mark.asyncio
