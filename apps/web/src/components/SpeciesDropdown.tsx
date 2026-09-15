@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { getSpecies, createSpecies } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
+import { isManagerPlus } from '../lib/roles';
 
 interface SpeciesDropdownProps {
   species: string;
@@ -7,6 +9,8 @@ interface SpeciesDropdownProps {
 }
 
 const SpeciesDropdown: React.FC<SpeciesDropdownProps> = ({ species, setSpecies }) => {
+  const { role } = useAuth();
+  const canAddSpecies = isManagerPlus(role);
   const [speciesList, setSpeciesList] = useState<string[]>([]);
   const [showOtherInput, setShowOtherInput] = useState(false);
   const [addingSpecies, setAddingSpecies] = useState(false);
@@ -81,10 +85,10 @@ const SpeciesDropdown: React.FC<SpeciesDropdownProps> = ({ species, setSpecies }
             {species}
           </option>
         )}
-        <option value="Other">+ Add Other Species...</option>
+        {canAddSpecies && <option value="Other">+ Add Other Species...</option>}
       </select>
 
-      {showOtherInput && (
+      {canAddSpecies && showOtherInput && (
         <div className="flex gap-2 items-center mt-2">
           <input
             type="text"

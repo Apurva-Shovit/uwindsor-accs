@@ -73,7 +73,7 @@ export const getIncidentReports = (params?: { vet_contacted?: boolean; tank_id?:
 
 // Projects
 export const getSpecies = () => api.get('/species/');
-export const createSpecies = (data: any) => api.post('/species', data);
+export const createSpecies = (data: any) => api.post('/species/', data);
 export const getProjects = (params?: { status_filter?: string; page?: number; limit?: number }) =>
   api.get('/projects', { params });
 export const getProjectsOverview = (params?: { search?: string; status?: string }) =>
