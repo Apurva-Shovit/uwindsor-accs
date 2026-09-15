@@ -479,16 +479,34 @@ class ProjectService:
             })
 
         # --- PROCESS AUDIT LOGS ---
-        audit_list = []
-        for a in audits:
-            aud_dt = get_dt(a)
-            if not is_in_range(aud_dt):
-                continue
+        # Batch-resolve ids referenced inside before/after payloads instead of resolving
+        # each field with its own DB round-trip (that N+1 pattern was the main cause of
+        # slow report loads/tab switches on projects with a long audit history).
+        in_range_audits = [(a, get_dt(a)) for a in audits]
+        in_range_audits = [(a, dt) for a, dt in in_range_audits if is_in_range(dt)]
 
-            actor = user_map.get(str(a.actor_id)) or user_map.get(a.actor_id) or "System User"
+        payload_user_ids: set = set()
+        payload_tank_ids: set = set()
+        payload_room_ids: set = set()
+        payload_project_ids: set = set()
+        for a, _ in in_range_audits:
+            EntityResolver.collect_payload_ids(a.before, payload_user_ids, payload_tank_ids, payload_room_ids, payload_project_ids)
+            EntityResolver.collect_payload_ids(a.after, payload_user_ids, payload_tank_ids, payload_room_ids, payload_project_ids)
+
+        payload_user_map = await EntityResolver.resolve_users_by_ids(list(payload_user_ids - set(user_map.keys())))
+        payload_tank_map = await EntityResolver.resolve_tanks_by_ids(list(payload_tank_ids - set(tank_map.keys())))
+        room_map = await EntityResolver.resolve_rooms_by_ids(list(payload_room_ids))
+        project_map = await EntityResolver.resolve_projects_by_ids(list(payload_project_ids))
+
+        combined_user_map = {**user_map, **payload_user_map}
+        combined_tank_map = {**tank_map, **payload_tank_map}
+
+        audit_list = []
+        for a, aud_dt in in_range_audits:
+            actor = combined_user_map.get(str(a.actor_id)) or combined_user_map.get(a.actor_id) or "System User"
             ts_str = aud_dt.strftime("%a, %b %d, %Y, %I:%M %p") if aud_dt else "-"
-            clean_before = await EntityResolver.resolve_payload_ids(a.before)
-            clean_after = await EntityResolver.resolve_payload_ids(a.after)
+            clean_before = EntityResolver.resolve_payload_ids_sync(a.before, combined_user_map, combined_tank_map, room_map, project_map)
+            clean_after = EntityResolver.resolve_payload_ids_sync(a.after, combined_user_map, combined_tank_map, room_map, project_map)
             audit_list.append({
                 "id": str(a.id),
                 "actor_name": actor,

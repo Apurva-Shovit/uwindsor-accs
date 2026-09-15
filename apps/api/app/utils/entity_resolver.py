@@ -125,6 +125,138 @@ class EntityResolver:
         return str(project_id)
 
     @classmethod
+    async def resolve_rooms_by_ids(cls, room_ids: List[str]) -> Dict[str, str]:
+        if not room_ids:
+            return {}
+        unique_ids = list(set([str(rid) for rid in room_ids if rid]))
+        valid_oids = [ObjectId(rid) for rid in unique_ids if ObjectId.is_valid(rid)]
+        rooms = await Room.find({"_id": {"$in": valid_oids}}).to_list() if valid_oids else []
+        room_map = {str(r.id): f"Room {r.room_number}" for r in rooms}
+        return {rid: room_map.get(rid, "Unknown Room") for rid in unique_ids}
+
+    @classmethod
+    async def resolve_projects_by_ids(cls, project_ids: List[str]) -> Dict[str, str]:
+        if not project_ids:
+            return {}
+        unique_ids = list(set([str(pid) for pid in project_ids if pid]))
+        valid_oids = [ObjectId(pid) for pid in unique_ids if ObjectId.is_valid(pid)]
+        projects = await Project.find({"_id": {"$in": valid_oids}}).to_list() if valid_oids else []
+        project_map = {str(p.id): p.title for p in projects}
+        return {pid: project_map.get(pid, "Unknown Project") for pid in unique_ids}
+
+    @classmethod
+    def collect_payload_ids(
+        cls,
+        payload: Optional[Dict[str, Any]],
+        user_ids: set,
+        tank_ids: set,
+        room_ids: set,
+        project_ids: set,
+    ) -> None:
+        """Walks a before/after payload gathering referenced ids without hitting the DB, so callers can batch-resolve them in one shot instead of per-field."""
+        if not payload or not isinstance(payload, dict):
+            return
+        for k, v in payload.items():
+            if k in ["_id", "id", "v", "revision_id", "password_hash", "password"]:
+                continue
+            if isinstance(v, ObjectId):
+                v = str(v)
+            if (k.endswith("_id") or k.endswith("_by")) and isinstance(v, str):
+                if k in ["user_id", "created_by", "actor_id", "approved_by", "closed_by", "pi_id", "updated_by", "deleted_by"]:
+                    user_ids.add(v)
+                elif k == "tank_id":
+                    tank_ids.add(v)
+                elif k == "room_id":
+                    room_ids.add(v)
+                elif k == "project_id":
+                    project_ids.add(v)
+                elif k.endswith("_by"):
+                    user_ids.add(v)
+            elif (k.endswith("_ids") or k in ["assigned_tank_ids", "facility_ids", "room_ids"]) and isinstance(v, list):
+                for item in v:
+                    item_str = str(item)
+                    if k == "assigned_tank_ids" or k.endswith("tank_ids"):
+                        tank_ids.add(item_str)
+                    elif k in ["facility_ids", "room_ids"]:
+                        if "room" in k:
+                            room_ids.add(item_str)
+                    elif ObjectId.is_valid(item_str):
+                        user_ids.add(item_str)
+            elif isinstance(v, dict):
+                cls.collect_payload_ids(v, user_ids, tank_ids, room_ids, project_ids)
+            elif isinstance(v, list):
+                for item in v:
+                    if isinstance(item, dict):
+                        cls.collect_payload_ids(item, user_ids, tank_ids, room_ids, project_ids)
+
+    @classmethod
+    def resolve_payload_ids_sync(
+        cls,
+        payload: Optional[Dict[str, Any]],
+        user_map: Dict[str, str],
+        tank_map: Dict[str, str],
+        room_map: Dict[str, str],
+        project_map: Dict[str, str],
+    ) -> Optional[Dict[str, Any]]:
+        """Same shape/behavior as resolve_payload_ids, but resolves from pre-fetched maps instead of issuing a DB call per field — use after batch-resolving ids collected via collect_payload_ids."""
+        if not payload or not isinstance(payload, dict):
+            return payload
+        cleaned = {}
+        for k, v in payload.items():
+            if k in ["_id", "id", "v", "revision_id", "password_hash", "password"]:
+                continue
+            if isinstance(v, ObjectId):
+                v = str(v)
+            if (k.endswith("_id") or k.endswith("_by")) and isinstance(v, str):
+                if k in ["user_id", "created_by", "actor_id", "approved_by", "closed_by", "pi_id", "updated_by", "deleted_by"]:
+                    cleaned[k.replace("_id", "_name").replace("_by", "_by_name")] = user_map.get(v, "Unknown User")
+                elif k == "tank_id":
+                    cleaned["tank_number"] = tank_map.get(v, "Unknown Tank")
+                elif k == "room_id":
+                    cleaned["room_number"] = room_map.get(v, "Unknown Room")
+                elif k == "project_id":
+                    cleaned["project_title"] = project_map.get(v, "Unknown Project")
+                else:
+                    resolved = user_map.get(v, "Unknown Reference") if k.endswith("_by") else v
+                    if isinstance(resolved, str) and ObjectId.is_valid(resolved):
+                        resolved = "Unknown Reference"
+                    cleaned[k] = resolved
+            elif (k.endswith("_ids") or k in ["assigned_tank_ids", "facility_ids", "room_ids"]) and isinstance(v, list):
+                resolved_list = []
+                for item in v:
+                    item_str = str(item)
+                    if k == "assigned_tank_ids" or k.endswith("tank_ids"):
+                        resolved_list.append(tank_map.get(item_str, "Unknown Tank"))
+                    elif k in ["facility_ids", "room_ids"]:
+                        if "room" in k:
+                            resolved_list.append(room_map.get(item_str, "Unknown Room"))
+                        else:
+                            resolved_list.append(item_str)
+                    elif ObjectId.is_valid(item_str):
+                        resolved_list.append(user_map.get(item_str, "Unknown User"))
+                    else:
+                        resolved_list.append(item)
+                cleaned[k.replace("_ids", "_list")] = resolved_list
+            elif isinstance(v, dict):
+                cleaned[k] = cls.resolve_payload_ids_sync(v, user_map, tank_map, room_map, project_map)
+            elif isinstance(v, list):
+                cleaned_items = []
+                for item in v:
+                    if isinstance(item, dict):
+                        cleaned_items.append(cls.resolve_payload_ids_sync(item, user_map, tank_map, room_map, project_map))
+                    elif isinstance(item, (str, ObjectId)) and ObjectId.is_valid(str(item)):
+                        cleaned_items.append("Unknown Reference")
+                    else:
+                        cleaned_items.append(item)
+                cleaned[k] = cleaned_items
+            else:
+                if isinstance(v, (str, ObjectId)) and ObjectId.is_valid(str(v)):
+                    cleaned[k] = "Unknown Reference"
+                else:
+                    cleaned[k] = str(v) if isinstance(v, ObjectId) else v
+        return cleaned
+
+    @classmethod
     async def resolve_payload_ids(cls, payload: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """Recursively resolves known _id suffix fields in payloads to human-readable strings and strips raw ObjectIDs."""
         if not payload or not isinstance(payload, dict):
