@@ -29,7 +29,10 @@ class Project(Document):
     # Disposition fields
     closed_at: Optional[datetime] = None
     closed_by: Optional[str] = None
-    disposition_type: Optional[Literal["euthanized", "transferred_external", "adopted", "other"]] = None
+    # "transferred_external" is retained only so historic documents written
+    # before internal transfers existed still validate on read; new closures
+    # can no longer select it (see schemas/project.py::ProjectClose).
+    disposition_type: Optional[Literal["euthanized", "transferred_external", "transferred_internal", "adopted", "other"]] = None
     disposition_notes: Optional[str] = None
 
 

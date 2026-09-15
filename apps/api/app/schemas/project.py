@@ -1,6 +1,6 @@
 from datetime import datetime
-from typing import Literal, Optional
-from pydantic import BaseModel
+from typing import List, Literal, Optional
+from pydantic import BaseModel, Field, model_validator
 
 
 class ProjectCreate(BaseModel):
@@ -25,6 +25,28 @@ class ProjectCreate(BaseModel):
 
 
 
+class InternalTransferAllocation(BaseModel):
+    """One slice of a project's fish population routed to another active AUPP on closure."""
+    source_tank_assignment_id: str
+    destination_project_id: str
+    count: int = Field(gt=0, description="Number of fish in this slice")
+    mode: Literal["relabel", "move"]
+    # Required when mode == "move" (a different physical tank). Ignored for
+    # "relabel", where the destination tank is implicitly the source tank --
+    # the fish don't move, the tank's assignment just changes owner project.
+    destination_tank_id: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _check_destination_tank(self):
+        if self.mode == "move" and not self.destination_tank_id:
+            raise ValueError("destination_tank_id is required when mode is 'move'")
+        return self
+
+
 class ProjectClose(BaseModel):
-    disposition_type: Literal["euthanized", "transferred_external", "adopted", "other"]
+    disposition_type: Literal["euthanized", "transferred_internal", "adopted", "other"]
     notes: Optional[str] = None
+    # Required when disposition_type == "transferred_internal" and the project
+    # has active tank assignments; describes how its population splits across
+    # other AUPPs still open at the facility.
+    internal_transfers: Optional[List[InternalTransferAllocation]] = None

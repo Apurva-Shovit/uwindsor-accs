@@ -6,6 +6,7 @@ import { BookOpen, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { formatDate } from '../utils/formatters';
 import { Paginator } from '../components/ui/Paginator';
 import { ProtectedView } from '../components/security/ProtectedView';
+import { DISPOSITION_LABELS } from '../components/CloseProjectModal';
 
 
 const UWindsorBufferingLoader: React.FC<{ message?: string }> = ({ message = "Synchronizing ACARE Facility Data..." }) => (
@@ -271,7 +272,7 @@ export const ProjectReportPage: React.FC = () => {
           <div className="bg-red-50 border border-red-200 rounded-xl p-3.5 text-xs text-red-800 space-y-1">
             <span className="font-bold uppercase block text-red-900">Project Closed & Dispositioned</span>
             <div><strong>Closed At:</strong> {formatDate(project.closed_at)}</div>
-            <div><strong>Disposition:</strong> <span className="capitalize">{project.disposition_type}</span></div>
+            <div><strong>Disposition:</strong> <span>{DISPOSITION_LABELS[project.disposition_type] || project.disposition_type}</span></div>
             {project.disposition_notes && <div><strong>Notes:</strong> {project.disposition_notes}</div>}
           </div>
         )}
