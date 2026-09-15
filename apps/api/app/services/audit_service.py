@@ -45,6 +45,23 @@ class AuditService:
         non_user_refs = [(log.entity_type, str(log.entity_id)) for log in logs if log.entity_type != "user" and log.entity_id]
         entity_display_map = await AuditRepository.get_entity_display_names_bulk(non_user_refs)
 
+        # Batch-resolve ids referenced inside before/after payloads instead of resolving
+        # each field with its own DB round-trip (the N+1 pattern fixed for project reports
+        # in project_service.py, applied here too).
+        payload_user_ids: set = set()
+        payload_tank_ids: set = set()
+        payload_room_ids: set = set()
+        payload_project_ids: set = set()
+        for log in logs:
+            EntityResolver.collect_payload_ids(log.before, payload_user_ids, payload_tank_ids, payload_room_ids, payload_project_ids)
+            EntityResolver.collect_payload_ids(log.after, payload_user_ids, payload_tank_ids, payload_room_ids, payload_project_ids)
+
+        payload_user_map = await EntityResolver.resolve_users_by_ids(list(payload_user_ids - set(actor_map.keys())))
+        payload_tank_map = await EntityResolver.resolve_tanks_by_ids(list(payload_tank_ids))
+        payload_room_map = await EntityResolver.resolve_rooms_by_ids(list(payload_room_ids))
+        payload_project_map = await EntityResolver.resolve_projects_by_ids(list(payload_project_ids))
+        combined_user_map = {**actor_map, **payload_user_map}
+
         from bson import ObjectId
 
         async def _extract_user_from_snapshot(payload: Dict[str, Any] | None) -> str | None:
@@ -119,8 +136,8 @@ class AuditService:
                 action_label = "placed_in_quarantine" if log.after.get("is_quarantined") else "lifted_quarantine"
 
             # 5. Recursively resolve MongoDB ObjectIDs inside the payload diffs
-            resolved_before = await EntityResolver.resolve_payload_ids(log.before) if log.before else None
-            resolved_after = await EntityResolver.resolve_payload_ids(log.after) if log.after else None
+            resolved_before = EntityResolver.resolve_payload_ids_sync(log.before, combined_user_map, payload_tank_map, payload_room_map, payload_project_map)
+            resolved_after = EntityResolver.resolve_payload_ids_sync(log.after, combined_user_map, payload_tank_map, payload_room_map, payload_project_map)
 
             result.append({
                 "actor_name": actor_name,
